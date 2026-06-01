@@ -169,7 +169,7 @@ All personas are **fully customizable** — edit name, role, description, system
 
 ### Multi-Provider Support
 
-Mix and match models from 10 different provider types:
+Mix and match models from 12 different provider types:
 
 | Provider | Type | Description |
 |----------|------|-------------|
@@ -177,6 +177,8 @@ Mix and match models from 10 different provider types:
 | **Ollama** | Local | Run open-source models locally (Llama, Mistral, Phi, etc.) |
 | **Groq** | Cloud | Ultra-fast inference for Llama and Mixtral models |
 | **NVIDIA NIM** | Cloud | NVIDIA Build models via `integrate.api.nvidia.com` |
+| **OpenCode Zen** | Cloud | Direct connection to [opencode.ai/zen](https://opencode.ai) (chat/completions only, v1) |
+| **OpenCode Go** | Cloud | Direct connection to OpenCode Go (subscription, chat/completions only, v1) |
 | **OpenAI Direct** | Cloud | Direct connection to OpenAI API |
 | **Anthropic Direct** | Cloud | Direct connection to Anthropic API |
 | **Google Direct** | Cloud | Direct connection to Google AI API |

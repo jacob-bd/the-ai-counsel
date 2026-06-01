@@ -180,7 +180,7 @@ Manage council configuration and presets.
 | `search_hybrid_mode` | boolean | `update` | DuckDuckGo: combine web + news (default `true`) |
 | `full_content_results` | integer | `update` | Jina Reader full-text fetch count (0–5, default 3; 0 = disabled) |
 | `enabled_providers` | object | `update` | Council-only provider toggles |
-| `direct_provider_toggles` | object | `update` | Per-direct-provider council toggles |
+| `direct_provider_toggles` | object | `update` | Per-direct-provider council toggles (keys: `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`, `opencode-zen`, `opencode-go`) |
 | `preset_id` | string | `save_preset`, `delete_preset`, `set_default_preset` | Preset UUID |
 | `preset_name` | string | `save_preset` | Display name |
 | `council_models` | string[] | `save_preset` | Members for preset (alias: `models`) |
@@ -266,7 +266,7 @@ Provider utilities, model listing, and health checks.
   "chairman_model": "...",
   "execution_mode": "full",
   "search_provider": "duckduckgo",
-  "configured_providers": ["openai", "groq"],
+  "configured_providers": ["openai", "groq", "opencode"],
   "ollama_url": "http://localhost:11434"
 }
 ```
@@ -283,7 +283,9 @@ If settings fetch fails while backend is up: includes `"settings_error": "..."`.
 | `"yake"` | Extract key terms with YAKE before searching |
 | `"llm"` | Chairman model reformulates the query (skipped for DuckDuckGo) |
 
-**`set_api_key` valid providers:** `openrouter`, `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`, `tinyfish`, `tavily`, `brave`, `serper`.
+**`set_api_key` valid providers:** `openrouter`, `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`, `opencode` (alias for `opencode-zen` / `opencode-go` — both products share the single `opencode_api_key` field), `tinyfish`, `tavily`, `brave`, `serper`.
+
+**OpenCode test:** `test` with provider `opencode-zen` or `opencode-go` validates the product. For testing both products against a single key, use REST `POST /api/settings/test-opencode` (no equivalent single-call MCP shortcut).
 
 ---
 

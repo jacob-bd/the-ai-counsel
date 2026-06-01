@@ -190,7 +190,7 @@ Environment overrides:
 | `LLM_COUNCIL_LITELLM_PRICING_URL` | `https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json` |
 | `LLM_COUNCIL_PRICING_CACHE_TTL_SECONDS` | `86400` |
 
-Custom endpoint note: custom OpenAI-compatible endpoints do not have a universal billing API. The app reports OpenCode endpoints as free by configured endpoint name/URL/model marker; other custom endpoints use catalog estimates only when the upstream model ID can be matched, otherwise cost is unknown.
+Custom endpoint note: custom OpenAI-compatible endpoints do not have a universal billing API. OpenCode Zen and OpenCode Go are first-class direct providers (`opencode-zen:` and `opencode-go:` prefixes) with their own pricing table in `costs.py` — see "OpenCode note" above. Other custom endpoints use catalog estimates only when the upstream model ID can be matched, otherwise cost is unknown.
 
 ---
 
@@ -510,7 +510,7 @@ curl -X PUT http://localhost:8001/api/settings \
 
 **Note:** These toggles filter model lists in **Settings → Council Config** only. They do **not** restrict Advisor Setup model pickers (advisors use all configured providers).
 
-**`direct_provider_toggles` keys:** `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`
+**`direct_provider_toggles` keys:** `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`, `opencode-zen`, `opencode-go`
 
 ---
 
@@ -532,6 +532,7 @@ curl -X PUT http://localhost:8001/api/settings \
 | DeepSeek | `deepseek_api_key` |
 | Groq | `groq_api_key` |
 | Nvidia | `nvidia_api_key` |
+| OpenCode (Zen + Go) | `opencode_api_key` |
 | TinyFish | `tinyfish_api_key` |
 | Tavily | `tavily_api_key` |
 | Brave | `brave_api_key` |
