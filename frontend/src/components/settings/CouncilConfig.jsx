@@ -9,6 +9,8 @@ const DIRECT_PROVIDERS = [
     { id: 'mistral', name: 'Mistral', key: 'mistral_api_key' },
     { id: 'deepseek', name: 'DeepSeek', key: 'deepseek_api_key' },
     { id: 'nvidia', name: 'NVIDIA', key: 'nvidia_api_key' },
+    { id: 'opencode-zen', name: 'OpenCode Zen', key: 'opencode_api_key' },
+    { id: 'opencode-go', name: 'OpenCode Go', key: 'opencode_api_key' },
 ];
 
 export default function CouncilConfig({
@@ -73,6 +75,8 @@ export default function CouncilConfig({
             case 'mistral': return !!settings?.mistral_api_key_set;
             case 'deepseek': return !!settings?.deepseek_api_key_set;
             case 'nvidia': return !!settings?.nvidia_api_key_set;
+            case 'opencode-zen': return !!settings?.opencode_api_key_set;
+            case 'opencode-go': return !!settings?.opencode_api_key_set;
             default: return false;
         }
     };
@@ -206,7 +210,9 @@ export default function CouncilConfig({
                                                 google: false,
                                                 mistral: false,
                                                 deepseek: false,
-                                                nvidia: false
+                                                nvidia: false,
+                                                'opencode-zen': false,
+                                                'opencode-go': false,
                                             });
                                         }
                                     }}

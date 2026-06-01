@@ -35,6 +35,7 @@ const hasAnyDirectKey = (data) => !!(
   || data?.mistral_api_key_set
   || data?.deepseek_api_key_set
   || data?.nvidia_api_key_set
+  || data?.opencode_api_key_set
 );
 
 /** Council toggles cannot be ON for providers that have no credentials. */
@@ -53,6 +54,8 @@ const normalizeDirectProviderToggles = (toggles, data) => ({
   mistral: !!toggles?.mistral && !!data?.mistral_api_key_set,
   deepseek: !!toggles?.deepseek && !!data?.deepseek_api_key_set,
   nvidia: !!toggles?.nvidia && !!data?.nvidia_api_key_set,
+  'opencode-zen': !!toggles?.['opencode-zen'] && !!data?.opencode_api_key_set,
+  'opencode-go': !!toggles?.['opencode-go'] && !!data?.opencode_api_key_set,
 });
 
 export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys' }) {
@@ -143,6 +146,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     mistral: false,
     deepseek: false,
     nvidia: false,
+    'opencode-zen': false,
+    'opencode-go': false,
   });
 
   // Council Configuration (unified across all providers)
@@ -449,6 +454,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           mistral: !!data.mistral_api_key_set,
           deepseek: !!data.deepseek_api_key_set,
           nvidia: !!data.nvidia_api_key_set,
+          'opencode-zen': !!data.opencode_api_key_set,
+          'opencode-go': !!data.opencode_api_key_set,
         }, data));
       }
 
@@ -1159,7 +1166,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           google: false,
           mistral: false,
           deepseek: false,
-          nvidia: false
+          nvidia: false,
+          'opencode-zen': false,
+          'opencode-go': false,
         },
         council_models: ['', ''],
         chairman_model: '',
@@ -1531,6 +1540,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       case 'Mistral': return !!(directKeys.mistral_api_key || settings?.mistral_api_key_set);
       case 'DeepSeek': return !!(directKeys.deepseek_api_key || settings?.deepseek_api_key_set);
       case 'NVIDIA': return !!(directKeys.nvidia_api_key || settings?.nvidia_api_key_set);
+      case 'OpenCode Zen': return !!settings?.opencode_api_key_set;
+      case 'OpenCode Go': return !!settings?.opencode_api_key_set;
       default: return false;
     }
   };

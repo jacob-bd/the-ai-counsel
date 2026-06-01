@@ -70,6 +70,7 @@ function hasAnyDirectProviderKey(settings) {
     || settings.deepseek_api_key_set
     || settings.groq_api_key_set
     || settings.nvidia_api_key_set
+    || settings.opencode_api_key_set
   );
 }
 
@@ -81,6 +82,11 @@ const DIRECT_PROVIDER_KEY_FLAGS = {
   deepseek: 'deepseek_api_key_set',
   groq: 'groq_api_key_set',
   nvidia: 'nvidia_api_key_set',
+  'opencode-zen': 'opencode_api_key_set',
+  'opencode-go': 'opencode_api_key_set',
+  // Backend returns capitalized labels with a space; allow both forms.
+  'opencode zen': 'opencode_api_key_set',
+  'opencode go': 'opencode_api_key_set',
 };
 
 /** Advisor setup shows models for configured providers, not only council toggles. */
