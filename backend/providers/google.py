@@ -60,7 +60,7 @@ class GoogleProvider(LLMProvider):
                 data = response.json()
                 try:
                     content = data["candidates"][0]["content"]["parts"][0]["text"]
-                    return {"content": content, "error": False}
+                    return {"content": content, "usage": data.get("usageMetadata"), "error": False}
                 except (KeyError, IndexError):
                     return {"error": True, "error_message": "Unexpected response format from Google API"}
                 

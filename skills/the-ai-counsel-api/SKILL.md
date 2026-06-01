@@ -1,6 +1,6 @@
 ---
 name: the-ai-counsel-api
-version: 0.7.0
+version: 0.8.0
 description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", etc.
 ---
 
@@ -124,7 +124,11 @@ anthropic:claude-sonnet-4              → Direct Anthropic API
 openai:gpt-4.1                         → Direct OpenAI API
 custom:nvidia/nemotron-3-super-120b    → Custom endpoint
 groq:llama3-70b-8192                   → Groq fast inference
+opencode-zen:glm-5.1                   → Direct OpenCode Zen (chat/completions only, v1)
+opencode-go:kimi-k2.5                  → Direct OpenCode Go (chat/completions only, v1; subscription)
 ```
+
+**OpenCode note (v0.8.0):** The OpenCode provider only exposes models that route to `/v1/chat/completions`. GPT Responses, Anthropic Messages, and per-model Gemini are not supported in v1 and are filtered out of `/v1/models`. A single shared `opencode_api_key` field covers both products; Go users can also use Zen's free models. Use `POST /api/settings/test-opencode` to validate both products at once.
 
 ---
 
@@ -160,6 +164,33 @@ groq:llama3-70b-8192                   → Groq fast inference
 | **LLM Advisors** (Advisor Setup UI) | **All configured providers** — any provider with a saved API key, plus Ollama when `ollama_base_url` is set, plus custom endpoint when URL is configured. **Ignores** council `enabled_providers` toggles. |
 
 REST/MCP agents listing models should call the model list endpoints directly (`/api/models`, `/api/models/direct`, `/api/ollama/tags`, `/api/custom-endpoint/models`). Availability depends on credentials, not council toggles.
+
+---
+
+## Cost reporting
+
+All council runs, iterative council debates, advisor debates, `/api/ask` responses, saved conversation metadata, and MCP deliberation outputs expose cost data:
+
+- Per model call: `usage` (normalized token counts) and `cost` (provider, tokens, USD cost, pricing source, confidence, status).
+- Per run: `cost_report` with total USD cost, token totals, call totals, known/unknown/estimated/free counts, breakdown by model and stage, and raw call rows.
+
+Pricing order:
+
+1. Provider-reported cost when available. OpenRouter `usage.cost` / `usage.total_cost` is treated as known.
+2. Known-free rules report `$0`: `ollama:*`, `nvidia:*`, OpenRouter models ending in `:free`, and custom endpoints whose configured name/URL/model text indicates OpenCode Zen or OpenCode Go.
+3. Catalog estimate from `https://ai-model-pricing.com/api/v1/pricing.json`, cached locally in `data/model_pricing_cache.json`.
+4. Fallback catalog estimate from LiteLLM's `model_prices_and_context_window.json`.
+5. If usage is present but pricing cannot be matched, the report preserves token usage and marks cost as unknown.
+
+Environment overrides:
+
+| Variable | Default |
+|----------|---------|
+| `LLM_COUNCIL_PRICING_SOURCE_URL` | `https://ai-model-pricing.com/api/v1/pricing.json` |
+| `LLM_COUNCIL_LITELLM_PRICING_URL` | `https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json` |
+| `LLM_COUNCIL_PRICING_CACHE_TTL_SECONDS` | `86400` |
+
+Custom endpoint note: custom OpenAI-compatible endpoints do not have a universal billing API. The app reports OpenCode endpoints as free by configured endpoint name/URL/model marker; other custom endpoints use catalog estimates only when the upstream model ID can be matched, otherwise cost is unknown.
 
 ---
 
@@ -209,10 +240,12 @@ async def ask(query, model, web_search=False, base_url="http://localhost:8001"):
 
 **Response shapes by mode:**
 
-- **`chat_only` + 1 model:** `{"response": "...", "model": "...", "error": null}`
-- **`chat_only` + N models:** `{"responses": [{model, response, error}, ...]}`
-- **`chat_ranking`:** `{"responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}}`
-- **`full`:** `{"response": "...", "chairman_model": "...", "responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}}`
+- **`chat_only` + 1 model:** `{"response": "...", "model": "...", "error": null, "usage": {...}, "cost": {...}, "cost_report": {...}}`
+- **`chat_only` + N models:** `{"responses": [{model, response, error, usage, cost}, ...], "cost_report": {...}}`
+- **`chat_ranking`:** `{"responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}, "cost_report": {...}}`
+- **`full`:** `{"response": "...", "chairman_model": "...", "responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}, "cost_report": {...}}`
+
+`cost_report` is always in USD. It summarizes `total_cost`, `input_tokens`, `output_tokens`, `total_tokens`, `total_calls`, `known_cost_calls`, `unknown_cost_calls`, `estimated_calls`, `free_calls`, `by_model`, `by_stage`, and raw `calls`.
 
 ---
 
@@ -371,11 +404,12 @@ curl -X POST "http://localhost:8001/api/conversations/$CONV_ID/message" \
 Response includes all stages that were executed:
 ```json
 {
-  "stage1": [{"model": "openai:gpt-4.1", "response": "...", "error": null}],
+  "stage1": [{"model": "openai:gpt-4.1", "response": "...", "error": null, "usage": {...}, "cost": {...}}],
   "stage2": null,
   "stage3": null,
   "aggregate_rankings": null,
-  "label_to_model": null
+  "label_to_model": null,
+  "cost_report": {...}
 }
 ```
 
@@ -1217,21 +1251,21 @@ curl -X PUT http://localhost:8001/api/settings \
 | `search_start` | Web search begins | `provider` |
 | `search_complete` | After web search | `search_context`, `search_query` |
 | `stage1_init` | Before Stage 1 responses | `total` (model count) |
-| `stage1_progress` | Each model responds | `data`: `{model, response, error}`, `count`, `total` |
-| `stage1_complete` | After all models respond | `data`: list of `{model, response, error}` |
+| `stage1_progress` | Each model responds | `data`: `{model, response, error, usage, cost}`, `count`, `total` |
+| `stage1_complete` | After all models respond | `data`: list of `{model, response, error, usage, cost}` |
 | `stage2_init` | Before Stage 2 rankings | `total` |
-| `stage2_progress` | Each model ranks | `data`: `{model, ranking, parsed_ranking}`, `count`, `total` |
+| `stage2_progress` | Each model ranks | `data`: `{model, ranking, parsed_ranking, usage, cost}`, `count`, `total` |
 | `stage2_complete` | After peer review | `metadata`: `{label_to_model, aggregate_rankings}` |
-| `stage3_complete` | After chairman synthesis | `data`: `{model, response, error}` |
+| `stage3_complete` | After chairman synthesis | `data`: `{model, response, error, usage, cost}` |
 | `stage4_start` | Stage 4 corrected draft begins | — |
-| `stage4_complete` | Stage 4 corrected draft done | `data`: `{model, response, error}` |
+| `stage4_complete` | Stage 4 corrected draft done | `data`: `{model, response, error, usage, cost}` |
 | `round_start` | Each debate round begins | `round`, `total_rounds` |
 | `round_complete` | Each debate round finishes | `round` |
 | `convergence` | Early stop triggered | `round`, `message` |
-| `debate_complete` | All debate rounds done | `total_rounds_executed`, `converged`, `critique_mode`, `rounds`, `stage4` |
+| `debate_complete` | All debate rounds done | `total_rounds_executed`, `converged`, `critique_mode`, `rounds`, `stage4`, `cost_report` |
 | `title_complete` | Title generated | `data`: `{title}` |
 | `error` | On failure | `message` |
-| `complete` | Stream finished | — |
+| `complete` | Stream finished | optional `metadata.cost_report` |
 
 ### Advisor debate streaming (`/debate/stream`)
 
@@ -1241,13 +1275,13 @@ curl -X PUT http://localhost:8001/api/settings \
 | `advisor_search_complete` | After web search | `data`: `{search_query}` |
 | `advisor_debate_start` | Debate initialized | `data`: `{personas, max_rounds, question, web_search}` |
 | `advisor_round_start` | Each round begins | `data`: `{round_number, order, is_parallel}` |
-| `advisor_response` | Each persona responds | `data`: `{persona_id, persona_name, model, content, error, consensus}`, `round`, `count`, `total` |
+| `advisor_response` | Each persona responds | `data`: `{persona_id, persona_name, model, content, error, consensus, usage, cost}`, `round`, `count`, `total` |
 | `advisor_round_complete` | Round finishes | `data`: `{round_number, responses, consensus_votes, consensus_reached}` |
 | `advisor_tiebreaker_start` | Tiebreaker triggered (2 personas, no consensus) | — |
-| `advisor_tiebreaker` | Tiebreaker result | `data`: `{model, content, error}` |
+| `advisor_tiebreaker` | Tiebreaker result | `data`: `{model, content, error, usage, cost}` |
 | `advisor_verdict_start` | Verdict generation begins | — |
-| `advisor_verdict` | Verdict result | `data`: `{model, content, error}` |
-| `advisor_complete` | **Authoritative final event** | `data`: `{rounds, consensus_reached, verdict, tiebreaker, personas}` |
+| `advisor_verdict` | Verdict result | `data`: `{model, content, error, usage, cost}` |
+| `advisor_complete` | **Authoritative final event** | `data`: `{rounds, consensus_reached, verdict, tiebreaker, personas, cost_report}` |
 | `advisor_error` | Debate failed | `message` |
 | `title_complete` | Title generated (first message only) | `data`: `{title}` |
 

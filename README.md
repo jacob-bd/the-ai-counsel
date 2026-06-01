@@ -215,6 +215,7 @@ Fine-tune creativity vs consistency per stage:
 - **Abort Anytime** — Cancel in-progress requests
 - **Conversation History** — All conversations saved locally with search
 - **Customizable System Prompts** — Edit Stage 1, 2, and 3 prompts for Council mode
+- **Run Cost Reporting** — See total cost, tokens, call count, pricing confidence, and per-model breakdowns for council and advisor runs
 - **Rate Limit Warnings** — Alerts when your config may hit API limits
 - **"I'm Feeling Lucky"** — Randomize your council composition
 - **Import & Export** — Backup and share your settings, API keys, and prompts
@@ -406,7 +407,7 @@ data/
     └── ...
 ```
 
-**Privacy**: No data is sent to external servers except API calls to your configured LLM providers.
+**Privacy**: Prompts and responses are sent only to your configured LLM/search providers. Cost reporting also fetches public model-pricing catalogs; it does not send prompt text, responses, or API keys.
 
 > **⚠️ Security Warning: API Keys Stored in Plain Text**
 >

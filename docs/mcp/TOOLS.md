@@ -21,6 +21,12 @@ The The AI Counsel MCP server exposes **10 action-based tools**. Each tool group
 | [`providers`](#providers) | `list_models`, `health`, `test`, `set_api_key`, `set_search` | Models, health, keys, search |
 | [`config_backup`](#config_backup) | `export`, `import`, `reset` | Full settings backup/restore |
 
+## Cost Reports
+
+Deliberation tools return a `cost_report` object when a run performs model calls. It includes USD `total_cost`, token totals, call counts, known/unknown/estimated/free counts, `by_model`, `by_stage` where applicable, and raw `calls`.
+
+Cost attribution uses provider-reported cost first, then known-free rules (`ollama:*`, `nvidia:*`, OpenRouter `:free`, OpenCode custom endpoints), then cached catalog estimates from `ai-model-pricing.com` with LiteLLM as fallback. When pricing is unavailable, token usage is preserved and cost is marked unknown.
+
 ---
 
 ## council_deliberate
@@ -52,11 +58,14 @@ Run council deliberation. Creates a conversation automatically unless `conversat
   "stage1": { "results": [...], "summary": {...} },
   "stage2": { "rankings": [...], "aggregate_rankings": [...] },
   "stage3": { "synthesis": "..." },
-  "chairman_answer": "..."
+  "chairman_answer": "...",
+  "cost_report": {"total_cost": 0.0042, "total_tokens": 12345, "by_model": [...]}
 }
 ```
 
 Errors return `{"status": "error", "message": "..."}`.
+
+Stage-only actions also include `cost_report`. Individual result rows include `usage` and `cost` when the backend provider returned usage.
 
 ---
 
@@ -81,6 +90,8 @@ Chat with a single model.
 }
 ```
 
+Responses include `usage`, `cost`, and `cost_report` alongside the model response. Ollama, NVIDIA, OpenRouter `:free`, and OpenCode custom endpoint calls report zero cost.
+
 ---
 
 ## advisor_debate
@@ -104,6 +115,8 @@ Run a multi-round advisor debate with named personas.
   "max_rounds": 3
 }
 ```
+
+Response includes `cost_report` with total cost, token totals, call counts, and per-model breakdown. Advisor response, tiebreaker, and verdict rows include `usage` and `cost` when available.
 
 ---
 
@@ -139,7 +152,8 @@ Run a multi-round iterative debate with convergence detection. Models debate acr
   "converged": false,
   "critique_mode": "freeform",
   "rounds": [...],
-  "stage4": {"model": "...", "response": "Chairman's corrected draft..."}
+  "stage4": {"model": "...", "response": "Chairman's corrected draft..."},
+  "cost_report": {"total_cost": 0.0123, "by_model": [...]}
 }
 ```
 

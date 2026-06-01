@@ -69,7 +69,7 @@ def register(server, base_url: str) -> None:
 
                 configured = []
                 for key in ("openrouter", "openai", "anthropic", "google", "mistral", "deepseek", "groq",
-                            "tavily", "brave", "serper", "tinyfish"):
+                            "opencode", "tavily", "brave", "serper", "tinyfish"):
                     if settings.get(f"{key}_api_key_set"):
                         configured.append(key)
 
@@ -110,6 +110,9 @@ def register(server, base_url: str) -> None:
                     "mistral": "mistral_api_key",
                     "deepseek": "deepseek_api_key",
                     "groq": "groq_api_key",
+                    "opencode": "opencode_api_key",
+                    "opencode-zen": "opencode_api_key",
+                    "opencode-go": "opencode_api_key",
                     "tinyfish": "tinyfish_api_key",
                     "tavily": "tavily_api_key",
                     "brave": "brave_api_key",

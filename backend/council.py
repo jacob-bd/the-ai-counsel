@@ -6,6 +6,7 @@ import logging
 from . import openrouter
 from . import ollama_client
 from .config import get_council_models, get_chairman_model
+from .costs import attach_cost
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ from .providers.ollama import OllamaProvider
 from .providers.groq import GroqProvider
 from .providers.custom_openai import CustomOpenAIProvider
 from .providers.nvidia import NvidiaProvider
+from .providers.opencode import OpenCodeProvider
 
 # Initialize providers
 PROVIDERS = {
@@ -34,6 +36,8 @@ PROVIDERS = {
     "openrouter": OpenRouterProvider(),
     "ollama": OllamaProvider(),
     "custom": CustomOpenAIProvider(),
+    "opencode-zen": OpenCodeProvider(product="zen"),
+    "opencode-go": OpenCodeProvider(product="go"),
 }
 
 def get_provider_for_model(model_id: str) -> Any:
@@ -50,7 +54,10 @@ def get_provider_for_model(model_id: str) -> Any:
 async def query_model(model: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
     """Dispatch query to appropriate provider."""
     provider = get_provider_for_model(model)
-    return await provider.query(model, messages, timeout, temperature)
+    response = await provider.query(model, messages, timeout, temperature)
+    if isinstance(response, dict):
+        return await attach_cost(model, response)
+    return response
 
 
 async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -179,7 +186,9 @@ async def stage1_collect_responses(
                                 "model": model,
                                 "response": None,
                                 "error": response.get('error'),
-                                "error_message": response.get('error_message', 'Unknown error')
+                                "error_message": response.get('error_message', 'Unknown error'),
+                                "usage": response.get('usage'),
+                                "cost": response.get('cost'),
                             }
                         else:
                             # Successful response - ensure content is always a string
@@ -190,7 +199,9 @@ async def stage1_collect_responses(
                             result = {
                                 "model": model,
                                 "response": content,
-                                "error": None
+                                "error": None,
+                                "usage": response.get('usage'),
+                                "cost": response.get('cost'),
                             }
                     
                     if result:
@@ -323,7 +334,9 @@ async def stage2_collect_rankings(
                                 "ranking": None,
                                 "parsed_ranking": [],
                                 "error": response.get('error'),
-                                "error_message": response.get('error_message', 'Unknown error')
+                                "error_message": response.get('error_message', 'Unknown error'),
+                                "usage": response.get('usage'),
+                                "cost": response.get('cost'),
                             }
                         else:
                             # Ensure content is always a string before parsing
@@ -345,7 +358,9 @@ async def stage2_collect_rankings(
                                 "model": model,
                                 "ranking": full_text,
                                 "parsed_ranking": parsed,
-                                "error": None
+                                "error": None,
+                                "usage": response.get('usage'),
+                                "cost": response.get('cost'),
                             }
                     
                     if result:
@@ -462,7 +477,9 @@ async def stage3_synthesize_final(
                 "model": chairman_model,
                 "response": f"Error synthesizing final answer: {error_msg}",
                 "error": True,
-                "error_message": error_msg
+                "error_message": error_msg,
+                "usage": response.get('usage') if response else None,
+                "cost": response.get('cost') if response else None,
             }
 
         # Combine reasoning and content if available
@@ -484,7 +501,9 @@ async def stage3_synthesize_final(
         return {
             "model": chairman_model,
             "response": final_response,
-            "error": False
+            "error": False,
+            "usage": response.get('usage'),
+            "cost": response.get('cost'),
         }
 
     except Exception as e:
@@ -703,4 +722,3 @@ async def generate_search_query(user_query: str) -> str:
         logger.error(f"Error generating search query: {e}")
 
     return user_query[:100]  # Fallback to direct query
-

@@ -60,6 +60,8 @@ DEFAULT_DIRECT_PROVIDER_TOGGLES = {
     "deepseek": False,
     "groq": False,
     "nvidia": False,
+    "opencode-zen": False,
+    "opencode-go": False,
 }
 
 
@@ -125,6 +127,7 @@ class Settings(BaseModel):
     deepseek_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
+    opencode_api_key: Optional[str] = None
 
     # Ollama Settings
     ollama_base_url: str = "http://localhost:11434"

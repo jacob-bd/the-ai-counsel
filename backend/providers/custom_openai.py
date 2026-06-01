@@ -54,7 +54,7 @@ class CustomOpenAIProvider(LLMProvider):
 
                 data = response.json()
                 content = data["choices"][0]["message"]["content"]
-                return {"content": content, "error": False}
+                return {"content": content, "usage": data.get("usage"), "error": False}
 
         except httpx.TimeoutException:
             return {"error": True, "error_message": f"Request timed out after {int(timeout)}s — {name} did not respond"}

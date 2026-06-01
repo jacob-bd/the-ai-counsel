@@ -44,7 +44,7 @@ class DeepSeekProvider(LLMProvider):
                     
                 data = response.json()
                 content = data["choices"][0]["message"]["content"]
-                return {"content": content, "error": False}
+                return {"content": content, "usage": data.get("usage"), "error": False}
                 
         except Exception as e:
             return {"error": True, "error_message": str(e)}

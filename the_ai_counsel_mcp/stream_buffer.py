@@ -31,9 +31,22 @@ def _build_stage1_result(conversation_id: str, query: str, stage1_data: list, se
 
         if error:
             error_info = _classify_model_error(error, error_message)
-            results.append({"model": model, "response": None, "status": "error", "error": error_info})
+            results.append({
+                "model": model,
+                "response": None,
+                "status": "error",
+                "error": error_info,
+                "usage": item.get("usage"),
+                "cost": item.get("cost"),
+            })
         else:
-            results.append({"model": model, "response": response, "status": "success"})
+            results.append({
+                "model": model,
+                "response": response,
+                "status": "success",
+                "usage": item.get("usage"),
+                "cost": item.get("cost"),
+            })
 
     succeeded = sum(1 for r in results if r["status"] == "success")
     return {
@@ -59,6 +72,8 @@ def _build_stage2_result(conversation_id: str, stage2_data: list, metadata: dict
                 "parsed_ranking": [],
                 "status": "error",
                 "error": _classify_model_error(error),
+                "usage": item.get("usage"),
+                "cost": item.get("cost"),
             })
         else:
             rankings.append({
@@ -66,6 +81,8 @@ def _build_stage2_result(conversation_id: str, stage2_data: list, metadata: dict
                 "ranking_text": item.get("ranking"),
                 "parsed_ranking": item.get("parsed_ranking", []),
                 "status": "success",
+                "usage": item.get("usage"),
+                "cost": item.get("cost"),
             })
     return {
         "conversation_id": conversation_id,
@@ -84,6 +101,8 @@ def _build_stage3_result(conversation_id: str, stage3_data: dict) -> dict:
         "synthesis": stage3_data.get("response") if not error else None,
         "status": "error" if error else "success",
         "error": _classify_model_error(error, stage3_data.get("error_message")) if error else None,
+        "usage": stage3_data.get("usage"),
+        "cost": stage3_data.get("cost"),
     }
 
 
@@ -194,6 +213,7 @@ async def buffer_debate(events: AsyncIterator[dict], conversation_id: str) -> di
     consensus_reached: bool = False
     consensus_round: int | None = None
     round_extracts: list[dict] = []
+    cost_report: dict | None = None
     question: str = ""
 
     for event in all_events:
@@ -265,6 +285,7 @@ async def buffer_debate(events: AsyncIterator[dict], conversation_id: str) -> di
                 verdict = data["verdict"]
             if data.get("personas"):
                 personas = data["personas"]
+            cost_report = data.get("cost_report")
             break
 
         elif etype == "advisor_error":
@@ -305,6 +326,7 @@ async def buffer_debate(events: AsyncIterator[dict], conversation_id: str) -> di
         "round_extracts": round_extracts,
         "tiebreaker": tiebreaker,
         "verdict": verdict,
+        "cost_report": cost_report,
         "summary": {
             "total_personas": len(personas),
             "rounds_run": len(rounds_list),
@@ -356,6 +378,7 @@ async def buffer_iterative_debate(events: AsyncIterator[dict], conversation_id: 
 
     rounds = []
     stage4 = None
+    cost_report = None
     converged = False
     critique_mode = "freeform"
     error_msg = None
@@ -365,6 +388,7 @@ async def buffer_iterative_debate(events: AsyncIterator[dict], conversation_id: 
         if etype == "debate_complete":
             rounds = event.get("rounds", rounds)
             stage4 = event.get("stage4", stage4)
+            cost_report = event.get("cost_report", cost_report)
             converged = event.get("converged", converged)
             critique_mode = event.get("critique_mode", critique_mode)
             break
@@ -394,4 +418,5 @@ async def buffer_iterative_debate(events: AsyncIterator[dict], conversation_id: 
         "converged": converged,
         "rounds": rounds,
         "stage4": stage4,
+        "cost_report": cost_report,
     }

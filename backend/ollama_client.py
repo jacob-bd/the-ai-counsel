@@ -59,6 +59,7 @@ async def query_model(
                 
                 return {
                     'content': data.get('message', {}).get('content', ''),
+                    'usage': data,
                     'error': None
                 }
 

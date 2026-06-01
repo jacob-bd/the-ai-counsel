@@ -68,7 +68,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 
 **Provider System** (`backend/providers/`)
 - **Base**: `base.py` - Abstract interface for all LLM providers
-- **Implementations**: `openrouter.py`, `ollama.py`, `groq.py`, `openai.py`, `anthropic.py`, `google.py`, `mistral.py`, `deepseek.py`, `custom_openai.py`
+- **Implementations**: `openrouter.py`, `ollama.py`, `groq.py`, `openai.py`, `anthropic.py`, `google.py`, `mistral.py`, `deepseek.py`, `custom_openai.py`, `opencode.py` (OpenCode Zen + Go, chat/completions only)
 - **Auto-routing**: Model IDs with prefix (e.g., `openai:gpt-4.1`, `ollama:llama3`, `custom:model-name`) route to correct provider
 - **Routing logic**: `council.py:get_provider_for_model()` handles prefix parsing
 
@@ -80,6 +80,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 | `search.py` | Web search: DuckDuckGo, Tavily, Brave, Serper, TinyFish with Jina Reader content fetch |
 | `settings.py` | Config management, persisted to `data/settings.json` |
 | `config.py` | OpenRouter endpoint URL, data dir constant, settings-aware getters (`get_openrouter_api_key`, `get_council_models`, `get_chairman_model`, ...) that bridge env vars and `settings.py` |
+| `costs.py` | Usage normalization, pricing lookup/cache, per-call cost attribution, and run-level cost reports |
 | `prompts.py` | Default system prompts for all stages (Stage 1/2/3, Title, Query) |
 | `main.py` | FastAPI app with streaming SSE endpoints, live progress tracking (`_active_runs`), and MCP server mount |
 | `storage.py` | Conversation persistence in `data/conversations/{id}.json` |
@@ -93,6 +94,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 | `Stage1.jsx` | Tab view of individual model responses |
 | `Stage2.jsx` | Peer rankings with de-anonymization, aggregate scores |
 | `Stage3.jsx` | Chairman synthesis (final answer) |
+| `CostReport.jsx` | Compact run-cost panel with total cost, token/call counts, confidence status, and per-model breakdown |
 | `CouncilGrid.jsx` | Visual grid of council members with provider icons |
 | `CouncilSetup.jsx` | Inline council editor on welcome screen (members, chairman, presets; auto-save) |
 | `Settings.jsx` | 5-section settings: LLM API Keys, Council Config, System Prompts, Search Providers, Backup & Reset |
@@ -246,6 +248,21 @@ Body: {content, execution_mode?, council_models?, chairman_model?, web_search?, 
 
 ### Minimum Model Count
 The minimum is 1 model (not 2). Single-model queries are valid for any execution mode.
+
+## Cost Reporting
+
+Every council, iterative debate, and advisor run should carry:
+- Per-call `usage` and `cost` fields on model response objects when the provider returns usage.
+- A run-level `metadata.cost_report` in stored conversations and stream completion events.
+- A top-level `cost_report` from JSON endpoints and MCP tools.
+
+`backend/costs.py` is the single attribution path. It normalizes token usage from OpenAI-compatible, Anthropic, Google, and Ollama response formats, then prices calls in this order:
+1. Provider-reported cost, currently OpenRouter `usage.cost` / `usage.total_cost`.
+2. Known-free rules: `ollama:*`, `nvidia:*`, unprefixed or prefixed OpenRouter models ending in `:free`, and custom endpoints whose configured name/URL/model text contains OpenCode markers.
+3. Cached pricing catalog estimate from `LLM_COUNCIL_PRICING_SOURCE_URL` (default `https://ai-model-pricing.com/api/v1/pricing.json`), falling back to `LLM_COUNCIL_LITELLM_PRICING_URL` (default LiteLLM `model_prices_and_context_window.json`).
+4. Unknown cost with token usage preserved when pricing is unavailable.
+
+Catalog data is cached at `data/model_pricing_cache.json`; TTL is `LLM_COUNCIL_PRICING_CACHE_TTL_SECONDS` (default `86400`). Custom endpoints are only zero-cost when known-free; otherwise they use upstream model estimates when a catalog match exists and mark the cost as estimated.
 
 ## Execution Modes
 

@@ -8,6 +8,86 @@ from ..client import CouncilClient
 from ..stream_buffer import buffer_stage1, buffer_stage2, buffer_stage3, buffer_iterative_debate
 
 
+def _combine_cost_report(*stage_results: dict) -> dict:
+    calls = []
+    for stage in stage_results:
+        for key in ("results", "rankings"):
+            for item in stage.get(key, []) if isinstance(stage, dict) else []:
+                if item.get("cost"):
+                    calls.append(item["cost"])
+        if isinstance(stage, dict) and stage.get("cost"):
+            calls.append(stage["cost"])
+
+    by_model = {}
+    total_cost = 0.0
+    input_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
+    known = 0
+    unknown = 0
+    estimates = 0
+    free = 0
+    for call in calls:
+        model = call.get("model", "unknown")
+        row = by_model.setdefault(model, {
+            "name": model,
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "total_cost": 0.0,
+            "known_cost_calls": 0,
+            "unknown_cost_calls": 0,
+            "estimated_calls": 0,
+            "free_calls": 0,
+        })
+        row["calls"] += 1
+        in_tokens = call.get("input_tokens") if isinstance(call.get("input_tokens"), int) else 0
+        out_tokens = call.get("output_tokens") if isinstance(call.get("output_tokens"), int) else 0
+        tokens = call.get("total_tokens") if isinstance(call.get("total_tokens"), int) else 0
+        row["input_tokens"] += in_tokens
+        row["output_tokens"] += out_tokens
+        row["total_tokens"] += tokens
+        input_tokens += in_tokens
+        output_tokens += out_tokens
+        total_tokens += tokens
+        if isinstance(call.get("total_cost"), (int, float)):
+            row["total_cost"] += float(call["total_cost"])
+            total_cost += float(call["total_cost"])
+            row["known_cost_calls"] += 1
+            known += 1
+        else:
+            row["unknown_cost_calls"] += 1
+            unknown += 1
+        if call.get("is_estimate"):
+            row["estimated_calls"] += 1
+            estimates += 1
+        if call.get("cost_status") == "free":
+            row["free_calls"] += 1
+            free += 1
+
+    rows = list(by_model.values())
+    for row in rows:
+        row["total_cost"] = round(row["total_cost"], 8)
+
+    return {
+        "currency": "USD",
+        "total_cost": round(total_cost, 8),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "total_calls": len(calls),
+        "known_cost_calls": known,
+        "unknown_cost_calls": unknown,
+        "estimated_calls": estimates,
+        "free_calls": free,
+        "has_unknown_costs": unknown > 0,
+        "has_estimates": estimates > 0,
+        "by_model": sorted(rows, key=lambda r: r["total_cost"], reverse=True),
+        "calls": calls,
+    }
+
+
 def register(server, base_url: str) -> None:
     """Register council_deliberate and model_chat tools."""
 
@@ -15,7 +95,8 @@ def register(server, base_url: str) -> None:
         "Run council deliberation. action: 'stage1' (individual responses), "
         "'stage2' (peer rankings), 'stage3' (chairman synthesis only), "
         "'full' (all 3 stages). Pass conversation_id to continue a thread. "
-        "web_search enriches the query. models overrides council members for 'full' only."
+        "web_search enriches the query. models overrides council members for 'full' only. "
+        "Results include usage/cost details and a cost_report."
     ))
     async def council_deliberate(
         action: str,
@@ -39,6 +120,7 @@ def register(server, base_url: str) -> None:
                         conversation_id, query, web_search=web_search, execution_mode="chat_only"
                     )
                     result, _ = await buffer_stage1(events, conversation_id, query)
+                    result["cost_report"] = _combine_cost_report(result)
                     return json.dumps(result, indent=2)
 
                 if action == "stage2":
@@ -47,6 +129,7 @@ def register(server, base_url: str) -> None:
                     )
                     _, remaining = await buffer_stage1(events, conversation_id, query)
                     result, _ = await buffer_stage2(remaining, conversation_id)
+                    result["cost_report"] = _combine_cost_report(result)
                     return json.dumps(result, indent=2)
 
                 if action == "stage3":
@@ -56,6 +139,7 @@ def register(server, base_url: str) -> None:
                     _, after1 = await buffer_stage1(events, conversation_id, query)
                     _, after2 = await buffer_stage2(after1, conversation_id)
                     result = await buffer_stage3(after2, conversation_id)
+                    result["cost_report"] = _combine_cost_report(result)
                     return json.dumps(result, indent=2)
 
                 events = client.stream_message(
@@ -74,6 +158,7 @@ def register(server, base_url: str) -> None:
                 "stage2": stage2,
                 "stage3": stage3,
                 "chairman_answer": stage3.get("synthesis"),
+                "cost_report": _combine_cost_report(stage1, stage2, stage3),
             }, indent=2)
         except Exception as exc:
             return json.dumps({"status": "error", "message": str(exc)}, indent=2)
@@ -81,7 +166,8 @@ def register(server, base_url: str) -> None:
     @server.tool(description=(
         "Chat with a single model. action: 'quick' (one-shot, no memory) or "
         "'multi_turn' (pass conversation_id from prior response to continue). "
-        "model must include provider prefix, e.g. openai:gpt-4.1 or ollama:llama3."
+        "model must include provider prefix, e.g. openai:gpt-4.1 or ollama:llama3. "
+        "Results include usage/cost details and a cost_report."
     ))
     async def model_chat(
         action: str,
@@ -107,6 +193,9 @@ def register(server, base_url: str) -> None:
                         "model": result.get("model", model),
                         "response": result.get("response"),
                         "error": result.get("error"),
+                        "usage": result.get("usage"),
+                        "cost": result.get("cost"),
+                        "cost_report": result.get("cost_report"),
                         "web_search_used": web_search,
                     }, indent=2)
 
@@ -127,6 +216,9 @@ def register(server, base_url: str) -> None:
                 "model": first.get("model", model),
                 "response": first.get("response"),
                 "error": first.get("error"),
+                "usage": first.get("usage"),
+                "cost": first.get("cost"),
+                "cost_report": _combine_cost_report(result),
                 "web_search_used": web_search,
             }, indent=2)
         except Exception as exc:
@@ -138,6 +230,7 @@ def register(server, base_url: str) -> None:
         "Supports 3 critique modes: 'freeform' (default), 'paragraph' (per-paragraph), "
         "and 'claim' (per-claim with canonical claim extraction). "
         "Returns all rounds data plus the chairman's corrected draft (Stage 4). "
+        "Results include a cost_report. "
         "Set debate_rounds (1-5, default from settings) for number of rounds. "
         "auto_converge (bool) stops early if rankings stabilize; "
         "convergence_threshold (1-3) sets how many stable rounds trigger early stop."

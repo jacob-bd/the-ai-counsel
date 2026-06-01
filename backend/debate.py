@@ -14,6 +14,7 @@ from .council import (
     calculate_aggregate_rankings,
     build_stage_texts,
 )
+from .costs import build_iterative_debate_cost_report
 
 logger = logging.getLogger(__name__)
 
@@ -811,4 +812,5 @@ async def run_iterative_debate(
         "critique_mode": critique_mode,
         "stage4": stage4_result,
         "rounds": all_rounds_data,
+        "cost_report": build_iterative_debate_cost_report(all_rounds_data, stage4_result),
     }

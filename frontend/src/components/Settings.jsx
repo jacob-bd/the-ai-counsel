@@ -101,6 +101,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   });
   const [directAvailableModels, setDirectAvailableModels] = useState([]);
 
+  // OpenCode (Zen + Go) State — single key, shared between products
+  const [opencodeApiKey, setOpencodeApiKey] = useState('');
+  const [isTestingOpencode, setIsTestingOpencode] = useState(false);
+  const [opencodeTestResult, setOpencodeTestResult] = useState(null);
+  const [opencodeAvailableModels, setOpencodeAvailableModels] = useState([]);
+
   // Validation State
   const [validatingKeys, setValidatingKeys] = useState({});
   const [keyValidationStatus, setKeyValidationStatus] = useState({});
@@ -503,6 +509,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       loadOllamaModels(data.ollama_base_url || 'http://localhost:11434');
       if (data.custom_endpoint_url) {
         loadCustomEndpointModels();
+      }
+      if (data.opencode_api_key_set) {
+        loadOpencodeModels();
       }
 
     } catch (err) {
@@ -1179,6 +1188,69 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     }
   };
 
+  const handleTestOpencode = async () => {
+    const apiKey = opencodeApiKey;
+    if (!apiKey && !settings?.opencode_api_key_set) return;
+
+    setIsTestingOpencode(true);
+    setOpencodeTestResult(null);
+
+    try {
+      const result = await api.testOpencodeKey(apiKey || '');
+      // result is either { success, message } (single product) or { success, results: {zen, go} }
+      if (result?.results) {
+        const zenOk = result.results.zen?.success;
+        const goOk = result.results.go?.success;
+        const summary = [
+          zenOk ? '✓ Zen' : '✗ Zen',
+          goOk ? '✓ Go' : '✗ Go',
+        ].join(' · ');
+        const messages = [result.results.zen?.message, result.results.go?.message]
+          .filter(Boolean)
+          .join(' / ');
+        setOpencodeTestResult({
+          success: result.success,
+          message: `${summary} — ${messages}`,
+        });
+      } else {
+        setOpencodeTestResult({
+          success: !!result?.success,
+          message: result?.message || 'No response from OpenCode',
+        });
+      }
+
+      if (result?.success && apiKey) {
+        await api.updateSettings({ opencode_api_key: apiKey });
+        setOpencodeApiKey('');
+        await loadSettings();
+        await loadOpencodeModels();
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
+    } catch (err) {
+      setOpencodeTestResult({
+        success: false,
+        message: err?.response?.data?.detail || err?.message || 'Test failed',
+      });
+    } finally {
+      setIsTestingOpencode(false);
+    }
+  };
+
+  const loadOpencodeModels = async () => {
+    try {
+      const all = await api.getDirectModels();
+      const opencodeOnly = (all || []).filter(m => {
+        const name = m.provider || '';
+        return name === 'OpenCode Zen' || name === 'OpenCode Go';
+      });
+      setOpencodeAvailableModels(opencodeOnly);
+    } catch (err) {
+      console.error('Failed to load OpenCode models:', err);
+      setOpencodeAvailableModels([]);
+    }
+  };
+
   const handleTestDirectKey = async (providerId, keyField) => {
     const apiKey = directKeys[keyField];
     // Allow if key is entered OR if it's already set (Retest mode)
@@ -1674,6 +1746,13 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                 handleTestDirectKey={handleTestDirectKey}
                 validatingKeys={validatingKeys}
                 keyValidationStatus={keyValidationStatus}
+                // OpenCode
+                opencodeApiKey={opencodeApiKey}
+                setOpencodeApiKey={setOpencodeApiKey}
+                handleTestOpencode={handleTestOpencode}
+                isTestingOpencode={isTestingOpencode}
+                opencodeTestResult={opencodeTestResult}
+                opencodeAvailableModels={opencodeAvailableModels}
                 // Custom Endpoint
                 customEndpointName={customEndpointName}
                 setCustomEndpointName={(val) => { setCustomEndpointName(val); setCustomEndpointTestResult(null); }}

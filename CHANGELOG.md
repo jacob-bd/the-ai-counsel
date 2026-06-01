@@ -5,6 +5,24 @@ All notable changes to The AI Counsel will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.8.0] - 2026-06-01
+
+### Added
+
+- **OpenCode Zen and OpenCode Go as direct providers** — Two new council model sources, addressing [opencode.ai](https://opencode.ai) without going through OpenRouter.
+  - Prefixes: `opencode-zen:` (Zen dispatch) and `opencode-go:` (Go dispatch).
+  - v1 scope: chat/completions only. The provider filters each product's `/v1/models` listing to chat-capable model families and drops non-`/chat/completions` endpoints (GPT Responses, Anthropic Messages, per-model Gemini). Multi-protocol support is a future release.
+  - Single shared API key field. A user with only a Zen subscription, only a Go subscription, or both on the same key is supported. Go users can also use Zen's free models.
+  - Settings → "LLM API Keys" has a new OpenCode subsection with a single "Test & Save" button that validates both products in one call (`POST /api/settings/test-opencode`).
+  - `direct_provider_toggles` now defaults `opencode-zen` and `opencode-go` to `false` (Council-only; Advisor model pickers ignore these toggles, per AGENTS.md).
+  - Cost attribution: hardcoded pricing table in `backend/costs.py` (`_OPENCODE_PRICING`, `_OPENCODE_FREE_MODELS`) reports `pricing_source: "table:opencode"` for paid models and `pricing_source: "free:opencode"` for the four known-free Zen models (big-pickle, deepseek-v4-flash-free, mimo-v2.5-free, nemotron-3-super-free). Go's published per-1M prices are surfaced with a "subscription" note and `cost_status: "estimated"`.
+  - Council grid uses a new `opencode.svg` icon and a dedicated `#211E1E` (OpenCode brand grey) accent. Prefix detection is ordered before generic `gpt`/`claude` substring fallbacks in `councilGridUtils.js`.
+
+- **Run cost reporting**: Council, iterative debate, advisor debate, REST, and MCP responses now include per-call usage/cost metadata plus a summarized `cost_report` by model and stage. The UI shows a compact run-cost panel with token totals, call counts, pricing confidence, and model breakdowns.
+- **Pricing catalog integration**: Added cached pricing lookups from `ai-model-pricing.com` with LiteLLM pricing as fallback. Known-free Ollama, NVIDIA, OpenRouter `:free`, and OpenCode custom endpoints report `$0`.
+
 ## [0.7.0] - 2026-05-30
 
 ### Added

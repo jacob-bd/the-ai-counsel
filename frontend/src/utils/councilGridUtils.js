@@ -8,6 +8,7 @@ import groqLogo from '../assets/icons/groq.svg';
 import openrouterLogo from '../assets/icons/openrouter.svg';
 import nvidiaLogo from '../assets/icons/nvidia.svg';
 import customLogo from '../assets/icons/openai-compatible.svg';
+import opencodeLogo from '../assets/icons/opencode.svg';
 
 export const PROVIDER_CONFIG = {
   openai: { color: '#10a37f', label: 'OpenAI', logo: openaiLogo },
@@ -20,10 +21,14 @@ export const PROVIDER_CONFIG = {
   nvidia: { color: '#76b900', label: 'NVIDIA', logo: nvidiaLogo },
   openrouter: { color: '#7f5af0', label: 'OpenRouter', logo: openrouterLogo },
   custom: { color: '#06b6d4', label: 'Custom', logo: customLogo },
+  'opencode-zen': { color: '#211E1E', label: 'OpenCode Zen', logo: opencodeLogo },
+  'opencode-go': { color: '#211E1E', label: 'OpenCode Go', logo: opencodeLogo },
   default: { color: '#888888', label: 'Model', logo: null, icon: '🤖' },
 };
 
 const PROVIDER_PREFIXES = [
+  ['opencode-zen:', 'opencode-zen'],
+  ['opencode-go:', 'opencode-go'],
   ['custom:', 'custom'],
   ['ollama:', 'ollama'],
   ['groq:', 'groq'],

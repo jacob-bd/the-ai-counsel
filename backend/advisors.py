@@ -6,6 +6,7 @@ import re
 from typing import List, Dict, Any, Optional
 
 from .council import query_model
+from .costs import build_advisor_cost_report
 from .model_preflight import build_preflight_error_message, preflight_models
 from .personas import get_personas_by_ids, Persona
 from .settings import get_settings
@@ -162,10 +163,18 @@ async def _query_advisor(
     try:
         result = await query_model(model, messages, temperature=temperature)
         if result.get("error"):
-            return pid, model, None, result.get("error_message", "Model error")
-        return pid, model, result.get("content", ""), None
+            return pid, model, None, result.get("error_message", "Model error"), result.get("usage"), result.get("cost")
+        return pid, model, result.get("content", ""), None, result.get("usage"), result.get("cost")
     except Exception as e:
-        return pid, model, None, str(e)
+        return pid, model, None, str(e), None, None
+
+
+def _unpack_advisor_result(result: tuple) -> tuple:
+    """Accept old four-field test doubles while using six fields in production."""
+    if len(result) == 4:
+        pid, model, content, error = result
+        return pid, model, content, error, None, None
+    return result
 
 
 async def _query_neutral(model: str, prompt: str, temperature: float = 0.3) -> Dict[str, Any]:
@@ -173,10 +182,22 @@ async def _query_neutral(model: str, prompt: str, temperature: float = 0.3) -> D
     try:
         response = await query_model(model, [{"role": "user", "content": prompt}], temperature=temperature)
         if response.get("error"):
-            return {"model": model, "content": None, "error": response.get("error_message")}
-        return {"model": model, "content": response.get("content", ""), "error": None}
+            return {
+                "model": model,
+                "content": None,
+                "error": response.get("error_message"),
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+        return {
+            "model": model,
+            "content": response.get("content", ""),
+            "error": None,
+            "usage": response.get("usage"),
+            "cost": response.get("cost"),
+        }
     except Exception as e:
-        return {"model": model, "content": None, "error": str(e)}
+        return {"model": model, "content": None, "error": str(e), "usage": None, "cost": None}
 
 
 async def run_debate(
@@ -263,6 +284,7 @@ async def run_debate(
     safe_question = question.replace("{", "{{").replace("}", "}}")
 
     all_rounds: List[Dict[str, Any]] = []
+    cost_rounds: List[Dict[str, Any]] = []
     round_extracts: List[Dict[str, Any]] = []
     consensus_reached = False
     consensus_round: Optional[int] = None
@@ -331,7 +353,7 @@ async def run_debate(
                 )
 
                 for task in done:
-                    pid, model, content, error = await task
+                    pid, model, content, error, usage, cost = _unpack_advisor_result(await task)
                     completed_count += 1
 
                     if error:
@@ -343,6 +365,8 @@ async def run_debate(
                             "error": error,
                             "consensus": False,
                             "consensus_score": None,
+                            "usage": usage,
+                            "cost": cost,
                         }
                     else:
                         consensus_score = parse_consensus_tag(content)
@@ -372,6 +396,8 @@ async def run_debate(
                             "consensus_score": None if exceeds_word_limit else consensus_score,
                             "word_count": word_count,
                             "word_limit": word_limit,
+                            "usage": usage,
+                            "cost": cost,
                         }
 
                     round_responses.append(resp_data)
@@ -398,9 +424,14 @@ async def run_debate(
             "responses": [
                 {"persona_id": r["persona_id"], "persona_name": r["persona_name"],
                  "model": r["model"], "content": r["content"],
-                 "consensus": r["consensus"], "consensus_score": r["consensus_score"]}
+                 "consensus": r["consensus"], "consensus_score": r["consensus_score"],
+                 "usage": r.get("usage"), "cost": r.get("cost")}
                 for r in successful_responses
             ],
+        })
+        cost_rounds.append({
+            "round_number": round_num,
+            "responses": round_responses,
         })
 
         all_agree = (
@@ -456,6 +487,8 @@ async def run_debate(
                 "model": extract_result.get("model"),
                 "content": extract_result.get("content") or "",
                 "error": extract_result.get("error"),
+                "usage": extract_result.get("usage"),
+                "cost": extract_result.get("cost"),
             })
 
     transcript_text = _format_transcript(all_rounds, personas_map)
@@ -508,5 +541,11 @@ async def run_debate(
             "tiebreaker": tiebreaker_result,
             "verdict": verdict_data,
             "personas": personas_serialized,
+            "cost_report": build_advisor_cost_report(
+                cost_rounds,
+                verdict_data,
+                tiebreaker_result,
+                round_extracts,
+            ),
         },
     }

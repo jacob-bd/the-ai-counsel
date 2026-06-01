@@ -59,7 +59,7 @@ class AnthropicProvider(LLMProvider):
                     
                 data = response.json()
                 content = data["content"][0]["text"]
-                return {"content": content, "error": False}
+                return {"content": content, "usage": data.get("usage"), "error": False}
                 
         except Exception as e:
             return {"error": True, "error_message": str(e)}

@@ -261,6 +261,24 @@ export const api = {
   },
 
   /**
+   * Test the OpenCode API key (against Zen and/or Go).
+   * Pass product='zen' or 'go' to test a single product; omit to test both.
+   */
+  async testOpencodeKey(apiKey, product = null) {
+    const response = await fetch(`${API_BASE}/api/settings/test-opencode`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ api_key: apiKey, product }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to test OpenCode key');
+    }
+    return response.json();
+  },
+
+  /**
    * Test Ollama connection.
    */
   async testOllamaConnection(baseUrl) {

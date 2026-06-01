@@ -12,6 +12,7 @@ import AdvisorSetup from './AdvisorSetup';
 import MarkdownContent from './MarkdownContent';
 import Stage4, { Stage4Skeleton } from './Stage4';
 import RoundNavigator from './RoundNavigator';
+import CostReport from './CostReport';
 import './ChatInterface.css';
 
 function hasStage1Results(msg) {
@@ -273,6 +274,7 @@ export default function ChatInterface({
                                         question={msg.question || ''}
                                         webSearch={msg.webSearch}
                                         error={msg.error || null}
+                                        costReport={msg.metadata?.cost_report}
                                     />
                                 ) : (
                                     <CouncilMessageRenderer
@@ -483,6 +485,11 @@ function CouncilMessageRenderer({
                     onSelectRound={hasRounds ? setSelectedRound : null}
                 />
             )}
+
+            <CostReport
+                report={displayMetadata.cost_report}
+                title={totalRounds > 1 ? 'Debate Cost' : 'Run Cost'}
+            />
 
             {/* Stage 1: Council Grid (during active round deliberation only) */}
             {shouldShowStage1CouncilGrid(msg) && (

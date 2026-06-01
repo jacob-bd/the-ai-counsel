@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import AdvisorGrid from './AdvisorGrid';
 import MarkdownContent from './MarkdownContent';
 import { getShortModelName } from '../utils/modelHelpers';
+import CostReport from './CostReport';
 import './DebateView.css';
 
 const toStr = (v) => (typeof v === 'string' ? v : String(v || ''));
@@ -104,6 +105,7 @@ export default function DebateView({
   question = '',
   webSearch = null,
   error = null,
+  costReport = null,
 }) {
   const [verdictCopied, setVerdictCopied] = useState(false);
 
@@ -166,6 +168,8 @@ export default function DebateView({
           Debate starting...
         </div>
       )}
+
+      <CostReport report={costReport} title="Advisor Debate Cost" />
 
       {/* Error banner — shown when the debate fails */}
       {error && (

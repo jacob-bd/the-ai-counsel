@@ -90,6 +90,7 @@ async def query_model(
                     'content': message.get('content'),
                     'reasoning': message.get('reasoning'), # Capture reasoning field (common in DeepSeek R1/reasoning models)
                     'reasoning_details': message.get('reasoning_details'),
+                    'usage': data.get('usage'),
                     'error': None
                 }
 

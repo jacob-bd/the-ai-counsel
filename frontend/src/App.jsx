@@ -627,7 +627,14 @@ function App() {
               setCurrentConversation((prev) => {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
-                messages[messages.length - 1] = { ...lastMsg, isRunning: false };
+                messages[messages.length - 1] = {
+                  ...lastMsg,
+                  isRunning: false,
+                  metadata: {
+                    ...lastMsg.metadata,
+                    cost_report: event.data?.cost_report,
+                  },
+                };
                 return { ...prev, messages };
               });
               setIsLoading(false);
@@ -1120,6 +1127,7 @@ function App() {
                     aggregate_rankings: lastMsg.metadata?.aggregate_rankings,
                     canonical_claims: lastMsg.metadata?.canonical_claims,
                     aggregate_claim_verdicts: lastMsg.metadata?.aggregate_claim_verdicts,
+                    cost_report: lastMsg.metadata?.cost_report,
                   }
                 };
 
@@ -1228,6 +1236,7 @@ function App() {
                     ...lastMsg.metadata,
                     rounds: rounds,
                     stage4: event.stage4 || lastMsg.metadata?.stage4,
+                    cost_report: event.cost_report || lastMsg.metadata?.cost_report,
                     converged: event.converged || lastMsg.metadata?.converged,
                     critique_mode: event.critique_mode || lastMsg.metadata?.critique_mode,
                     label_to_model: lastRound.metadata?.label_to_model || lastMsg.metadata?.label_to_model,
@@ -1248,6 +1257,21 @@ function App() {
               break;
 
             case 'complete':
+              setCurrentConversation((prev) => {
+                if (!prev || prev.messages.length === 0) return prev;
+                const messages = [...prev.messages];
+                const lastMsg = messages[messages.length - 1];
+                if (lastMsg.role === 'assistant') {
+                  messages[messages.length - 1] = {
+                    ...lastMsg,
+                    metadata: {
+                      ...lastMsg.metadata,
+                      ...(event.metadata || {}),
+                    },
+                  };
+                }
+                return { ...prev, messages };
+              });
               // Stream complete, reload conversations list
               loadConversations();
               setIsLoading(false);

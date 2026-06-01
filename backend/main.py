@@ -16,6 +16,7 @@ import asyncio
 from . import storage
 from .council import generate_conversation_title, generate_search_query, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, PROVIDERS
 from .config import get_chairman_model, get_council_models
+from .costs import build_advisor_cost_report, build_council_cost_report, build_iterative_debate_cost_report
 from .model_preflight import build_preflight_error_message, preflight_models
 from .search import perform_web_search, SearchProvider
 from .settings import get_settings, save_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, AVAILABLE_MODELS, PROMPT_DEFAULTS
@@ -63,6 +64,12 @@ def _save_partial_results(
         partial_metadata["label_to_model"] = label_to_model
     if aggregate_rankings:
         partial_metadata["aggregate_rankings"] = aggregate_rankings
+    if "cost_report" not in partial_metadata:
+        partial_metadata["cost_report"] = build_council_cost_report(
+            stage1_results,
+            stage2_results,
+            stage3_result,
+        )
     storage.add_assistant_message(
         conversation_id,
         stage1_results,
@@ -292,6 +299,7 @@ class PipelineResult:
     stage3: Optional[Dict[str, Any]] = None
     label_to_model: Dict[str, str] = field(default_factory=dict)
     aggregate_rankings: Any = None
+    cost_report: Optional[Dict[str, Any]] = None
 
 
 async def _run_council_pipeline(
@@ -342,6 +350,7 @@ async def _run_council_pipeline(
             chairman_override=chairman_override
         )
 
+    result.cost_report = build_council_cost_report(result.stage1, result.stage2, result.stage3)
     return result
 
 
@@ -463,6 +472,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
         stage3_result = None
         label_to_model = {}
         aggregate_rankings = {}
+        cost_report = None
         _register_run(conversation_id, body.execution_mode)
         try:
             storage.add_user_message(conversation_id, body.content, conversation=conversation)
@@ -587,6 +597,8 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                 _active_runs[conversation_id]["stage3_response"] = stage3_result
                 yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
+            cost_report = build_council_cost_report(stage1_results, stage2_results, stage3_result)
+
             # Wait for title generation if it was started
             if title_task:
                 try:
@@ -600,6 +612,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             # Save complete assistant message with metadata
             metadata = {
                 "execution_mode": body.execution_mode,  # Save mode for historical context
+                "cost_report": cost_report,
             }
 
             # Only include stage2/stage3 metadata if they were executed
@@ -622,7 +635,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             )
 
             # Send completion event
-            yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'metadata': {'cost_report': cost_report}})}\n\n"
 
         except asyncio.CancelledError:
             print(f"Stream cancelled for conversation {conversation_id}")
@@ -633,6 +646,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                         stage3_result, conversation,
                         label_to_model=label_to_model,
                         aggregate_rankings=aggregate_rankings,
+                        extra_metadata={"cost_report": build_council_cost_report(stage1_results, stage2_results, stage3_result)},
                     )
                     print(f"Saved partial results: {len(stage1_results)} stage1, {len(stage2_results)} stage2")
                 except Exception as save_err:
@@ -686,6 +700,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
         final_canonical_claims = None
         final_aggregate_claim_verdicts = None
         final_stage4 = None
+        cost_report = None
         debate_critique_mode = "freeform"
         debate_converged = False
         _register_run(conversation_id, body.execution_mode)
@@ -799,6 +814,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
 
                 if event_type == "debate_complete":
                     rounds_data = event.get("rounds", [])
+                    cost_report = event.get("cost_report") or build_iterative_debate_cost_report(rounds_data, event.get("stage4"))
                     debate_converged = event.get("converged", False)
                     debate_critique_mode = event.get("critique_mode", "freeform")
                     if rounds_data:
@@ -830,6 +846,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                 "debate_rounds_executed": len(rounds_data),
                 "converged": debate_converged,
                 "rounds": rounds_data,
+                "cost_report": cost_report or build_iterative_debate_cost_report(rounds_data, final_stage4),
             }
             if body.execution_mode in ["chat_ranking", "full"]:
                 metadata["label_to_model"] = final_label_to_model
@@ -854,7 +871,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                 conversation=conversation
             )
 
-            yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'metadata': {'cost_report': metadata['cost_report']}})}\n\n"
 
         except asyncio.CancelledError:
             print(f"Stream cancelled for conversation {conversation_id}")
@@ -864,7 +881,10 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                         conversation_id, body, final_stage1, final_stage2,
                         final_stage3, conversation,
                         label_to_model=final_label_to_model,
-                        extra_metadata={"rounds": rounds_data},
+                        extra_metadata={
+                            "rounds": rounds_data,
+                            "cost_report": build_iterative_debate_cost_report(rounds_data, final_stage4),
+                        },
                     )
                     print(f"Saved partial debate results: {len(rounds_data)} rounds")
                 except Exception as save_err:
@@ -956,6 +976,7 @@ async def start_debate_stream(conversation_id: str, body: StartDebateRequest, re
             verdict_data = None
             tiebreaker_data = None
             saved_personas = []
+            cost_report = None
 
             web_search_used = bool(body.search_provider or body.web_search)
             async for event in run_debate(
@@ -977,6 +998,7 @@ async def start_debate_stream(conversation_id: str, body: StartDebateRequest, re
                     verdict_data = event["data"]["verdict"]
                     tiebreaker_data = event["data"].get("tiebreaker")
                     saved_personas = event["data"].get("personas", [])
+                    cost_report = event["data"].get("cost_report")
 
                 if event_type == "advisor_error":
                     message = event.get("message", "Advisor debate failed")
@@ -993,6 +1015,7 @@ async def start_debate_stream(conversation_id: str, body: StartDebateRequest, re
                 "model_assignments": body.model_assignments,
                 "max_rounds": body.max_rounds,
                 "web_search": web_search_used,
+                "cost_report": cost_report or build_advisor_cost_report(all_rounds, verdict_data, tiebreaker_data),
             }
             if search_context:
                 metadata["search_context"] = search_context
@@ -1063,7 +1086,7 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
         preflight=False,
     )
 
-    metadata = {"execution_mode": body.execution_mode}
+    metadata = {"execution_mode": body.execution_mode, "cost_report": result.cost_report}
     if body.execution_mode in ("chat_ranking", "full"):
         metadata["label_to_model"] = result.label_to_model
         metadata["aggregate_rankings"] = result.aggregate_rankings
@@ -1087,6 +1110,7 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
         "stage3": result.stage3,
         "aggregate_rankings": result.aggregate_rankings if result.aggregate_rankings else None,
         "label_to_model": result.label_to_model if result.label_to_model else None,
+        "cost_report": result.cost_report,
     }
 
 
@@ -1125,10 +1149,13 @@ async def ask_oneshot(body: AskRequest):
             "response": r.get("response"),
             "model": r.get("model"),
             "error": r.get("error"),
+            "usage": r.get("usage"),
+            "cost": r.get("cost"),
+            "cost_report": result.cost_report,
         }
 
     if body.execution_mode == "chat_only":
-        return {"responses": result.stage1}
+        return {"responses": result.stage1, "cost_report": result.cost_report}
 
     if body.execution_mode == "chat_ranking":
         return {
@@ -1136,6 +1163,7 @@ async def ask_oneshot(body: AskRequest):
             "rankings": result.stage2,
             "aggregate_rankings": result.aggregate_rankings,
             "label_to_model": result.label_to_model,
+            "cost_report": result.cost_report,
         }
 
     return {
@@ -1145,6 +1173,7 @@ async def ask_oneshot(body: AskRequest):
         "rankings": result.stage2,
         "aggregate_rankings": result.aggregate_rankings,
         "label_to_model": result.label_to_model,
+        "cost_report": result.cost_report,
     }
 
 
@@ -1173,6 +1202,7 @@ class UpdateSettingsRequest(BaseModel):
     deepseek_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
+    opencode_api_key: Optional[str] = None
 
     # Enabled Providers
     enabled_providers: Optional[Dict[str, bool]] = None
@@ -1257,6 +1287,7 @@ async def get_app_settings():
         "deepseek_api_key_set": bool(settings.deepseek_api_key),
         "groq_api_key_set": bool(settings.groq_api_key),
         "nvidia_api_key_set": bool(settings.nvidia_api_key),
+        "opencode_api_key_set": bool(settings.opencode_api_key),
         "custom_endpoint_api_key_set": bool(settings.custom_endpoint_api_key),
 
         # Enabled Providers
@@ -1448,6 +1479,8 @@ async def update_app_settings(request: UpdateSettingsRequest):
         updates["groq_api_key"] = request.groq_api_key
     if request.nvidia_api_key is not None:
         updates["nvidia_api_key"] = request.nvidia_api_key
+    if request.opencode_api_key is not None:
+        updates["opencode_api_key"] = request.opencode_api_key
 
     # Enabled Providers
     if request.enabled_providers is not None:
@@ -1561,6 +1594,7 @@ async def update_app_settings(request: UpdateSettingsRequest):
         "deepseek_api_key_set": bool(settings.deepseek_api_key),
         "groq_api_key_set": bool(settings.groq_api_key),
         "nvidia_api_key_set": bool(settings.nvidia_api_key),
+        "opencode_api_key_set": bool(settings.opencode_api_key),
         "custom_endpoint_api_key_set": bool(settings.custom_endpoint_api_key),
 
         # Enabled Providers
@@ -1778,13 +1812,19 @@ async def test_provider_api(request: TestProviderRequest):
     
     if request.provider_id not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Invalid provider ID")
-        
+
     api_key = request.api_key
     if not api_key:
         # Try to get from settings
         settings = get_settings()
-        # Map provider_id to setting key (e.g. 'openai' -> 'openai_api_key')
-        setting_key = f"{request.provider_id}_api_key"
+        # Provider-id → settings-key map. Falls back to "<id>_api_key".
+        _PROVIDER_SETTINGS_KEY_OVERRIDES = {
+            "opencode-zen": "opencode_api_key",
+            "opencode-go": "opencode_api_key",
+        }
+        setting_key = _PROVIDER_SETTINGS_KEY_OVERRIDES.get(
+            request.provider_id, f"{request.provider_id}_api_key"
+        )
         if hasattr(settings, setting_key):
              api_key = getattr(settings, setting_key)
     
@@ -1793,6 +1833,37 @@ async def test_provider_api(request: TestProviderRequest):
 
     provider = PROVIDERS[request.provider_id]
     return await provider.validate_key(api_key)
+
+
+class TestOpenCodeRequest(BaseModel):
+    """Request to test the OpenCode API key against Zen and/or Go."""
+    api_key: Optional[str] = None
+    product: Optional[str] = None  # "zen" | "go" | None (= test both)
+
+
+@app.post("/api/settings/test-opencode")
+async def test_opencode_key(request: TestOpenCodeRequest):
+    """Test the OpenCode API key by listing models on Zen and/or Go."""
+    from .providers.opencode import OpenCodeProvider
+
+    api_key = request.api_key
+    if not api_key:
+        api_key = get_settings().opencode_api_key
+    if not api_key:
+        return {"success": False, "message": "No OpenCode API key provided or configured"}
+
+    products = [request.product] if request.product in ("zen", "go") else ["zen", "go"]
+    results: Dict[str, Any] = {}
+    for product in products:
+        provider = OpenCodeProvider(product=product)
+        results[product] = await provider.validate_key(api_key)
+
+    if request.product:
+        return results[request.product]
+    return {
+        "success": any(r.get("success") for r in results.values()),
+        "results": results,
+    }
 
 
 class TestOllamaRequest(BaseModel):
