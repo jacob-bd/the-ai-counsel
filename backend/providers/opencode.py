@@ -1,15 +1,16 @@
-"""OpenCode Zen / Go direct provider (OpenAI-compatible chat/completions only).
+"""OpenCode Zen / Go direct provider (chat/completions + messages protocols).
 
 OpenCode Zen is a multi-protocol gateway: GPT-family models use /v1/responses,
 Claude-family use /v1/messages, Gemini use per-model Google endpoints, and the
-rest use the OpenAI-compatible /v1/chat/completions endpoint. This provider
-only supports the chat/completions subset in v1. Models that need a different
-protocol are not listed by ``get_models`` and will surface as a backend error
-if requested directly.
+rest use the OpenAI-compatible /v1/chat/completions endpoint.
 
-OpenCode Go is a subscription endpoint that also exposes /v1/chat/completions
-for a subset of models (GLM, Kimi, DeepSeek, MiMo). Models on the /v1/messages
-path (MiniMax, Qwen) are not supported in v1.
+OpenCode Go is a subscription endpoint exposing /v1/chat/completions for some
+models (GLM, Kimi, DeepSeek, MiMo) and /v1/messages (Anthropic-compatible)
+for others (MiniMax, Qwen).
+
+This provider supports the chat/completions and messages subsets. Models that
+need /v1/responses (GPT) or per-model Google endpoints (Gemini) are not listed
+by ``get_models`` and will surface as a backend error if requested directly.
 
 Both products share the same OpenCode auth — one key unlocks Zen balance
 (per-token) and/or Go subscription ($5 first month, $10/month after).
@@ -33,7 +34,7 @@ INITIAL_RETRY_DELAY = 1.0
 
 
 class OpenCodeProvider(LLMProvider):
-    """Provider for OpenCode Zen and OpenCode Go (chat/completions only)."""
+    """Provider for OpenCode Zen and OpenCode Go (chat/completions + messages)."""
 
     PRODUCT_CONFIG: Dict[str, Dict[str, str]] = {
         "zen": {
@@ -48,17 +49,13 @@ class OpenCodeProvider(LLMProvider):
         },
     }
 
-    # Substring markers for chat/completions-capable models. Anything not
-    # matching is filtered out of get_models(). Keep this list aligned with the
-    # v1 scope; the per-model hardcoded pricing in costs.py mirrors it.
+    # Substring markers for chat/completions-capable models.
     _CHAT_COMPLETIONS_MARKERS: Dict[str, tuple[str, ...]] = {
         "zen": (
             "deepseek",
             "glm",
             "kimi",
             "minimax",
-            "qwen3.5",
-            "qwen3.6",
             "grok",
             "big-pickle",
             "mimo",
@@ -70,6 +67,12 @@ class OpenCodeProvider(LLMProvider):
             "deepseek",
             "mimo",
         ),
+    }
+
+    # Substring markers for Anthropic-compatible /v1/messages models.
+    _MESSAGES_MARKERS: Dict[str, tuple[str, ...]] = {
+        "zen": ("qwen",),
+        "go": ("minimax", "qwen"),
     }
 
     def __init__(self, product: str = "zen") -> None:
@@ -99,6 +102,12 @@ class OpenCodeProvider(LLMProvider):
         lowered = model_id.lower()
         return any(marker in lowered for marker in markers)
 
+    def _supports_messages(self, model_id: str) -> bool:
+        """Return True when the model uses /v1/messages on this product."""
+        markers = self._MESSAGES_MARKERS[self.product]
+        lowered = model_id.lower()
+        return any(marker in lowered for marker in markers)
+
     async def query(
         self,
         model_id: str,
@@ -116,15 +125,90 @@ class OpenCodeProvider(LLMProvider):
         model = self._strip_prefix(model_id)
         if not model:
             return {"error": True, "error_message": f"Missing model id after {self.config['prefix']}: prefix"}
-        if not self._supports_chat_completions(model):
-            return {
-                "error": True,
-                "error_message": (
-                    f"{model} is not a /v1/chat/completions model on {self.name}. "
-                    f"v1 only supports models listed in Settings → Council Config."
-                ),
-            }
 
+        if self._supports_chat_completions(model):
+            return await self._query_chat_completions(api_key, model, messages, timeout, temperature)
+        if self._supports_messages(model):
+            return await self._query_messages(api_key, model, messages, timeout, temperature)
+
+        return {
+            "error": True,
+            "error_message": (
+                f"{model} is not supported on {self.name}. "
+                f"Only chat/completions and messages-protocol models are available."
+            ),
+        }
+
+    async def _query_chat_completions(
+        self, api_key: str, model: str, messages: List[Dict[str, str]],
+        timeout: float, temperature: float,
+    ) -> Dict[str, Any]:
+        return await self._request_with_retries(
+            api_key=api_key,
+            model=model,
+            url=f"{self.config['base_url']}/chat/completions",
+            payload={
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": False,
+            },
+            parse_response=self._parse_chat_completions,
+            timeout=timeout,
+        )
+
+    async def _query_messages(
+        self, api_key: str, model: str, messages: List[Dict[str, str]],
+        timeout: float, temperature: float,
+    ) -> Dict[str, Any]:
+        system_message = ""
+        filtered_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_message = msg["content"]
+            else:
+                filtered_messages.append(msg)
+
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": filtered_messages,
+            "max_tokens": 4096,
+            "temperature": temperature,
+        }
+        if system_message:
+            payload["system"] = system_message
+
+        return await self._request_with_retries(
+            api_key=api_key,
+            model=model,
+            url=f"{self.config['base_url']}/messages",
+            payload=payload,
+            parse_response=self._parse_messages,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    def _parse_chat_completions(data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as e:
+            return {"error": True, "error_message": f"Unexpected response shape: {e}"}
+        return {"content": content, "usage": data.get("usage"), "error": False}
+
+    @staticmethod
+    def _parse_messages(data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            content = data["content"][0]["text"]
+        except (KeyError, IndexError, TypeError) as e:
+            return {"error": True, "error_message": f"Unexpected response shape: {e}"}
+        return {"content": content, "usage": data.get("usage"), "error": False}
+
+    async def _request_with_retries(
+        self, *, api_key: str, model: str, url: str,
+        payload: Dict[str, Any],
+        parse_response,
+        timeout: float,
+    ) -> Dict[str, Any]:
         last_error: Dict[str, str] = {}
         for attempt in range(MAX_RETRIES):
             try:
@@ -133,16 +217,7 @@ class OpenCodeProvider(LLMProvider):
                     "Authorization": f"Bearer {api_key}",
                 }
                 async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(
-                        f"{self.config['base_url']}/chat/completions",
-                        headers=headers,
-                        json={
-                            "model": model,
-                            "messages": messages,
-                            "temperature": temperature,
-                            "stream": False,
-                        },
-                    )
+                    response = await client.post(url, headers=headers, json=payload)
 
                 if response.status_code == 429:
                     retry_delay = INITIAL_RETRY_DELAY * (2 ** attempt)
@@ -167,16 +242,11 @@ class OpenCodeProvider(LLMProvider):
                         "error": True,
                         "error_message": (
                             f"Unexpected {self.name} response content-type: {content_type!r}. "
-                            f"Expected application/json (stream:false)."
+                            f"Expected application/json."
                         ),
                     }
 
-                data = response.json()
-                try:
-                    content = data["choices"][0]["message"]["content"]
-                except (KeyError, IndexError, TypeError) as e:
-                    return {"error": True, "error_message": f"Unexpected {self.name} response shape: {e}"}
-                return {"content": content, "usage": data.get("usage"), "error": False}
+                return parse_response(response.json())
 
             except httpx.TimeoutException:
                 last_error = {"code": "timeout"}
@@ -227,7 +297,7 @@ class OpenCodeProvider(LLMProvider):
                 mid = model_id.lower()
                 if any(x in mid for x in ("embed", "whisper", "tts", "audio", "transcribe", "image", "vision")):
                     continue
-                if not self._supports_chat_completions(model_id):
+                if not self._supports_chat_completions(model_id) and not self._supports_messages(model_id):
                     continue
                 models.append({
                     "id": f"{self.config['prefix']}:{model_id}",

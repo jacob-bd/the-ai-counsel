@@ -1,4 +1,4 @@
-"""Tests for the OpenCode Zen / Go direct provider (chat/completions only)."""
+"""Tests for the OpenCode Zen / Go direct provider (chat/completions + messages)."""
 
 import json
 import pytest
@@ -145,7 +145,9 @@ async def test_query_surfaces_api_error(fake_httpx, fake_settings):
 
 
 @pytest.mark.asyncio
-async def test_get_models_filters_to_chat_completions(fake_httpx, fake_settings):
+async def test_get_models_filters_supported_protocols(fake_httpx, fake_settings):
+    """Zen get_models includes chat/completions and messages models,
+    excludes responses (GPT), Gemini, and utility models."""
     fake_httpx.responses.append((
         200,
         {
@@ -153,6 +155,7 @@ async def test_get_models_filters_to_chat_completions(fake_httpx, fake_settings)
                 {"id": "glm-5.1", "is_free": False},
                 {"id": "deepseek-v4-flash", "is_free": False},
                 {"id": "big-pickle", "is_free": True},
+                {"id": "qwen3.5-plus", "is_free": False},
                 {"id": "gpt-5", "is_free": False},
                 {"id": "claude-sonnet-4-6", "is_free": False},
                 {"id": "embed-v1", "is_free": False},
@@ -167,6 +170,7 @@ async def test_get_models_filters_to_chat_completions(fake_httpx, fake_settings)
     assert "opencode-zen:glm-5.1" in ids
     assert "opencode-zen:deepseek-v4-flash" in ids
     assert "opencode-zen:big-pickle" in ids
+    assert "opencode-zen:qwen3.5-plus" in ids
     assert "opencode-zen:gpt-5" not in ids
     assert "opencode-zen:claude-sonnet-4-6" not in ids
     assert "opencode-zen:embed-v1" not in ids
@@ -176,15 +180,19 @@ async def test_get_models_filters_to_chat_completions(fake_httpx, fake_settings)
 
 
 @pytest.mark.asyncio
-async def test_go_get_models_excludes_messages_protocol(fake_httpx, fake_settings):
+async def test_go_get_models_includes_messages_models(fake_httpx, fake_settings):
+    """Go get_models includes both chat/completions and messages models."""
     fake_httpx.responses.append((
         200,
         {
             "data": [
                 {"id": "glm-5", "is_free": False},
                 {"id": "deepseek-v4-flash", "is_free": False},
+                {"id": "minimax-m3", "is_free": False},
                 {"id": "minimax-m2.5", "is_free": False},
+                {"id": "qwen3.7-max", "is_free": False},
                 {"id": "qwen3.6-plus", "is_free": False},
+                {"id": "gpt-5", "is_free": False},
             ]
         },
         "",
@@ -195,8 +203,11 @@ async def test_go_get_models_excludes_messages_protocol(fake_httpx, fake_setting
     ids = [m["id"] for m in models]
     assert "opencode-go:glm-5" in ids
     assert "opencode-go:deepseek-v4-flash" in ids
-    assert "opencode-go:minimax-m2.5" not in ids
-    assert "opencode-go:qwen3.6-plus" not in ids
+    assert "opencode-go:minimax-m3" in ids
+    assert "opencode-go:minimax-m2.5" in ids
+    assert "opencode-go:qwen3.7-max" in ids
+    assert "opencode-go:qwen3.6-plus" in ids
+    assert "opencode-go:gpt-5" not in ids
 
 
 @pytest.mark.asyncio
@@ -230,8 +241,8 @@ async def test_query_sends_stream_false(fake_httpx, fake_settings):
 
 
 @pytest.mark.asyncio
-async def test_query_rejects_non_chat_completions_model(fake_httpx, fake_settings):
-    """Embed/audio/transcribe models must be rejected at query() time, not
+async def test_query_rejects_unsupported_model(fake_httpx, fake_settings):
+    """Embed/audio/GPT models must be rejected at query() time, not
     surfaced as a confusing upstream 4xx."""
     provider = OpenCodeProvider(product="zen")
     result = await provider.query(
@@ -239,7 +250,7 @@ async def test_query_rejects_non_chat_completions_model(fake_httpx, fake_setting
         [{"role": "user", "content": "hi"}],
     )
     assert result["error"] is True
-    assert "/v1/chat/completions" in result["error_message"]
+    assert "not supported" in result["error_message"]
     assert fake_httpx.instances == [], "Should not have made an HTTP call"
 
 
@@ -296,3 +307,75 @@ async def test_query_rejects_non_json_content_type(fake_httpx, fake_settings):
 
     assert result["error"] is True
     assert "content-type" in result["error_message"].lower() or "stream" in result["error_message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_query_messages_protocol_posts_to_messages_endpoint(fake_httpx, fake_settings):
+    """Messages-protocol models POST to /messages with Anthropic body format."""
+    fake_httpx.responses.append((
+        200,
+        {
+            "content": [{"text": "hello from qwen"}],
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        },
+        "",
+    ))
+
+    provider = OpenCodeProvider(product="go")
+    result = await provider.query(
+        "opencode-go:minimax-m3",
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "hi"},
+        ],
+    )
+
+    assert result["error"] is False
+    assert result["content"] == "hello from qwen"
+    assert result["usage"]["input_tokens"] == 10
+    assert fake_httpx.instances[0].kwargs["__url__"] == "https://opencode.ai/zen/go/v1/messages"
+    body = fake_httpx.instances[0].kwargs["json"]
+    assert body["model"] == "minimax-m3"
+    assert body["max_tokens"] == 4096
+    assert body["system"] == "You are helpful."
+    assert body["messages"] == [{"role": "user", "content": "hi"}]
+    assert "stream" not in body
+    headers = fake_httpx.instances[0].kwargs["headers"]
+    assert headers["Authorization"] == "Bearer sk-zen-test"
+
+
+@pytest.mark.asyncio
+async def test_query_messages_without_system_message(fake_httpx, fake_settings):
+    """Messages body should not include 'system' key when no system message."""
+    fake_httpx.responses.append((
+        200,
+        {"content": [{"text": "ok"}], "usage": {"input_tokens": 1, "output_tokens": 1}},
+        "",
+    ))
+
+    provider = OpenCodeProvider(product="zen")
+    await provider.query("opencode-zen:qwen3.5-plus", [{"role": "user", "content": "hi"}])
+
+    body = fake_httpx.instances[0].kwargs["json"]
+    assert "system" not in body
+    assert fake_httpx.instances[0].kwargs["__url__"] == "https://opencode.ai/zen/v1/messages"
+
+
+@pytest.mark.asyncio
+async def test_zen_qwen_uses_messages_not_chat_completions(fake_httpx, fake_settings):
+    """Zen Qwen models must route to /messages, not /chat/completions."""
+    provider = OpenCodeProvider(product="zen")
+    assert provider._supports_messages("qwen3.5-plus") is True
+    assert provider._supports_messages("qwen3.6-plus") is True
+    assert provider._supports_chat_completions("qwen3.5-plus") is False
+    assert provider._supports_chat_completions("qwen3.6-plus") is False
+
+
+@pytest.mark.asyncio
+async def test_go_minimax_uses_messages(fake_httpx, fake_settings):
+    """Go MiniMax models must route to /messages."""
+    provider = OpenCodeProvider(product="go")
+    assert provider._supports_messages("minimax-m3") is True
+    assert provider._supports_messages("minimax-m2.7") is True
+    assert provider._supports_messages("minimax-m2.5") is True
+    assert provider._supports_chat_completions("minimax-m3") is False

@@ -58,8 +58,10 @@ _OPENCODE_PRICING: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {
         "glm-5": {"input": 1.00, "output": 3.20, "cached": 0.20},
         "kimi-k2.5": {"input": 0.60, "output": 3.00, "cached": 0.10},
         "kimi-k2.6": {"input": 0.95, "output": 4.00, "cached": 0.16},
-        "qwen3.5-plus": {"input": 0.20, "output": 1.20, "cached": 0.02},
+        "qwen3.7-max": {"input": 2.50, "output": 7.50, "cached": 0.50},
+        "qwen3.7-plus": {"input": 0.40, "output": 1.60, "cached": 0.04},
         "qwen3.6-plus": {"input": 0.50, "output": 3.00, "cached": 0.05},
+        "qwen3.5-plus": {"input": 0.20, "output": 1.20, "cached": 0.02},
         "grok-build-0.1": {"input": 1.00, "output": 2.00, "cached": 0.20},
     },
     "opencode-go": {
@@ -71,6 +73,12 @@ _OPENCODE_PRICING: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {
         "mimo-v2.5-pro": {"input": 1.74, "output": 3.48, "cached": 0.0145},
         "deepseek-v4-pro": {"input": 1.74, "output": 3.48, "cached": 0.0145},
         "deepseek-v4-flash": {"input": 0.14, "output": 0.28, "cached": 0.0028},
+        "minimax-m3": {"input": 0.60, "output": 2.40, "cached": 0.12},
+        "minimax-m2.7": {"input": 0.30, "output": 1.20, "cached": 0.06},
+        "minimax-m2.5": {"input": 0.30, "output": 1.20, "cached": 0.06},
+        "qwen3.7-max": {"input": 2.50, "output": 7.50, "cached": 0.50},
+        "qwen3.7-plus": {"input": 0.40, "output": 1.60, "cached": 0.04},
+        "qwen3.6-plus": {"input": 0.50, "output": 3.00, "cached": 0.05},
     },
 }
 
@@ -84,6 +92,8 @@ _OPENCODE_FREE_MODELS: Dict[str, set] = {
         "deepseek-v4-flash-free",
         "mimo-v2.5-free",
         "nemotron-3-super-free",
+        "minimax-m3-free",
+        "qwen3.6-plus-free",
     },
     "opencode-go": set(),
 }
