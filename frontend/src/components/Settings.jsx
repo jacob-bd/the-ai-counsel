@@ -1575,7 +1575,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     if (enabledProviders.direct) {
       const filteredDirectModels = directAvailableModels.filter(m => {
         if (m.provider === 'Groq') return false; // Handled separately above
-        const providerKey = m.provider.toLowerCase();
+        const providerKey = m.provider.toLowerCase().replace(/\s+/g, '-');
         const individualToggleEnabled = directProviderToggles[providerKey];
         const providerConfigured = isDirectProviderConfigured(m.provider);
         return individualToggleEnabled && providerConfigured;
