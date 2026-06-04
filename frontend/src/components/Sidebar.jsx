@@ -73,7 +73,7 @@ export default function Sidebar({
         <div className="sidebar-title-wrapper">
           <div className="sidebar-title">The AI <span className="title-plus">Counsel</span></div>
           <div className="sidebar-subtitle">Created by: <a href="https://github.com/jacob-bd" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dotted rgba(255,255,255,0.3)', paddingBottom: '1px', transition: 'border-color 0.2s' }} onMouseEnter={e => e.target.style.borderBottomColor = 'rgba(255,255,255,0.7)'} onMouseLeave={e => e.target.style.borderBottomColor = 'rgba(255,255,255,0.3)'}>Jacob Ben-David</a></div>
-          <div className="sidebar-version">v0.8.2</div>
+          <div className="sidebar-version">v0.9.0</div>
         </div>
         <button
           className="icon-button"

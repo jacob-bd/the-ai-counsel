@@ -7,28 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-03
+
 ### Added
-- **Response language setting**: Council and advisor model outputs can be pinned to one of 17 languages via Settings → General → Response Language. Title generation and internal search queries stay in English.
+- **Configurable date format**: Conversation timestamps in the sidebar can be set to Auto (browser locale), MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD via Settings → General → Display Preferences. The setting is retroactive — all existing conversations update immediately.
 - **General settings section**: Display preferences (date format) and response language moved out of Backup & Reset into a dedicated General section at the top of Settings.
+- **Response language setting**: Council and advisor model outputs can be pinned to one of 17 languages via Settings → General → Response Language. Title generation and internal search queries stay in English.
 - **Sidebar run summaries**: After a titled council or advisor run completes, the sidebar shows a compact line (rounds, critique mode, auto-converge, advisor personas, consensus, search). Sidebar search matches this line.
 - **Sidebar conversation cost**: Each sidebar card shows a cumulative cost pill (sum of all assistant run costs in the thread, including follow-ups).
-
-### Changed
-- **Date format location**: Settings → General → Display Preferences (was Backup & Reset).
-- **Sidebar timestamps**: Conversation cards show date and time on separate lines (respects your date format setting).
-- **Settings auto-save**: All Settings sections now save automatically (debounced). The Save Changes button was removed; API keys still save on successful test.
-
-## [0.8.2] - 2026-06-03
-
-### Added
-- **Configurable date format**: Conversation timestamps in the sidebar can now be set to Auto (browser locale), MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD via Settings → General → Display Preferences. The setting is retroactive — all existing conversations update immediately.
 - **Release process documentation**: Added `docs/RELEASE.md` and AGENTS guidance so future maintainers and AI agents create both annotated Git tags and GitHub Releases for public versions.
 
 ### Changed
+- **Settings auto-save**: All Settings sections now save automatically (debounced). The Save Changes button was removed; API keys still save on successful test.
 - **Global provider toggles**: `enabled_providers` and `direct_provider_toggles` now apply to **all** model pickers — Council Setup, Advisor Setup, and Settings. Previously they only affected council model pickers in Settings.
 - **Simplified Settings → Council Config**: Removed council member/chairman model selection, "I'm Feeling Lucky" randomizer, "Show free OpenRouter models only" filter, and related validation from Settings. Model composition is now managed exclusively via the welcome-screen Council Setup. Settings retains provider toggles (now global) and all three temperature sliders (Council Heat, Peer Ranking Heat, Chairman Heat).
 - **Provider toggle restructure**: Local (Ollama) is now standalone at the top; all remote providers (OpenRouter, Groq, Custom, Direct Connections) are grouped under a single "Remote APIs" master toggle.
 - **Stage 2 Heat moved**: The Peer Ranking temperature slider moved from Council System Prompts (Stage 2 tab) into the Council Config temperature section alongside the other sliders.
+- **Sidebar timestamps**: Conversation cards show date and time on separate lines (respects your date format setting).
 
 ## [0.8.1] - 2026-06-02
 
