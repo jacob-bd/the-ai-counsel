@@ -13,6 +13,39 @@ INDEX_FILE_NAME = "conversations_index.json"
 VALID_CONVERSATION_MODES = {"council", "advisors"}
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
 
+def is_default_conversation_title(title: Optional[str]) -> bool:
+    """Check if the title is a default, placeholder, or empty title."""
+    return not title or title in (DEFAULT_CONVERSATION_TITLE, "Untitled Conversation", "")
+
+def derive_conversation_title(content: str) -> str:
+    """Derive a short title from the first message content."""
+    if not content or not isinstance(content, str):
+        return "Untitled Conversation"
+    # Normalize whitespace/newlines
+    title = " ".join(content.split())
+    if not title:
+        return "Untitled Conversation"
+    # Strip quotes
+    title = title.strip('"\'')
+    if len(title) > 50:
+        title = title[:47].rstrip() + "..."
+    return title
+
+def maybe_repair_conversation_title(conversation: Dict[str, Any]) -> bool:
+    """Repair conversation title if it is default/placeholder and has user messages."""
+    current_title = conversation.get("title", DEFAULT_CONVERSATION_TITLE)
+    if is_default_conversation_title(current_title):
+        first_user_content = None
+        for msg in conversation.get("messages", []):
+            if msg.get("role") == "user" and msg.get("content"):
+                first_user_content = msg["content"]
+                break
+        if first_user_content:
+            conversation["title"] = derive_conversation_title(first_user_content)
+            return True
+    return False
+
+
 # Keep in sync with frontend/src/constants/critiqueMode.js
 CRITIQUE_MODE_LABELS = {
     "freeform": "Freeform",
@@ -218,6 +251,7 @@ def _build_index_entry(
     *,
     mode: Optional[str] = None,
 ) -> Dict[str, Any]:
+    maybe_repair_conversation_title(conversation)
     entry = {
         "id": conversation["id"],
         "created_at": conversation["created_at"],
@@ -343,6 +377,9 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
 
     with open(path, 'r') as f:
         conversation = json.load(f)
+    if maybe_repair_conversation_title(conversation):
+        # Save to persist the repaired title
+        save_conversation(conversation)
     conversation["mode"] = infer_conversation_mode(conversation)
     return conversation
 
@@ -356,6 +393,7 @@ def save_conversation(conversation: Dict[str, Any]):
     """
     ensure_data_dir()
     conversation["mode"] = infer_conversation_mode(conversation)
+    maybe_repair_conversation_title(conversation)
 
     path = get_conversation_path(conversation['id'])
     with open(path, 'w') as f:
