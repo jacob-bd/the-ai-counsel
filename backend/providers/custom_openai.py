@@ -1,10 +1,63 @@
 """Custom OpenAI-compatible endpoint provider."""
 
+import asyncio
+import logging
+import os
+import random
+import time
 import httpx
 from typing import List, Dict, Any
 from .base import LLMProvider
 from .temperature import add_temperature_if_supported
 from ..settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Runtime 429 retry configuration (text-only and attachment calls)
+# ---------------------------------------------------------------------------
+
+# Maximum retries for transient 429/rate-limit responses during any query.
+_DEFAULT_RATE_LIMIT_MAX_RETRIES = 2
+# Base backoff delay (seconds); each retry doubles this (plus jitter).
+_DEFAULT_RATE_LIMIT_BASE_DELAY = 1.0
+# Jitter ceiling added to each backoff interval (seconds).
+_DEFAULT_RATE_LIMIT_JITTER = 0.5
+
+
+def _is_rate_limited(status_code: int, response_text: str) -> bool:
+    """Return True when the response indicates a transient rate-limit.
+
+    Priority order:
+      1. HTTP status code 429 (canonical rate-limit status)
+      2. HTTP status code 503 combined with Notion-specific markers
+      3. Substring match on the response body as a last-resort fallback
+
+    This ordering ensures upstream wording changes do not silently break
+    detection -- the status code is the stable signal.
+    """
+    if status_code == 429:
+        return True
+    body = (response_text or "").lower()
+    if status_code == 503 and any(
+        m in body for m in ("notion_429", "rate_limit", "rate limit", "fileimporterror")
+    ):
+        return True
+    # Last-resort substring match for error messages surfaced as HTTP 200
+    # (e.g. Notion2API wraps some errors inside a 200 payload).
+    if status_code not in {200, 0} and any(
+        m in body for m in ("notion rate limit", "rate_limit", "too many requests", "throttl", "quota")
+    ):
+        return True
+    return False
+
+
+def _is_auth_error(status_code: int) -> bool:
+    return status_code in {401, 403}
+
+
+def _is_not_found(status_code: int) -> bool:
+    return status_code == 404
 
 
 class CustomOpenAIProvider(LLMProvider):
@@ -18,7 +71,30 @@ class CustomOpenAIProvider(LLMProvider):
         api_key = settings.custom_endpoint_api_key or ""
         return name, url, api_key
 
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
+    def _is_attachment_rate_limit(self, status_code: int, response_text: str) -> bool:
+        """Legacy attachment-specific rate-limit check (delegates to shared helper)."""
+        return _is_rate_limited(status_code, response_text)
+
+    def _rate_limit_retry_config(self) -> tuple[int, float, float]:
+        """Return (max_retries, base_delay_s, jitter_s) for text-only rate-limit backoff."""
+        settings = get_settings()
+        try:
+            max_retries = max(0, int(getattr(
+                settings, "rate_limit_max_retries",
+                os.getenv("LLM_COUNCIL_RATE_LIMIT_MAX_RETRIES", str(_DEFAULT_RATE_LIMIT_MAX_RETRIES))
+            )))
+        except (TypeError, ValueError):
+            max_retries = _DEFAULT_RATE_LIMIT_MAX_RETRIES
+        try:
+            base_delay = max(0.0, float(getattr(
+                settings, "rate_limit_base_delay_seconds",
+                os.getenv("LLM_COUNCIL_RATE_LIMIT_BASE_DELAY_SECONDS", str(_DEFAULT_RATE_LIMIT_BASE_DELAY))
+            )))
+        except (TypeError, ValueError):
+            base_delay = _DEFAULT_RATE_LIMIT_BASE_DELAY
+        return max_retries, base_delay, _DEFAULT_RATE_LIMIT_JITTER
+
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7, attachments: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
         name, base_url, api_key = self._get_config()
 
         if not base_url:
