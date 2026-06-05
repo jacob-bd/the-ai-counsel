@@ -75,10 +75,15 @@ export default function Stage1({ responses, startTime, endTime }) {
               key={index}
               className={`tab ${safeActiveTab === index ? 'active' : ''} ${resp?.error ? 'tab-error' : ''}`}
               onClick={() => setActiveTab(index)}
-              style={safeActiveTab === index ? { borderColor: visuals.color, color: visuals.color } : {}}
+              style={safeActiveTab === index ? { borderColor: visuals.color, color: '#f8fafc' } : {}}
               title={resp?.model}
             >
-              <span className="tab-icon" style={{ backgroundColor: safeActiveTab === index ? 'transparent' : 'rgba(255,255,255,0.1)' }}>
+              <span
+                className="tab-icon"
+                style={{
+                  backgroundColor: safeActiveTab === index ? visuals.color : 'rgba(255,255,255,0.1)',
+                  color: safeActiveTab === index ? '#ffffff' : undefined
+                }}>
                 {visuals.icon}
               </span>
               <span className="tab-name">{shortName}</span>
@@ -95,7 +100,7 @@ export default function Stage1({ responses, startTime, endTime }) {
               {currentVisuals.icon}
             </span>
             <div className="model-info">
-              <span className="model-name-large">{currentResponse.model || 'Unknown Model'}</span>
+              <span className="model-name-large">{getShortModelName(currentResponse.model) || 'Unknown Model'}</span>
               <span className="model-provider-badge" style={{ borderColor: currentVisuals.color, color: currentVisuals.color }}>
                 {currentVisuals.name}
               </span>

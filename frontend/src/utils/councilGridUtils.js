@@ -18,6 +18,7 @@ export const PROVIDER_CONFIG = {
   groq: { color: '#f55036', label: 'Groq', logo: groqLogo },
   ollama: { color: '#ffffff', label: 'Local', logo: ollamaLogo },
   deepseek: { color: '#4e61e6', label: 'DeepSeek', logo: deepseekLogo },
+  kimi: { color: '#111827', label: 'Kimi', logo: null, icon: '月' },
   nvidia: { color: '#76b900', label: 'NVIDIA', logo: nvidiaLogo },
   openrouter: { color: '#7f5af0', label: 'OpenRouter', logo: openrouterLogo },
   custom: { color: '#06b6d4', label: 'Custom', logo: customLogo },
@@ -43,6 +44,17 @@ const PROVIDER_PREFIXES = [
 export function getProviderInfo(modelId) {
   if (!modelId) return PROVIDER_CONFIG.default;
   const id = modelId.toLowerCase();
+
+  if (id.startsWith('custom:')) {
+    const subId = id.substring(7);
+    if (subId.includes('gpt') || subId.includes('openai')) return PROVIDER_CONFIG.openai;
+    if (subId.includes('claude') || subId.includes('anthropic')) return PROVIDER_CONFIG.anthropic;
+    if (subId.includes('gemini') || subId.includes('google')) return PROVIDER_CONFIG.google;
+    if (subId.includes('mistral') || subId.includes('mixtral')) return PROVIDER_CONFIG.mistral;
+    if (subId.includes('deepseek')) return PROVIDER_CONFIG.deepseek;
+    if (subId.includes('kimi') || subId.includes('moonshot')) return PROVIDER_CONFIG.kimi;
+    return PROVIDER_CONFIG.custom;
+  }
 
   if (id.startsWith('openrouter:') || id.includes('openrouter')) return PROVIDER_CONFIG.openrouter;
 

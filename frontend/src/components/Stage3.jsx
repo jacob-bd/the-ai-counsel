@@ -68,7 +68,7 @@ export default function Stage3({ finalResponse, labelToModel, startTime, endTime
                         </span>
                         <div className="chairman-info">
                             <span className="chairman-role">
-                                <span>👨‍⚖️</span> Chairman's Verdict
+                                <span>👨‍⚖️</span> Chairman / Synthesizer
                             </span>
                             <span className="chairman-model">{shortName}</span>
                             <span className="chairman-provider-badge">{visuals.name}</span>

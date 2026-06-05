@@ -191,13 +191,18 @@ function App() {
 
       setAvailableSearchProviders(buildAvailableSearchProviders(settings));
 
+      const customProviderConfigured = settings.custom_endpoint_url &&
+        settings.custom_endpoint_api_key_set &&
+        settings.enabled_providers?.custom !== false;
+
       const hasApiKey = settings.openrouter_api_key_set ||
         settings.groq_api_key_set ||
         settings.openai_api_key_set ||
         settings.anthropic_api_key_set ||
         settings.google_api_key_set ||
         settings.mistral_api_key_set ||
-        settings.deepseek_api_key_set;
+        settings.deepseek_api_key_set ||
+        customProviderConfigured;
 
       // 2. Test Ollama Connection
       // We do this regardless to update the status indicator
