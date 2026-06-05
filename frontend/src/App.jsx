@@ -20,6 +20,23 @@ function finalizeTimers(timers = {}) {
   return next;
 }
 
+const isDefaultConversationTitle = (title) =>
+  !title || title === 'New Conversation' || title === 'Untitled Conversation';
+
+const deriveConversationTitle = (content) => {
+  if (!content || typeof content !== 'string') return 'Untitled Conversation';
+
+  let title = content.trim().replace(/\s+/g, ' ');
+  if (!title) return 'Untitled Conversation';
+
+  title = title.replace(/^["']+|["']+$/g, '');
+
+  if (title.length > 50) {
+    title = `${title.substring(0, 47)}...`;
+  }
+  return title;
+};
+
 const IDLE_LOADING = {
   search: false,
   stage1: false,
@@ -364,10 +381,26 @@ function App() {
   const loadConversations = async (retryCount = 0) => {
     try {
       const convs = await api.listConversations();
-      setConversations(convs.map((conv) => ({
-        ...conv,
-        mode: getConversationMode(conv),
-      })));
+      setConversations((prev) =>
+        convs.map((conv) => {
+          const local = prev.find((item) => item.id === conv.id);
+
+          const updated = {
+            ...conv,
+            mode: getConversationMode(conv),
+          };
+
+          if (
+            local &&
+            isDefaultConversationTitle(conv.title) &&
+            !isDefaultConversationTitle(local.title)
+          ) {
+            updated.title = local.title;
+          }
+
+          return updated;
+        })
+      );
     } catch (error) {
       console.error('Failed to load conversations:', error);
       // Retry up to 3 times with increasing delays (1s, 2s, 3s)
@@ -879,6 +912,23 @@ function App() {
           setIsLoading(false);
           return;
         }
+      }
+
+      activeConversationIdRef.current = activeConversationId;
+
+      // Optimistically update conversation title in list and current state if it is a new/untitled conversation
+      const currentConvInList = conversations.find(c => c.id === activeConversationId);
+      const currentTitle = currentConvInList?.title || currentConversation?.title;
+      const hasNoTitle = isDefaultConversationTitle(currentTitle);
+
+      if (hasNoTitle) {
+        const optimisticTitle = deriveConversationTitle(content);
+        setConversations(prev => prev.map(c =>
+          c.id === activeConversationId ? { ...c, title: optimisticTitle } : c
+        ));
+        setCurrentConversation(prev =>
+          prev && prev.id === activeConversationId ? { ...prev, title: optimisticTitle } : prev
+        );
       }
 
       // Optimistically add user message to UI
@@ -1418,6 +1468,14 @@ function App() {
               break;
 
             case 'title_complete':
+              // Update with final generated title optimistically
+              if (event.data && event.data.title) {
+                const finalTitle = event.data.title;
+                setConversations(prev => prev.map(c =>
+                  c.id === activeConversationId ? { ...c, title: finalTitle } : c
+                ));
+                setCurrentConversation(prev => prev && prev.id === activeConversationId ? { ...prev, title: finalTitle } : prev);
+              }
               // Reload conversations to get updated title
               loadConversations();
               break;
