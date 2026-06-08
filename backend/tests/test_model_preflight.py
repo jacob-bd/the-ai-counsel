@@ -99,7 +99,7 @@ async def test_preflight_soft_fails_on_rate_limit():
         }
 
         # Mock sleep to avoid waiting during retries
-        with patch("backend.model_preflight.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch("backend.model_preflight.asyncio.sleep", new_callable=AsyncMock):
             result = await preflight_models(["openai:gpt-4o"], timeout=1.0)
 
     assert result.ok is True  # Allowed to proceed (soft-fail)
@@ -140,5 +140,4 @@ async def test_preflight_hard_fails_on_plain_503():
     assert result.failures == [{"model": "custom:unstable-model", "error": "Service Unavailable"}]
     assert result.rate_limited == []
     assert mock_query.call_count == 1
-
 
