@@ -104,10 +104,20 @@ class CustomOpenAIProvider(LLMProvider):
             base_delay = _DEFAULT_RATE_LIMIT_BASE_DELAY
         return max_retries, base_delay, _DEFAULT_RATE_LIMIT_JITTER
 
-    def _supports_attachments(self) -> bool:
-        """Check if custom endpoint supports attachments."""
+    def _is_notion_attachment_endpoint(self, name: str, base_url: str) -> bool:
+        """True when the custom endpoint is Notion2API and needs upload throttling."""
+        name_marker = (name or "").lower()
+        url_marker = (base_url or "").lower()
+        if "notion" in name_marker or "notion2api" in name_marker:
+            return True
+        return "notion" in url_marker or "notion2api" in url_marker
+
+    def _supports_attachments(self, name: str | None = None, base_url: str | None = None) -> bool:
+        """True when the custom endpoint is configured to accept attachment payloads."""
+        if name is None or base_url is None:
+            name, base_url, _ = self._get_config()
         settings = get_settings()
-        return getattr(settings, "custom_endpoint_supports_attachments", False)
+        return bool(getattr(settings, "custom_endpoint_supports_attachments", False))
 
     def _attachment_retry_config(self) -> tuple[int, float]:
         """Return (max_retries, base_delay) for attachment rate-limit backoff."""
@@ -155,13 +165,36 @@ class CustomOpenAIProvider(LLMProvider):
         temperature: float = 0.7,
         attachments: List[Dict[str, Any]] | None = None
     ) -> Dict[str, Any]:
-        if attachments and self._supports_attachments():
+        name, base_url, _ = self._get_config()
+        payload_attachments = (
+            attachments if attachments and self._supports_attachments(name, base_url) else None
+        )
+        notion_upload = bool(
+            payload_attachments and self._is_notion_attachment_endpoint(name, base_url)
+        )
+
+        if notion_upload:
             async with _ATTACHMENT_UPLOAD_SEMAPHORE:
-                res = await self._query_execute(model_id, messages, timeout, temperature, attachments)
-                await self._maybe_pause_after_attachment_call()
+                res = await self._query_execute(
+                    model_id,
+                    messages,
+                    timeout,
+                    temperature,
+                    payload_attachments,
+                    notion_upload=True,
+                )
+                if not res.get("error"):
+                    await self._maybe_pause_after_attachment_call()
                 return res
-        else:
-            return await self._query_execute(model_id, messages, timeout, temperature, None)
+
+        return await self._query_execute(
+            model_id,
+            messages,
+            timeout,
+            temperature,
+            payload_attachments,
+            notion_upload=False,
+        )
 
     async def _query_execute(
         self,
@@ -169,7 +202,9 @@ class CustomOpenAIProvider(LLMProvider):
         messages: List[Dict[str, str]],
         timeout: float = 120.0,
         temperature: float = 0.7,
-        attachments: List[Dict[str, Any]] | None = None
+        attachments: List[Dict[str, Any]] | None = None,
+        *,
+        notion_upload: bool = False,
     ) -> Dict[str, Any]:
         name, base_url, api_key = self._get_config()
 
@@ -207,14 +242,17 @@ class CustomOpenAIProvider(LLMProvider):
                 temperature,
             )
 
+            # Attachment payloads use the Notion2API wire format. Generic custom
+            # endpoints only receive them when custom_endpoint_supports_attachments
+            # is enabled; Notion-specific throttling/retry applies separately.
             if attachments:
                 payload["attachments"] = attachments
 
             start_time = time.monotonic()
             attempts_info = []
 
-            has_attachments = bool(attachments)
-            if has_attachments:
+            use_notion_attachment_retry = notion_upload and bool(payload.get("attachments"))
+            if use_notion_attachment_retry:
                 rate_limit_retries, rate_limit_base = self._attachment_retry_config()
                 rate_limit_jitter = 0.0
             else:
@@ -290,8 +328,8 @@ class CustomOpenAIProvider(LLMProvider):
                         )
                         break
 
-                    if has_attachments:
-                        # Linear/progressive backoff for attachments to match previous implementation
+                    if use_notion_attachment_retry:
+                        # Linear/progressive backoff for Notion2API file-import limits
                         sleep_time = rate_limit_base * attempt_idx
                     else:
                         sleep_time = rate_limit_base * (2 ** attempt) + random.uniform(0, rate_limit_jitter)
@@ -307,8 +345,19 @@ class CustomOpenAIProvider(LLMProvider):
                     )
                     await asyncio.sleep(sleep_time)
 
+                if response is None:
+                    return {
+                        "error": True,
+                        "error_message": (
+                            f"{name} API error (no response) after {len(attempts_info)} attempt(s)."
+                        ),
+                        "rate_limited": False,
+                        "debug_timeline": attempts_info,
+                        "total_elapsed_seconds": f"{time.monotonic() - start_time:.2f}s",
+                    }
+
                 # Evaluate final outcome
-                if response is None or last_status != 200:
+                if last_status != 200:
                     status_str = f"status: {last_status}" if last_status else "no response"
                     if _is_auth_error(last_status):
                         err_msg = (

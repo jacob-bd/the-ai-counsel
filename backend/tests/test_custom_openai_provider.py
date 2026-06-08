@@ -171,14 +171,23 @@ async def test_custom_openai_503_no_marker_fails_fast(fake_httpx, fake_settings,
 @pytest.mark.asyncio
 async def test_custom_openai_supports_attachments(fake_settings):
     provider = CustomOpenAIProvider()
-    
-    # Test setting false
-    fake_settings.__class__.custom_endpoint_supports_attachments = False
-    assert provider._supports_attachments() is False
 
-    # Test setting true
+    fake_settings.__class__.custom_endpoint_supports_attachments = False
+    assert provider._supports_attachments("Notion2API", "http://127.0.0.1:8120") is False
+
     fake_settings.__class__.custom_endpoint_supports_attachments = True
-    assert provider._supports_attachments() is True
+    assert provider._supports_attachments("Notion2API", "http://127.0.0.1:8120") is True
+    assert provider._supports_attachments("Custom", "https://custom-api.local/v1") is True
+
+
+@pytest.mark.asyncio
+async def test_custom_openai_notion_endpoint_detection():
+    provider = CustomOpenAIProvider()
+    assert provider._is_notion_attachment_endpoint("Notion2API", "http://127.0.0.1:8120") is True
+    assert provider._is_notion_attachment_endpoint("Custom", "http://localhost:8000/v1") is False
+    assert provider._is_notion_attachment_endpoint("Custom", "http://127.0.0.1:8120/v1") is False
+    assert provider._is_notion_attachment_endpoint("OpenAI", "https://api.openai.com/v1") is False
+    assert provider._is_notion_attachment_endpoint("Custom", "http://localhost/notion2api/v1") is True
 
 
 @pytest.mark.asyncio
@@ -196,9 +205,12 @@ async def test_custom_openai_attachment_retry_config(fake_settings):
 
 @pytest.mark.asyncio
 async def test_custom_openai_attachment_query_retries_and_progressive_backoff(fake_httpx, fake_settings, mock_sleep):
+    fake_settings.__class__.custom_endpoint_name = "Notion2API"
+    fake_settings.__class__.custom_endpoint_url = "http://127.0.0.1:8120/v1"
     fake_settings.__class__.custom_endpoint_supports_attachments = True
     fake_settings.__class__.attachment_max_attempts = 3
     fake_settings.__class__.attachment_retry_delay_seconds = 10.0
+    fake_settings.__class__.attachment_delay_seconds = 20.0
 
     # Rate limit twice, then succeed
     fake_httpx.responses.extend([
@@ -216,11 +228,85 @@ async def test_custom_openai_attachment_query_retries_and_progressive_backoff(fa
 
     assert result["error"] is False
     assert result["content"] == "with attachment"
-    # progressive backoff: base * 1, base * 2, followed by post-call delay (default 20s)
+    assert "attachments" in fake_httpx.instances[-1].kwargs["json"]
+    # progressive backoff: base * 1, base * 2, then post-success delay only
     assert len(mock_sleep) == 3
     assert mock_sleep[0] == 10.0
     assert mock_sleep[1] == 20.0
     assert mock_sleep[2] == 20.0
+
+
+@pytest.mark.asyncio
+async def test_custom_openai_non_notion_attachments_sent_without_throttling(fake_httpx, fake_settings, mock_sleep):
+    fake_settings.__class__.custom_endpoint_supports_attachments = True
+    fake_settings.__class__.custom_endpoint_url = "https://custom-api.local/v1"
+    fake_settings.__class__.attachment_max_attempts = 3
+    fake_settings.__class__.attachment_retry_delay_seconds = 10.0
+
+    fake_httpx.responses.append(
+        (200, {"choices": [{"message": {"content": "ok"}}]}, "")
+    )
+
+    provider = CustomOpenAIProvider()
+    result = await provider.query(
+        "custom:my-model",
+        [{"role": "user", "content": "hi"}],
+        attachments=[{"name": "test.txt", "content": "data"}],
+    )
+
+    assert result["error"] is False
+    assert "attachments" in fake_httpx.instances[-1].kwargs["json"]
+    assert len(mock_sleep) == 0
+
+
+@pytest.mark.asyncio
+async def test_custom_openai_non_notion_attachment_rate_limit_uses_text_retry(fake_httpx, fake_settings, mock_sleep):
+    fake_settings.__class__.custom_endpoint_supports_attachments = True
+    fake_settings.__class__.custom_endpoint_url = "https://custom-api.local/v1"
+    fake_settings.__class__.attachment_max_attempts = 3
+    fake_settings.__class__.attachment_retry_delay_seconds = 10.0
+
+    fake_httpx.responses.extend([
+        (429, {}, "Too many requests"),
+        (200, {"choices": [{"message": {"content": "ok"}}]}, ""),
+    ])
+
+    provider = CustomOpenAIProvider()
+    result = await provider.query(
+        "custom:my-model",
+        [{"role": "user", "content": "hi"}],
+        attachments=[{"name": "test.txt", "content": "data"}],
+    )
+
+    assert result["error"] is False
+    assert len(mock_sleep) == 1
+    assert mock_sleep[0] < 10.0
+
+
+@pytest.mark.asyncio
+async def test_custom_openai_notion_attachment_failure_skips_post_delay(fake_httpx, fake_settings, mock_sleep):
+    fake_settings.__class__.custom_endpoint_name = "Notion2API"
+    fake_settings.__class__.custom_endpoint_url = "http://127.0.0.1:8120/v1"
+    fake_settings.__class__.custom_endpoint_supports_attachments = True
+    fake_settings.__class__.attachment_max_attempts = 2
+    fake_settings.__class__.attachment_retry_delay_seconds = 10.0
+    fake_settings.__class__.attachment_delay_seconds = 20.0
+
+    fake_httpx.responses.extend([
+        (429, {}, "Too many requests"),
+        (429, {}, "Too many requests"),
+    ])
+
+    provider = CustomOpenAIProvider()
+    result = await provider.query(
+        "custom:my-model",
+        [{"role": "user", "content": "hi"}],
+        attachments=[{"name": "test.txt", "content": "data"}],
+    )
+
+    assert result["error"] is True
+    assert len(mock_sleep) == 1
+    assert mock_sleep[0] == 10.0
 
 
 
