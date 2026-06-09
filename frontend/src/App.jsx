@@ -914,8 +914,6 @@ function App() {
         }
       }
 
-      activeConversationIdRef.current = activeConversationId;
-
       // Optimistically update conversation title in list and current state if it is a new/untitled conversation
       const currentConvInList = conversations.find(c => c.id === activeConversationId);
       const currentTitle = currentConvInList?.title || currentConversation?.title;
