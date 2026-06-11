@@ -43,19 +43,41 @@ function commandForNpm() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm';
 }
 
+function expandWindowsCommand(command, args) {
+  if (process.platform !== 'win32' || !/\.(bat|cmd)$/i.test(command)) {
+    return { command, args };
+  }
+
+  const comspec = process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe';
+  return {
+    command: comspec,
+    args: ['/d', '/s', '/c', command, ...args],
+  };
+}
+
 function spawnLogged(name, command, args, options = {}) {
-  log(`Starting ${name}: ${command} ${args.join(' ')}`);
-  const child = spawn(command, args, {
-    cwd: ROOT_DIR,
-    windowsHide: false,
-    shell: false,
-    env: { ...process.env, ...options.env },
-    ...options,
-  });
+  const cwd = options.cwd || ROOT_DIR;
+  const env = { ...process.env, ...(options.env || {}) };
+  const { command: spawnCommand, args: spawnArgs } = expandWindowsCommand(command, args);
+
+  log(`Starting ${name}: ${spawnCommand} ${spawnArgs.join(' ')} (cwd=${cwd})`);
+
+  let child;
+  try {
+    child = spawn(spawnCommand, spawnArgs, {
+      cwd,
+      windowsHide: false,
+      shell: false,
+      env,
+    });
+  } catch (error) {
+    log(`${name} failed to spawn: ${error.stack || error.message}`);
+    throw error;
+  }
 
   child.stdout.on('data', data => appendProcessLog(name, data));
   child.stderr.on('data', data => appendProcessLog(name, data));
-  child.on('error', error => log(`${name} failed to start: ${error.message}`));
+  child.on('error', error => log(`${name} failed to start: ${error.stack || error.message}`));
   child.on('exit', (code, signal) => log(`${name} exited with code=${code} signal=${signal}`));
   return child;
 }
@@ -222,19 +244,19 @@ function createTray() {
   tray.on('click', () => (mainWindow && mainWindow.isVisible() ? mainWindow.hide() : showWindow()));
 }
 
-app.whenReady().then(async () => {
+async function startDesktopApp() {
   log(`${APP_NAME} desktop starting`);
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
   createWindow();
   createTray();
-  startStack();
 
   try {
+    startStack();
     await waitForUrl(HEALTH_URL, 90000);
     await waitForUrl(FRONTEND_URL, 90000);
     await mainWindow.loadURL(FRONTEND_URL);
   } catch (error) {
-    log(`Failed to load UI: ${error.message}`);
+    log(`Failed to load UI: ${error.stack || error.message}`);
     await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
       <h1>The AI Counsel desktop launcher could not start the UI.</h1>
       <p>${error.message}</p>
@@ -243,6 +265,11 @@ app.whenReady().then(async () => {
       <p>Frontend: ${FRONTEND_URL}</p>
     `)}`);
   }
+}
+
+app.whenReady().then(startDesktopApp).catch(error => {
+  log(`Fatal desktop startup error: ${error.stack || error.message}`);
+  dialog.showErrorBox(`${APP_NAME} startup failed`, error.message);
 });
 
 app.on('activate', showWindow);
@@ -264,4 +291,8 @@ app.on('window-all-closed', () => {
 
 process.on('uncaughtException', error => {
   log(`Uncaught exception: ${error.stack || error.message}`);
+});
+
+process.on('unhandledRejection', error => {
+  log(`Unhandled rejection: ${error.stack || error.message || error}`);
 });
