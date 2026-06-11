@@ -1,0 +1,50 @@
+{
+  "name": "the-ai-counsel-desktop",
+  "version": "0.9.2-desktop.0",
+  "private": true,
+  "description": "Electron desktop shell and stack launcher for The AI Counsel.",
+  "main": "electron/main.js",
+  "scripts": {
+    "desktop:install": "npm install && npm install --prefix frontend",
+    "desktop:start": "cross-env NODE_ENV=development electron .",
+    "desktop:dev": "npm run desktop:start",
+    "desktop:pack": "electron-builder --dir",
+    "desktop:build": "electron-builder --win portable --publish never"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.the-ai-counsel.desktop",
+    "productName": "The AI Counsel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "backend/**/*",
+      "frontend/**/*",
+      "pyproject.toml",
+      "uv.lock",
+      "README.md",
+      "docs/**/*"
+    ],
+    "asarUnpack": [
+      "backend/**/*",
+      "frontend/**/*",
+      "pyproject.toml",
+      "uv.lock"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "win": {
+      "target": ["portable"]
+    },
+    "portable": {
+      "artifactName": "The-AI-Counsel-${version}-portable.exe"
+    }
+  }
+}

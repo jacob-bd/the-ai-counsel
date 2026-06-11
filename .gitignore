@@ -27,6 +27,11 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
+# Desktop / Electron
+node_modules/
+release/
+*.log
+
 .DS_Store
 BUGS_AND_OPTIMIZATIONS.md
 DESIGN_SESSION_CONTEXT.md
@@ -44,4 +49,3 @@ logs/security/
 
 # Antigravity CLI config
 .antigravitycli/
-
