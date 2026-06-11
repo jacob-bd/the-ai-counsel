@@ -134,13 +134,14 @@ function startStack() {
 }
 
 function stopProcess(child, name) {
-  if (!child || child.killed) return;
+  if (!child || !child.pid || child.killed) return;
   try {
     log(`Stopping ${name}`);
     if (process.platform === 'win32') {
       spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
     } else {
-      child.kill('SIGTERM');
+      // Kill the process group to clean up any orphaned child processes
+      process.kill(-child.pid, 'SIGTERM');
     }
   } catch (error) {
     log(`Failed to stop ${name}: ${error.message}`);
