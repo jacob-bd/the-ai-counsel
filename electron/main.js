@@ -65,19 +65,20 @@ function spawnLogged(name, command, args, options = {}) {
   let child;
   try {
     child = spawn(spawnCommand, spawnArgs, {
-      cwd,
-      windowsHide: false,
-      shell: false,
-      env,
-    });
-  } catch (error) {
-    log(`${name} failed to spawn: ${error.stack || error.message}`);
-    throw error;
-  }
+function spawnLogged(name, command, args, options = {}) {
+  log(`Starting ${name}: ${command} ${args.join(' ')}`);
+  const child = spawn(command, args, {
+    cwd: ROOT_DIR,
+    windowsHide: false,
+    shell: false,
+    detached: process.platform !== 'win32',
+    env: { ...process.env, ...options.env },
+    ...options,
+  });
 
   child.stdout.on('data', data => appendProcessLog(name, data));
   child.stderr.on('data', data => appendProcessLog(name, data));
-  child.on('error', error => log(`${name} failed to start: ${error.stack || error.message}`));
+  child.on('error', error => log(`${name} failed to start: ${error.message}`));
   child.on('exit', (code, signal) => log(`${name} exited with code=${code} signal=${signal}`));
   return child;
 }
