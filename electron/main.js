@@ -14,6 +14,10 @@ const BACKEND_URL = process.env.AI_COUNSEL_BACKEND_URL || 'http://127.0.0.1:8001
 const FRONTEND_URL = process.env.AI_COUNSEL_FRONTEND_URL || 'http://127.0.0.1:5173';
 const HEALTH_URL = `${BACKEND_URL}/api/health`;
 
+if (process.platform === 'darwin') {
+  process.env.PATH = `/usr/local/bin:/opt/homebrew/bin:${process.env.PATH}`;
+}
+
 let mainWindow;
 let tray;
 let backendProcess;
