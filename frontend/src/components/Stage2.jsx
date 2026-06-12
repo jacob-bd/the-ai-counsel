@@ -27,7 +27,7 @@ function hexToRgb(hex) {
     return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 255, 255';
 }
 
-export default function Stage2({ rankings, labelToModel, aggregateRankings, startTime, endTime, canonicalClaims, aggregateClaimVerdicts }) {
+export default function Stage2({ rankings, labelToModel, aggregateRankings, startTime, endTime, canonicalClaims, aggregateClaimVerdicts, onRetryProvider, onFireProvider }) {
     const [activeTab, setActiveTab] = useState(0);
     const [viewMode, setViewMode] = useState('leaderboard'); // 'leaderboard' or 'heatmap'
 
@@ -120,6 +120,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                             safeActiveTab={safeActiveTab}
                             anonymizedLabelText={anonymizedLabelText}
                             parsedRanking={parsedRanking}
+                            onRetryProvider={onRetryProvider}
+                            onFireProvider={onFireProvider}
                         />
                     </div>
                 </details>
@@ -143,6 +145,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                         safeActiveTab={safeActiveTab}
                         anonymizedLabelText={anonymizedLabelText}
                         parsedRanking={parsedRanking}
+                        onRetryProvider={onRetryProvider}
+                        onFireProvider={onFireProvider}
                     />
                 </>
             )}
@@ -313,7 +317,9 @@ function RawEvaluationTabs({
     handleCopy,
     safeActiveTab,
     anonymizedLabelText,
-    parsedRanking
+    parsedRanking,
+    onRetryProvider,
+    onFireProvider
 }) {
     return (
         <>
@@ -335,7 +341,9 @@ function RawEvaluationTabs({
                                 {visuals.icon}
                             </span>
                             <span className="tab-name">{shortName}</span>
-                            {rank?.error && <span className="error-badge">!</span>}
+                            {rank?.error && <span className="error-badge" style={{ backgroundColor: '#ef4444' }}>!</span>}
+                            {rank?.retrying && <span className="error-badge" style={{ backgroundColor: '#3b82f6' }}>↺</span>}
+                            {rank?.pending && <span className="error-badge" style={{ backgroundColor: '#6b7280' }}>…</span>}
                         </button>
                     );
                 })}
@@ -376,7 +384,9 @@ function RawEvaluationTabs({
                             </button>
                         )}
 
-                        {hasError ? (
+                        {currentRanking.pending ? (
+                            <span className="model-status pending" style={{ borderColor: '#6b7280', color: '#94a3b8' }}>Pending</span>
+                        ) : hasError ? (
                             <span className="model-status error">Failed</span>
                         ) : (
                             <span className="model-status success">Completed</span>
@@ -384,13 +394,76 @@ function RawEvaluationTabs({
                     </div>
                 </div>
 
-                {hasError ? (
-                    <div className="response-error">
-                        <div className="error-icon">⚠️</div>
-                        <div className="error-details">
-                            <div className="error-title">Model Failed to Respond</div>
-                            <div className="error-message">{currentRanking?.error_message || 'Unknown error'}</div>
+                {currentRanking.pending ? (
+                    <div className="response-pending" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                            <div className="pending-icon" style={{ fontSize: '24px' }}>⏳</div>
+                            <div className="pending-details">
+                                <div className="pending-title" style={{ fontSize: '15px', fontWeight: '600', color: '#e5e7eb' }}>Request Paused (Pending)</div>
+                                <div className="pending-message" style={{ fontSize: '13px', color: '#94a3b8' }}>This model is held. You can resume the automated run or trigger it individually.</div>
+                            </div>
                         </div>
+                        {onFireProvider && (
+                            <button
+                                className="fire-provider-button"
+                                onClick={() => onFireProvider(currentRanking.model, 'stage2')}
+                                style={{
+                                    alignSelf: 'flex-start',
+                                    background: 'rgba(16,185,129,0.1)',
+                                    border: '1px solid rgba(16,185,129,0.4)',
+                                    color: '#10b981',
+                                    padding: '6px 14px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                ▶ Fire Manually
+                            </button>
+                        )}
+                    </div>
+                ) : hasError ? (
+                    <div className="response-error" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                            <div className="error-icon">⚠️</div>
+                            <div className="error-details">
+                                <div className="error-title">Model Failed to Respond</div>
+                                <div className="error-message">{currentRanking?.error_message || 'Unknown error'}</div>
+                            </div>
+                        </div>
+                        {onRetryProvider && !currentRanking.retrying && (
+                            <button
+                                className="retry-provider-button"
+                                onClick={() => onRetryProvider(currentRanking.model, 'stage2')}
+                                style={{
+                                    alignSelf: 'flex-start',
+                                    background: 'rgba(59,130,246,0.1)',
+                                    border: '1px solid rgba(59,130,246,0.4)',
+                                    color: '#60a5fa',
+                                    padding: '6px 14px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                ↺ Retry {getShortModelName(currentRanking.model)}
+                            </button>
+                        )}
+                        {currentRanking.retrying && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa', fontSize: '13px' }}>
+                                <span className="retrying-indicator">↺</span> Retrying {getShortModelName(currentRanking.model)}...
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <>

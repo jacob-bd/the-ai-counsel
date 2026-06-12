@@ -22,7 +22,7 @@ INTERNAL_PROVIDER_PREFIXES = {
 
 OPENAI_FIXED_TEMPERATURE_PREFIXES = ("gpt-5",)
 OPENAI_REASONING_MODEL_RE = re.compile(r"^o(?:1|3|4)(?:[-.]|$)")
-ANTHROPIC_NO_TEMPERATURE_RE = re.compile(r"^claude-(?:opus|sonnet|haiku)-[4-9](?:[-.]|$)")
+ANTHROPIC_NO_TEMPERATURE_RE = re.compile(r"^claude-(?:opus|sonnet|haiku|fable)-[4-9](?:[-.]|$)")
 
 
 def split_upstream_model(model_id: str) -> tuple[str, str]:

@@ -1,10 +1,11 @@
-"""Optional Notion2API OpenAI-compatible provider."""
-
 from __future__ import annotations
 
 import asyncio
 import json
 import os
+import random
+import time
+import logging
 from typing import Any, Dict, List
 
 import httpx
@@ -19,6 +20,88 @@ NOTION2API_RETRY_BASE_DELAY = 1.5
 NOTION2API_RETRY_MAX_DELAY = 20.0
 NOTION2API_QUERY_TIMEOUT = 600.0
 
+# 502 circuit breaker constants
+NOTION2API_502_PAUSE_SECONDS = 30.0
+NOTION2API_STAGGER_MIN = 5.0
+NOTION2API_STAGGER_MAX = 13.0
+# Fable5 pre-fire delay constants
+NOTION2API_FABLE5_DELAY_MIN = 10.0
+NOTION2API_FABLE5_DELAY_MAX = 15.0
+
+logger = logging.getLogger(__name__)
+
+
+class Notion2APICircuitBreaker:
+    """Process-level circuit breaker for notion2api 502 errors.
+    
+    When a 502 is detected, all notion2api calls pause for 30 seconds.
+    After the pause, each subsequent request waits a random 5-13s stagger
+    slot before firing (sequential slot ordering).
+    """
+
+    def __init__(self) -> None:
+        self._paused: bool = False
+        self._pause_until: float = 0.0
+        self._pause_lock: asyncio.Lock = asyncio.Lock()
+        self._stagger_lock: asyncio.Lock = asyncio.Lock()
+        self._semaphores: Dict[int, asyncio.Semaphore] = {}
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused and time.monotonic() < self._pause_until
+
+    def get_semaphore(self, max_concurrent: int) -> asyncio.Semaphore:
+        if max_concurrent not in self._semaphores:
+            self._semaphores[max_concurrent] = asyncio.Semaphore(max_concurrent)
+        return self._semaphores[max_concurrent]
+
+    def trigger_502_pause(self, model_id: str) -> None:
+        """Trigger or extend the 30-second 502 pause."""
+        now = time.monotonic()
+        new_until = now + NOTION2API_502_PAUSE_SECONDS
+        if self._paused and self._pause_until > now:
+            # Already paused — extend the window
+            logger.warning(
+                "[Notion2API] 502 pause extended — new 30s window started (%s)", model_id
+            )
+        else:
+            logger.warning(
+                "[Notion2API] 502 pause triggered — waiting %.0fs before retrying (%s)",
+                NOTION2API_502_PAUSE_SECONDS,
+                model_id,
+            )
+        self._paused = True
+        self._pause_until = new_until
+
+    async def wait_if_paused(self, model_id: str) -> None:
+        """Wait for the 502 pause to expire, then take a sequential stagger slot."""
+        # Wait for the pause window to expire
+        while True:
+            now = time.monotonic()
+            if not self._paused or now >= self._pause_until:
+                if self._paused and now >= self._pause_until:
+                    self._paused = False
+                    logger.info(
+                        "[Notion2API] 502 pause ended after %.1fs",
+                        NOTION2API_502_PAUSE_SECONDS,
+                    )
+                break
+            remaining = self._pause_until - now
+            await asyncio.sleep(min(remaining, 0.5))
+
+        # Sequential stagger slot: each caller waits for the previous one
+        # to finish its random delay before starting its own
+        async with self._stagger_lock:
+            delay = random.uniform(NOTION2API_STAGGER_MIN, NOTION2API_STAGGER_MAX)
+            logger.info(
+                "[Notion2API] Stagger delay: %.1fs before firing %s", delay, model_id
+            )
+            await asyncio.sleep(delay)
+            logger.info("[Notion2API] Request fired: %s (stagger=%.1fs)", model_id, delay)
+
+
+# Module-level singleton
+_circuit_breaker = Notion2APICircuitBreaker()
 
 
 class Notion2APIProvider(LLMProvider):
@@ -157,6 +240,35 @@ class Notion2APIProvider(LLMProvider):
         parts.append(self._coerce_stream_text(event.get("content")))
         return "".join(part for part in parts if part)
 
+    @staticmethod
+    def _is_fable5_model(model_id: str) -> bool:
+        """Return True if this model should have the fable5 pre-fire delay applied."""
+        return "fable5" in (model_id or "").lower()
+
+    @staticmethod
+    async def _fable5_preflight_delay(model_id: str) -> None:
+        """Apply the 10-15s pre-fire delay for fable5 models."""
+        delay = random.uniform(NOTION2API_FABLE5_DELAY_MIN, NOTION2API_FABLE5_DELAY_MAX)
+        logger.info(
+            "[Notion2API] Fable5 pre-fire delay: %.1fs for %s", delay, model_id
+        )
+        await asyncio.sleep(delay)
+        logger.info(
+            "[Notion2API] Fable5 delay complete — firing %s", model_id
+        )
+
+    def _get_firing_mode(self) -> tuple[str, int]:
+        """Read firing mode and sequential max_concurrent from settings."""
+        try:
+            from ..settings import get_settings
+            s = get_settings()
+            mode = getattr(s, "notion2api_firing_mode", "rapid_fire") or "rapid_fire"
+            max_concurrent = int(getattr(s, "notion2api_sequential_max_concurrent", 3) or 3)
+        except Exception:
+            mode = "rapid_fire"
+            max_concurrent = 3
+        return mode, max_concurrent
+
     async def query(
         self,
         model_id: str,
@@ -177,17 +289,54 @@ class Notion2APIProvider(LLMProvider):
             temperature,
         )
 
-        persistent_conversation_id = self._persistent_conversation_id(conversation_id, model)
+        persist_threads = False
+        try:
+            from ..settings import get_settings
+            persist_threads = getattr(get_settings(), "notion2api_persist_chats", False)
+        except Exception:
+            pass
+
+        persistent_conversation_id = self._persistent_conversation_id(conversation_id, model) if persist_threads else None
         if persistent_conversation_id:
             payload["conversation_id"] = persistent_conversation_id
             payload["metadata"] = {
                 "persist_remote_chat": True,
                 "source": "ai-counsel",
             }
+        else:
+            payload["metadata"] = {
+                "persist_remote_chat": False,
+                "source": "ai-counsel",
+            }
 
         payload["stream"] = True
         effective_timeout = self._effective_timeout(timeout)
 
+        _mode, _max_conc = self._get_firing_mode()
+        sem = None
+        if _mode == "sequential":
+            sem = _circuit_breaker.get_semaphore(_max_conc)
+
+        if sem:
+            async with sem:
+                return await self._execute_query_loop(
+                    model_id, base_url, token, payload, effective_timeout, _mode
+                )
+        else:
+            return await self._execute_query_loop(
+                model_id, base_url, token, payload, effective_timeout, _mode
+            )
+
+    async def _execute_query_loop(
+        self,
+        model_id: str,
+        base_url: str,
+        token: str,
+        payload: Dict[str, Any],
+        effective_timeout: float,
+        firing_mode: str,
+    ) -> Dict[str, Any]:
+        model = self._strip_prefix(model_id)
         last_response_text = ""
         last_status_code = 0
 
@@ -196,6 +345,13 @@ class Notion2APIProvider(LLMProvider):
             usage: Any = None
 
             try:
+                # --- Firing mode gate ---
+                if firing_mode in ("random_delay", "sequential"):
+                    await _circuit_breaker.wait_if_paused(model_id)
+                    if self._is_fable5_model(model_id):
+                        await self._fable5_preflight_delay(model_id)
+                # --- End firing mode gate ---
+
                 async with httpx.AsyncClient(timeout=effective_timeout) as client:
                     async with client.stream(
                         "POST",
@@ -208,6 +364,11 @@ class Notion2APIProvider(LLMProvider):
                         if response.status_code != 200:
                             raw_body = await response.aread()
                             last_response_text = raw_body.decode("utf-8", errors="replace")
+                            
+                            # Trigger 502 circuit breaker if needed
+                            if response.status_code == 502 and firing_mode in ("random_delay", "sequential"):
+                                _circuit_breaker.trigger_502_pause(model_id)
+
                             if (
                                 attempt < NOTION2API_QUERY_ATTEMPTS
                                 and self._is_retryable_response(response.status_code, last_response_text)

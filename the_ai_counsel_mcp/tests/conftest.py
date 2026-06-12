@@ -1,5 +1,11 @@
 """Shared test utilities for MCP tool tests."""
 
+import os
+for key in ("no_proxy", "NO_PROXY"):
+    val = os.environ.get(key)
+    if val:
+        os.environ[key] = ",".join(p for p in val.split(",") if "::" not in p)
+
 import json
 
 

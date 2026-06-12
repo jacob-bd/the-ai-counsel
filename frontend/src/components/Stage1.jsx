@@ -6,7 +6,7 @@ import ThinkBlockRenderer from './ThinkBlockRenderer';
 import StageTimer from './StageTimer';
 import './Stage1.css';
 
-export default function Stage1({ responses, startTime, endTime }) {
+export default function Stage1({ responses, startTime, endTime, onRetryProvider, onFireProvider }) {
   const [activeTab, setActiveTab] = useState(0);
 
   // Reset activeTab if it becomes out of bounds
@@ -82,7 +82,9 @@ export default function Stage1({ responses, startTime, endTime }) {
                 {visuals.icon}
               </span>
               <span className="tab-name">{shortName}</span>
-              {resp?.error && <span className="error-badge">!</span>}
+              {resp?.error && <span className="error-badge" style={{ backgroundColor: '#ef4444' }}>!</span>}
+              {resp?.retrying && <span className="error-badge" style={{ backgroundColor: '#3b82f6' }}>↺</span>}
+              {resp?.pending && <span className="error-badge" style={{ backgroundColor: '#6b7280' }}>…</span>}
             </button>
           );
         })}
@@ -123,7 +125,9 @@ export default function Stage1({ responses, startTime, endTime }) {
               </button>
             )}
 
-            {hasError ? (
+            {currentResponse.pending ? (
+              <span className="model-status pending" style={{ borderColor: '#6b7280', color: '#94a3b8' }}>Pending</span>
+            ) : hasError ? (
               <span className="model-status error">Failed</span>
             ) : (
               <span className="model-status success">Completed</span>
@@ -131,13 +135,76 @@ export default function Stage1({ responses, startTime, endTime }) {
           </div>
         </div>
 
-        {hasError ? (
-          <div className="response-error">
-            <div className="error-icon">⚠️</div>
-            <div className="error-details">
-              <div className="error-title">Model Failed to Respond</div>
-              <div className="error-message">{currentResponse?.error_message || 'Unknown error'}</div>
+        {currentResponse.pending ? (
+          <div className="response-pending" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+              <div className="pending-icon" style={{ fontSize: '24px' }}>⏳</div>
+              <div className="pending-details">
+                <div className="pending-title" style={{ fontSize: '15px', fontWeight: '600', color: '#e5e7eb' }}>Request Paused (Pending)</div>
+                <div className="pending-message" style={{ fontSize: '13px', color: '#94a3b8' }}>This model is held. You can resume the automated run or trigger it individually.</div>
+              </div>
             </div>
+            {onFireProvider && (
+              <button
+                className="fire-provider-button"
+                onClick={() => onFireProvider(currentResponse.model, 'stage1')}
+                style={{
+                  alignSelf: 'flex-start',
+                  background: 'rgba(16,185,129,0.1)',
+                  border: '1px solid rgba(16,185,129,0.4)',
+                  color: '#10b981',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                ▶ Fire Manually
+              </button>
+            )}
+          </div>
+        ) : hasError ? (
+          <div className="response-error" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+              <div className="error-icon">⚠️</div>
+              <div className="error-details">
+                <div className="error-title">Model Failed to Respond</div>
+                <div className="error-message">{currentResponse?.error_message || 'Unknown error'}</div>
+              </div>
+            </div>
+            {onRetryProvider && !currentResponse.retrying && (
+              <button
+                className="retry-provider-button"
+                onClick={() => onRetryProvider(currentResponse.model, 'stage1')}
+                style={{
+                  alignSelf: 'flex-start',
+                  background: 'rgba(59,130,246,0.1)',
+                  border: '1px solid rgba(59,130,246,0.4)',
+                  color: '#60a5fa',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                ↺ Retry {getShortModelName(currentResponse.model)}
+              </button>
+            )}
+            {currentResponse.retrying && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa', fontSize: '13px' }}>
+                <span className="retrying-indicator">↺</span> Retrying {getShortModelName(currentResponse.model)}...
+              </div>
+            )}
           </div>
         ) : (
           <div className="response-text markdown-content">

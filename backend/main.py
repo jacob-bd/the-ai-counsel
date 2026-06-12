@@ -8,6 +8,14 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Literal, Optional
 import logging
 import os
+
+# Sanitize no_proxy/NO_PROXY for httpx IPv6 parser bug (crashes on ::1)
+for env_name in ("no_proxy", "NO_PROXY"):
+    if env_name in os.environ:
+        entries = [e.strip() for e in os.environ[env_name].split(",") if e.strip()]
+        cleaned = [e for e in entries if ":" not in e]
+        os.environ[env_name] = ",".join(cleaned)
+
 import secrets
 import uuid
 import json
@@ -37,6 +45,14 @@ def _register_run(conversation_id: str, execution_mode: str) -> None:
         "mode": "council",
         "stage": "initializing",
         "execution_mode": execution_mode,
+        "paused": False,
+        "pause_event": None,
+        "continuation_mode": "normal",
+        "failed_providers": [],
+        "pending_providers": [],
+        "active_providers": [],
+        "queue": asyncio.Queue(),
+        "search_context": "",
         "progress": {
             "stage1": {"total": 0},
             "stage2": {"total": 0},
@@ -429,10 +445,13 @@ def _build_council_preflight_models(body: SendMessageRequest) -> List[str]:
 
 async def _run_model_preflight(models: List[str]) -> str:
     """Return a user-facing error message if model preflight fails."""
-    result = await preflight_models(models)
+    settings = get_settings()
+    timeout = getattr(settings, "preflight_timeout_seconds", 10.0)
+    result = await preflight_models(models, timeout=timeout)
     if result.ok:
         return ""
     return build_preflight_error_message(result)
+
 
 
 from dataclasses import dataclass, field
@@ -636,6 +655,10 @@ async def get_conversation_progress(conversation_id: str):
         "stage2": s2 or None,
         "stage3": run.get("stage3_response"),
         "stage4": run.get("stage4_response"),
+        "paused": run.get("paused", False),
+        "failed_model": run.get("failed_providers")[0] if run.get("failed_providers") else None,
+        "pending_count": len(run.get("pending_providers", [])),
+        "continuation_mode": run.get("continuation_mode", "normal"),
     }
 
 
@@ -706,6 +729,8 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     hybrid_mode=settings.search_hybrid_mode
                 )
                 search_context = search_result["results"]
+                if conversation_id in _active_runs:
+                    _active_runs[conversation_id]["search_context"] = search_context
                 extracted_query = search_result["extracted_query"]
                 search_intent = search_result.get("intent", "unknown")
                 yield f"data: {json.dumps({'type': 'search_complete', 'data': {'search_query': search_query, 'extracted_query': extracted_query, 'search_context': search_context, 'provider': provider.value, 'intent': search_intent}})}\n\n"
@@ -730,6 +755,20 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     total_models = item
                     _active_runs[conversation_id]["progress"]["stage1"]["total"] = total_models
                     yield f"data: {json.dumps({'type': 'stage1_init', 'total': total_models})}\n\n"
+                    continue
+
+                if isinstance(item, dict) and item.get("paused"):
+                    yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage1'}})}\n\n"
+                    
+                    q = _active_runs[conversation_id].get("queue")
+                    while _active_runs.get(conversation_id, {}).get("paused"):
+                        if await request.is_disconnected():
+                            raise asyncio.CancelledError("Client disconnected")
+                        try:
+                            event_data = await asyncio.wait_for(q.get(), timeout=0.5)
+                            yield event_data
+                        except asyncio.TimeoutError:
+                            continue
                     continue
 
                 stage1_results.append(item)
@@ -767,6 +806,20 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                         _active_runs[conversation_id]["progress"]["stage2"]["total"] = len(label_to_model)
                         # Send init event with total count
                         yield f"data: {json.dumps({'type': 'stage2_init', 'total': len(label_to_model)})}\n\n"
+                        continue
+
+                    if isinstance(item, dict) and item.get("paused"):
+                        yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage2'}})}\n\n"
+                        
+                        q = _active_runs[conversation_id].get("queue")
+                        while _active_runs.get(conversation_id, {}).get("paused"):
+                            if await request.is_disconnected():
+                                raise asyncio.CancelledError("Client disconnected")
+                            try:
+                                event_data = await asyncio.wait_for(q.get(), timeout=0.5)
+                                yield event_data
+                            except asyncio.TimeoutError:
+                                continue
                         continue
 
                     # Subsequent items are results
@@ -1425,6 +1478,7 @@ class UpdateSettingsRequest(BaseModel):
     notion2api_api_key: Optional[str] = None
     notion2api_root: Optional[str] = None
     notion2api_auto_launch: Optional[bool] = None
+    notion2api_persist_chats: Optional[bool] = None
 
     # API Keys
     serper_api_key: Optional[str] = None
@@ -1472,6 +1526,9 @@ class UpdateSettingsRequest(BaseModel):
     auto_converge: Optional[bool] = None
     convergence_threshold: Optional[int] = None
     model_timeout_seconds: Optional[int] = None
+    preflight_timeout_seconds: Optional[float] = None
+    claim_extraction_timeout_seconds: Optional[float] = None
+
 
     # System Prompts
     stage1_prompt: Optional[str] = None
@@ -1529,6 +1586,7 @@ async def get_app_settings():
         "notion2api_base_url": settings.notion2api_base_url,
         "notion2api_root": settings.notion2api_root,
         "notion2api_auto_launch": settings.notion2api_auto_launch,
+        "notion2api_persist_chats": settings.notion2api_persist_chats,
 
         # API Key Status
         "serper_api_key_set": bool(settings.serper_api_key),
@@ -1565,6 +1623,9 @@ async def get_app_settings():
         "chairman_temperature": settings.chairman_temperature,
         "stage2_temperature": settings.stage2_temperature,
         "model_timeout_seconds": settings.model_timeout_seconds,
+        "preflight_timeout_seconds": settings.preflight_timeout_seconds,
+        "claim_extraction_timeout_seconds": settings.claim_extraction_timeout_seconds,
+
 
         # Prompts
         "stage1_prompt": settings.stage1_prompt,
@@ -1708,6 +1769,8 @@ async def update_app_settings(request: UpdateSettingsRequest):
         updates["notion2api_root"] = request.notion2api_root
     if request.notion2api_auto_launch is not None:
         updates["notion2api_auto_launch"] = request.notion2api_auto_launch
+    if request.notion2api_persist_chats is not None:
+        updates["notion2api_persist_chats"] = request.notion2api_persist_chats
 
     if request.full_content_results is not None:
         # Validate range
@@ -1816,6 +1879,15 @@ async def update_app_settings(request: UpdateSettingsRequest):
         if request.model_timeout_seconds < 30 or request.model_timeout_seconds > 1800:
             raise HTTPException(status_code=400, detail="model_timeout_seconds must be between 30 and 1800")
         updates["model_timeout_seconds"] = request.model_timeout_seconds
+    if request.preflight_timeout_seconds is not None:
+        if request.preflight_timeout_seconds < 1.0 or request.preflight_timeout_seconds > 120.0:
+            raise HTTPException(status_code=400, detail="preflight_timeout_seconds must be between 1.0 and 120.0")
+        updates["preflight_timeout_seconds"] = request.preflight_timeout_seconds
+    if request.claim_extraction_timeout_seconds is not None:
+        if request.claim_extraction_timeout_seconds < 10.0 or request.claim_extraction_timeout_seconds > 600.0:
+            raise HTTPException(status_code=400, detail="claim_extraction_timeout_seconds must be between 10.0 and 600.0")
+        updates["claim_extraction_timeout_seconds"] = request.claim_extraction_timeout_seconds
+
 
     if request.date_format is not None:
         valid_formats = ("auto", "MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD")
@@ -1896,6 +1968,7 @@ async def update_app_settings(request: UpdateSettingsRequest):
         "notion2api_base_url": settings.notion2api_base_url,
         "notion2api_root": settings.notion2api_root,
         "notion2api_auto_launch": settings.notion2api_auto_launch,
+        "notion2api_persist_chats": settings.notion2api_persist_chats,
 
         # API Key Status
         "serper_api_key_set": bool(settings.serper_api_key),
@@ -2457,6 +2530,453 @@ async def test_openrouter_api(request: TestOpenRouterRequest):
         return {"success": False, "message": "Request timed out"}
     except Exception as e:
         return {"success": False, "message": str(e)}
+
+
+class ResumeRequest(BaseModel):
+    continuation_mode: str = "normal"  # "normal" | "fail_safe" | "conservative"
+
+
+@app.post("/api/conversations/{conversation_id}/pause/resume")
+async def resume_run(conversation_id: str, body: ResumeRequest):
+    run_info = _active_runs.get(conversation_id)
+    if not run_info:
+        raise HTTPException(status_code=404, detail="Active run not found")
+    
+    if not run_info.get("paused"):
+        return {"success": False, "message": "Run is not paused"}
+    
+    run_info["continuation_mode"] = body.continuation_mode
+    run_info["paused"] = False
+    
+    pause_event = run_info.get("pause_event")
+    if pause_event:
+        pause_event.set()
+        
+    queue = run_info.get("queue")
+    if queue:
+        await queue.put(f"data: {json.dumps({'type': 'run_resumed', 'continuation_mode': body.continuation_mode})}\n\n")
+        
+    return {"success": True}
+
+
+class RetryRequest(BaseModel):
+    model: str
+    stage: str  # "stage1" | "stage2"
+
+
+@app.post("/api/conversations/{conversation_id}/pause/retry")
+async def retry_failed_provider(conversation_id: str, body: RetryRequest):
+    run_info = _active_runs.get(conversation_id)
+    if not run_info:
+        raise HTTPException(status_code=404, detail="Active run not found")
+        
+    if not run_info.get("paused"):
+        raise HTTPException(status_code=400, detail="Run is not paused")
+
+    model_id = body.model
+    stage = body.stage
+
+    queue = run_info.get("queue")
+    if queue:
+        await queue.put(f"data: {json.dumps({'type': 'provider_retrying', 'data': {'model': model_id, 'stage': stage}})}\n\n")
+
+    conversation = storage.get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    history = _build_chat_history(conversation)
+    user_query = conversation["messages"][-1]["content"] if conversation["messages"] else ""
+    is_first_message = len(conversation["messages"]) == 1
+
+    settings = get_settings()
+    if stage == "stage1":
+        search_context_block = ""
+        search_context = run_info.get("search_context", "")
+        if search_context:
+            from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
+            search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
+            
+        try:
+            prompt_template = settings.stage1_prompt or ""
+            if not prompt_template:
+                from .prompts import STAGE1_PROMPT_DEFAULT
+                prompt_template = STAGE1_PROMPT_DEFAULT
+            prompt = prompt_template.format(user_query=user_query, search_context_block=search_context_block)
+        except Exception:
+            prompt = f"{search_context_block}Question: {user_query}" if search_context_block else user_query
+
+        prompt = apply_response_language(prompt, settings.response_language)
+        messages = (history[:-1] if is_first_message else history) + [{"role": "user", "content": prompt}]
+        
+        from .council import _query_model_gated, strip_thinking_blocks
+        model_timeout = getattr(settings, "model_timeout_seconds", 300)
+        if run_info.get("continuation_mode") == "conservative":
+            model_timeout = model_timeout * 2
+            
+        try:
+            response = await _query_model_gated(
+                model_id,
+                messages,
+                timeout=model_timeout,
+                temperature=settings.council_temperature,
+                conversation_id=conversation_id
+            )
+        except Exception as e:
+            response = {"error": True, "error_message": str(e)}
+            
+        if response.get("error"):
+            new_result = {
+                "model": model_id,
+                "response": None,
+                "error": response.get("error"),
+                "error_message": response.get("error_message", "Unknown error"),
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+        else:
+            content = response.get("content", "")
+            if not isinstance(content, str):
+                content = str(content) if content is not None else ""
+            content = strip_thinking_blocks(content)
+            new_result = {
+                "model": model_id,
+                "response": content,
+                "error": None,
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+            
+        responses = run_info.get("stage1_responses", [])
+        updated = False
+        for idx, r in enumerate(responses):
+            if r.get("model") == model_id:
+                r.clear()
+                r.update(new_result)
+                updated = True
+                break
+        if not updated:
+            responses.append(new_result)
+            
+        if new_result.get("error") is None:
+            if model_id in run_info.get("failed_providers", []):
+                run_info["failed_providers"].remove(model_id)
+
+    elif stage == "stage2":
+        stage1_results = run_info.get("stage1_responses", [])
+        successful_results = [r for r in stage1_results if not r.get('error')]
+        labels = [chr(65 + i) for i in range(len(successful_results))]
+        label_to_model = {
+            f"Response {label}": result['model']
+            for label, result in zip(labels, successful_results)
+        }
+        responses_text = "\n\n".join([
+            f"Response {label}:\n{result['response']}"
+            for label, result in zip(labels, successful_results)
+        ])
+        
+        search_context = run_info.get("search_context", "")
+        search_context_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
+        
+        try:
+            prompt_template = settings.stage2_prompt or ""
+            if not prompt_template:
+                from .prompts import STAGE2_PROMPT_DEFAULT
+                prompt_template = STAGE2_PROMPT_DEFAULT
+            ranking_prompt = prompt_template.format(
+                user_query=user_query,
+                responses_text=responses_text,
+                search_context_block=search_context_block
+            )
+            valid_label_list = ", ".join(label_to_model.keys())
+            ranking_prompt += f"\n\nCRITICAL: Your FINAL RANKING must include ONLY these labels, each exactly once: {valid_label_list}."
+        except Exception:
+            valid_label_list = ", ".join(label_to_model.keys())
+            ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses. FINAL RANKING must include ONLY: {valid_label_list}."
+
+        ranking_prompt = apply_response_language(ranking_prompt, settings.response_language)
+        messages = [{"role": "user", "content": ranking_prompt}]
+
+        from .council import _query_model_gated, strip_thinking_blocks, parse_ranking_from_text
+        model_timeout = getattr(settings, "model_timeout_seconds", 300)
+        if run_info.get("continuation_mode") == "conservative":
+            model_timeout = model_timeout * 2
+            
+        try:
+            response = await _query_model_gated(
+                model_id,
+                messages,
+                timeout=model_timeout,
+                temperature=settings.stage2_temperature,
+                conversation_id=conversation_id
+            )
+        except Exception as e:
+            response = {"error": True, "error_message": str(e)}
+
+        if response.get("error"):
+            new_result = {
+                "model": model_id,
+                "ranking": None,
+                "parsed_ranking": [],
+                "error": response.get("error"),
+                "error_message": response.get("error_message", "Unknown error"),
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+        else:
+            full_text = response.get("content", "")
+            if not isinstance(full_text, str):
+                full_text = str(full_text) if full_text is not None else ""
+            full_text = strip_thinking_blocks(full_text)
+            
+            parsed = parse_ranking_from_text(
+                full_text,
+                expected_count=len(successful_results),
+                valid_labels=list(label_to_model.keys())
+            )
+            new_result = {
+                "model": model_id,
+                "ranking": full_text,
+                "parsed_ranking": parsed,
+                "error": None,
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+
+        responses = run_info.get("stage2_responses", [])
+        updated = False
+        for idx, r in enumerate(responses):
+            if r.get("model") == model_id:
+                r.clear()
+                r.update(new_result)
+                updated = True
+                break
+        if not updated:
+            responses.append(new_result)
+
+        if new_result.get("error") is None:
+            if model_id in run_info.get("failed_providers", []):
+                run_info["failed_providers"].remove(model_id)
+
+    if queue:
+        success = new_result.get("error") is None
+        payload = {
+            "type": "provider_retry_result",
+            "data": {
+                "model": model_id,
+                "stage": stage,
+                "success": success,
+                "response": new_result.get("response") if stage == "stage1" else new_result.get("ranking"),
+                "error_message": new_result.get("error_message")
+            }
+        }
+        await queue.put(f"data: {json.dumps(payload)}\n\n")
+
+    return {"success": True, "result": new_result}
+
+
+class FireRequest(BaseModel):
+    model: str
+    stage: str
+
+
+@app.post("/api/conversations/{conversation_id}/pause/fire")
+async def fire_pending_provider(conversation_id: str, body: FireRequest):
+    run_info = _active_runs.get(conversation_id)
+    if not run_info:
+        raise HTTPException(status_code=404, detail="Active run not found")
+        
+    if not run_info.get("paused"):
+        raise HTTPException(status_code=400, detail="Run is not paused")
+
+    model_id = body.model
+    stage = body.stage
+
+    pending_list = run_info.get("pending_providers", [])
+    if model_id not in pending_list:
+        raise HTTPException(status_code=400, detail="Model is not pending in this stage")
+
+    pending_list.remove(model_id)
+    if "active_providers" not in run_info:
+        run_info["active_providers"] = []
+    run_info["active_providers"].append(model_id)
+
+    queue = run_info.get("queue")
+    if queue:
+        await queue.put(f"data: {json.dumps({'type': 'provider_fired_manual', 'data': {'model': model_id, 'stage': stage}})}\n\n")
+
+    conversation = storage.get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    history = _build_chat_history(conversation)
+    user_query = conversation["messages"][-1]["content"] if conversation["messages"] else ""
+    is_first_message = len(conversation["messages"]) == 1
+
+    settings = get_settings()
+    if stage == "stage1":
+        search_context = run_info.get("search_context", "")
+        search_context_block = ""
+        if search_context:
+            from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
+            search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
+            
+        try:
+            prompt_template = settings.stage1_prompt or ""
+            if not prompt_template:
+                from .prompts import STAGE1_PROMPT_DEFAULT
+                prompt_template = STAGE1_PROMPT_DEFAULT
+            prompt = prompt_template.format(user_query=user_query, search_context_block=search_context_block)
+        except Exception:
+            prompt = f"{search_context_block}Question: {user_query}" if search_context_block else user_query
+
+        prompt = apply_response_language(prompt, settings.response_language)
+        messages = (history[:-1] if is_first_message else history) + [{"role": "user", "content": prompt}]
+        
+        from .council import _query_model_gated, strip_thinking_blocks
+        model_timeout = getattr(settings, "model_timeout_seconds", 300)
+        if run_info.get("continuation_mode") == "conservative":
+            model_timeout = model_timeout * 2
+            
+        try:
+            response = await _query_model_gated(
+                model_id,
+                messages,
+                timeout=model_timeout,
+                temperature=settings.council_temperature,
+                conversation_id=conversation_id
+            )
+        except Exception as e:
+            response = {"error": True, "error_message": str(e)}
+            
+        if response.get("error"):
+            new_result = {
+                "model": model_id,
+                "response": None,
+                "error": response.get("error"),
+                "error_message": response.get("error_message", "Unknown error"),
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+        else:
+            content = response.get("content", "")
+            if not isinstance(content, str):
+                content = str(content) if content is not None else ""
+            content = strip_thinking_blocks(content)
+            new_result = {
+                "model": model_id,
+                "response": content,
+                "error": None,
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+            
+        responses = run_info.get("stage1_responses", [])
+        responses.append(new_result)
+        if model_id in run_info["active_providers"]:
+            run_info["active_providers"].remove(model_id)
+
+        if new_result.get("error"):
+            if model_id not in run_info.get("failed_providers", []):
+                run_info["failed_providers"].append(model_id)
+
+        if queue:
+            total = run_info["progress"]["stage1"]["total"]
+            await queue.put(f"data: {json.dumps({'type': 'stage1_progress', 'data': new_result, 'count': len(responses), 'total': total})}\n\n")
+
+    elif stage == "stage2":
+        stage1_results = run_info.get("stage1_responses", [])
+        successful_results = [r for r in stage1_results if not r.get('error')]
+        labels = [chr(65 + i) for i in range(len(successful_results))]
+        label_to_model = {
+            f"Response {label}": result['model']
+            for label, result in zip(labels, successful_results)
+        }
+        responses_text = "\n\n".join([
+            f"Response {label}:\n{result['response']}"
+            for label, result in zip(labels, successful_results)
+        ])
+        
+        search_context = run_info.get("search_context", "")
+        search_context_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
+        
+        try:
+            prompt_template = settings.stage2_prompt or ""
+            if not prompt_template:
+                from .prompts import STAGE2_PROMPT_DEFAULT
+                prompt_template = STAGE2_PROMPT_DEFAULT
+            ranking_prompt = prompt_template.format(
+                user_query=user_query,
+                responses_text=responses_text,
+                search_context_block=search_context_block
+            )
+            valid_label_list = ", ".join(label_to_model.keys())
+            ranking_prompt += f"\n\nCRITICAL: Your FINAL RANKING must include ONLY these labels, each exactly once: {valid_label_list}."
+        except Exception:
+            valid_label_list = ", ".join(label_to_model.keys())
+            ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses. FINAL RANKING must include ONLY: {valid_label_list}."
+
+        ranking_prompt = apply_response_language(ranking_prompt, settings.response_language)
+        messages = [{"role": "user", "content": ranking_prompt}]
+
+        from .council import _query_model_gated, strip_thinking_blocks, parse_ranking_from_text
+        model_timeout = getattr(settings, "model_timeout_seconds", 300)
+        if run_info.get("continuation_mode") == "conservative":
+            model_timeout = model_timeout * 2
+            
+        try:
+            response = await _query_model_gated(
+                model_id,
+                messages,
+                timeout=model_timeout,
+                temperature=settings.stage2_temperature,
+                conversation_id=conversation_id
+            )
+        except Exception as e:
+            response = {"error": True, "error_message": str(e)}
+
+        if response.get("error"):
+            new_result = {
+                "model": model_id,
+                "ranking": None,
+                "parsed_ranking": [],
+                "error": response.get("error"),
+                "error_message": response.get("error_message", "Unknown error"),
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+        else:
+            full_text = response.get("content", "")
+            if not isinstance(full_text, str):
+                full_text = str(full_text) if full_text is not None else ""
+            full_text = strip_thinking_blocks(full_text)
+            
+            parsed = parse_ranking_from_text(
+                full_text,
+                expected_count=len(successful_results),
+                valid_labels=list(label_to_model.keys())
+            )
+            new_result = {
+                "model": model_id,
+                "ranking": full_text,
+                "parsed_ranking": parsed,
+                "error": None,
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+            }
+
+        responses = run_info.get("stage2_responses", [])
+        responses.append(new_result)
+        if model_id in run_info["active_providers"]:
+            run_info["active_providers"].remove(model_id)
+
+        if new_result.get("error"):
+            if model_id not in run_info.get("failed_providers", []):
+                run_info["failed_providers"].append(model_id)
+
+        if queue:
+            total = run_info["progress"]["stage2"]["total"]
+            await queue.put(f"data: {json.dumps({'type': 'stage2_progress', 'data': new_result, 'count': len(responses), 'total': total})}\n\n")
+
+    return {"success": True, "result": new_result}
 
 
 # ---------- MCP server (mounted on same port as REST API) ----------

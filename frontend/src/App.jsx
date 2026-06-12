@@ -146,6 +146,11 @@ function App() {
   const [dateFormat, setDateFormat] = useState('auto');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appMode, setAppMode] = useState(null); // null shows landing page
+  const [runPaused, setRunPaused] = useState(false);
+  const [pausedModel, setPausedModel] = useState(null);
+  const [pausedStage, setPausedStage] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [continuationMode, setContinuationMode] = useState('normal');
   const abortControllerRef = useRef(null);
   const advisorAbortControllerRef = useRef(null);
   const progressPollRef = useRef(null);
@@ -283,6 +288,34 @@ function App() {
       setCouncilConfigured(computeCouncilConfigured(models));
     } catch (error) {
       console.error('Error after closing settings:', error);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!currentConversationId) return;
+    try {
+      await api.resumeRun(currentConversationId, continuationMode);
+      setRunPaused(false);
+    } catch (err) {
+      console.error('Failed to resume run:', err);
+    }
+  };
+
+  const handleRetryFailed = async (model, stage) => {
+    if (!currentConversationId) return;
+    try {
+      await api.retryFailedProvider(currentConversationId, model, stage);
+    } catch (err) {
+      console.error('Failed to retry provider:', err);
+    }
+  };
+
+  const handleFireProvider = async (model, stage) => {
+    if (!currentConversationId) return;
+    try {
+      await api.firePendingProvider(currentConversationId, model, stage);
+    } catch (err) {
+      console.error('Failed to fire provider:', err);
     }
   };
 
@@ -434,6 +467,10 @@ function App() {
 
   const abortAllStreams = () => {
     stopProgressPolling();
+    setRunPaused(false);
+    setPausedModel(null);
+    setPausedStage(null);
+    setPendingCount(0);
     if (advisorAbortControllerRef.current) {
       advisorAbortControllerRef.current.abort();
       advisorAbortControllerRef.current = null;
@@ -486,6 +523,11 @@ function App() {
       } else {
         setAppMode('council');
         setIsLoading(true);
+        setRunPaused(progress.paused || false);
+        setPausedModel(progress.failed_model || null);
+        setPausedStage(progress.stage);
+        setPendingCount(progress.pending_count || 0);
+        setContinuationMode(progress.continuation_mode || 'normal');
 
         setCurrentConversation(prev => {
           if (!prev || prev.id !== conversationId) return prev;
@@ -527,6 +569,11 @@ function App() {
           if (p.mode === 'advisors') {
             applyAdvisorProgress(conversationId, p);
           } else {
+            setRunPaused(p.paused || false);
+            setPausedModel(p.failed_model || null);
+            setPausedStage(p.stage);
+            setPendingCount(p.pending_count || 0);
+            setContinuationMode(p.continuation_mode || 'normal');
             setCurrentConversation(prev => {
               if (!prev || prev.id !== conversationId) return prev;
               const messages = [...prev.messages];
@@ -608,6 +655,10 @@ function App() {
 
   const handleAbort = () => {
     stopProgressPolling();
+    setRunPaused(false);
+    setPausedModel(null);
+    setPausedStage(null);
+    setPendingCount(0);
     if (advisorAbortControllerRef.current) {
       advisorAbortControllerRef.current.abort();
       setIsLoading(false);
@@ -889,6 +940,10 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     setIsLoading(true);
+    setRunPaused(false);
+    setPausedModel(null);
+    setPausedStage(null);
+    setPendingCount(0);
     let activeConversationId = currentConversationId;
 
     try {
@@ -1064,6 +1119,7 @@ function App() {
               setCurrentConversation((prev) => {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
+                const initialStage1 = (councilModels || []).map(m => ({ model: m, pending: true }));
 
                 const updatedLastMsg = {
                   ...lastMsg,
@@ -1074,7 +1130,8 @@ function App() {
                       total: event.total,
                       currentModel: null
                     }
-                  }
+                  },
+                  stage1: initialStage1
                 };
 
                 messages[messages.length - 1] = updatedLastMsg;
@@ -1087,8 +1144,11 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
 
-                // Immutable update for stage1
-                const updatedStage1 = lastMsg.stage1 ? [...lastMsg.stage1, event.data] : [event.data];
+                const updatedStage1 = lastMsg.stage1
+                  ? lastMsg.stage1.some(r => r.model === event.data.model)
+                    ? lastMsg.stage1.map(r => r.model === event.data.model ? event.data : r)
+                    : [...lastMsg.stage1, event.data]
+                  : [event.data];
                 const updatedLastMsg = {
                   ...lastMsg,
                   progress: {
@@ -1158,6 +1218,7 @@ function App() {
               setCurrentConversation((prev) => {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
+                const initialStage2 = (councilModels || []).map(m => ({ model: m, pending: true }));
 
                 const updatedLastMsg = {
                   ...lastMsg,
@@ -1168,7 +1229,8 @@ function App() {
                       total: event.total,
                       currentModel: null
                     }
-                  }
+                  },
+                  stage2: initialStage2
                 };
 
                 messages[messages.length - 1] = updatedLastMsg;
@@ -1181,8 +1243,11 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
 
-                // Immutable update for stage2
-                const updatedStage2 = lastMsg.stage2 ? [...lastMsg.stage2, event.data] : [event.data];
+                const updatedStage2 = lastMsg.stage2
+                  ? lastMsg.stage2.some(r => r.model === event.data.model)
+                    ? lastMsg.stage2.map(r => r.model === event.data.model ? event.data : r)
+                    : [...lastMsg.stage2, event.data]
+                  : [event.data];
                 const updatedLastMsg = {
                   ...lastMsg,
                   progress: {
@@ -1434,6 +1499,10 @@ function App() {
               break;
 
             case 'debate_complete':
+              setRunPaused(false);
+              setPausedModel(null);
+              setPausedStage(null);
+              setPendingCount(0);
               setCurrentConversation((prev) => {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
@@ -1479,7 +1548,97 @@ function App() {
               loadConversations();
               break;
 
+            case 'run_paused':
+              setRunPaused(true);
+              setPausedModel(event.data.failed_model);
+              setPausedStage(event.data.stage);
+              setPendingCount(event.data.pending_count);
+              break;
+
+            case 'run_resumed':
+              setRunPaused(false);
+              setPausedModel(null);
+              setPausedStage(null);
+              setPendingCount(0);
+              break;
+
+            case 'provider_retrying':
+              setCurrentConversation((prev) => {
+                if (!prev || prev.messages.length === 0) return prev;
+                const messages = [...prev.messages];
+                const lastMsg = { ...messages[messages.length - 1] };
+                const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
+                
+                if (Array.isArray(lastMsg[targetStage])) {
+                  lastMsg[targetStage] = lastMsg[targetStage].map(item => 
+                    item.model === event.data.model 
+                      ? { ...item, retrying: true, error: false, error_message: null } 
+                      : item
+                  );
+                }
+                messages[messages.length - 1] = lastMsg;
+                return { ...prev, messages };
+              });
+              break;
+
+            case 'provider_retry_result':
+              setCurrentConversation((prev) => {
+                if (!prev || prev.messages.length === 0) return prev;
+                const messages = [...prev.messages];
+                const lastMsg = { ...messages[messages.length - 1] };
+                const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
+                
+                if (Array.isArray(lastMsg[targetStage])) {
+                  lastMsg[targetStage] = lastMsg[targetStage].map(item => {
+                    if (item.model === event.data.model) {
+                      const updated = { ...item, retrying: false };
+                      if (event.data.success) {
+                        updated.error = false;
+                        updated.error_message = null;
+                        if (event.data.stage === 'stage1') {
+                          updated.response = event.data.response;
+                        } else {
+                          updated.ranking = event.data.response;
+                          updated.parsed_ranking = event.data.parsed_ranking;
+                        }
+                      } else {
+                        updated.error = true;
+                        updated.error_message = event.data.error_message || 'Retry failed';
+                      }
+                      return updated;
+                    }
+                    return item;
+                  });
+                }
+                messages[messages.length - 1] = lastMsg;
+                return { ...prev, messages };
+              });
+              break;
+
+            case 'provider_fired_manual':
+              setCurrentConversation((prev) => {
+                if (!prev || prev.messages.length === 0) return prev;
+                const messages = [...prev.messages];
+                const lastMsg = { ...messages[messages.length - 1] };
+                const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
+                
+                if (Array.isArray(lastMsg[targetStage])) {
+                  lastMsg[targetStage] = lastMsg[targetStage].map(item => 
+                    item.model === event.data.model 
+                      ? { ...item, pending: false } 
+                      : item
+                  );
+                }
+                messages[messages.length - 1] = lastMsg;
+                return { ...prev, messages };
+              });
+              break;
+
             case 'complete':
+              setRunPaused(false);
+              setPausedModel(null);
+              setPausedStage(null);
+              setPendingCount(0);
               setCurrentConversation((prev) => {
                 if (!prev || prev.messages.length === 0) return prev;
                 const messages = [...prev.messages];
@@ -1504,6 +1663,10 @@ function App() {
 
             case 'error':
               console.error('Stream error:', event.message);
+              setRunPaused(false);
+              setPausedModel(null);
+              setPausedStage(null);
+              setPendingCount(0);
               setCurrentConversation((prev) => {
                 if (!prev || prev.messages.length === 0) return prev;
                 const messages = [...prev.messages];
@@ -1521,10 +1684,31 @@ function App() {
               setIsLoading(false);
               break;
 
-            default:
-              console.log('Unknown event type:', eventType);
           }
         }, abortControllerRef.current?.signal);
+
+      // Defensive fallback check: if the stream method finished but the message is still loading
+      setCurrentConversation((prev) => {
+        if (!prev || prev.messages.length === 0) return prev;
+        const messages = [...prev.messages];
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.role === 'assistant' && (
+          lastMsg.loading?.stage1 ||
+          lastMsg.loading?.stage2 ||
+          lastMsg.loading?.stage3 ||
+          lastMsg.loading?.stage4 ||
+          lastMsg.loading?.search
+        )) {
+          console.warn("Stream completed without explicit complete event; triggering defensive timer finalization.");
+          messages[messages.length - 1] = {
+            ...lastMsg,
+            loading: IDLE_LOADING,
+            timers: finalizeTimers(lastMsg.timers),
+          };
+        }
+        return { ...prev, messages };
+      });
+      setIsLoading(false);
     } catch (error) {
       // Handle aborted requests - mark message as aborted
       if (error.name === 'AbortError') {
@@ -1664,6 +1848,14 @@ function App() {
                 debateRounds={debateRounds}
                 autoConverge={autoConverge}
                 convergenceThreshold={convergenceThreshold}
+                onRetryProvider={handleRetryFailed}
+                onFireProvider={handleFireProvider}
+                runPaused={runPaused}
+                pausedModel={pausedModel}
+                pendingCount={pendingCount}
+                continuationMode={continuationMode}
+                onContinuationModeChange={setContinuationMode}
+                onResume={handleResume}
               />
             )}
           </Suspense>

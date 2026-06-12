@@ -23,7 +23,7 @@ const isFixedTemperatureModel = (modelId = '') => {
     return (
         normalized.startsWith('gpt-5') ||
         /^o(?:1|3|4)(?:[-.]|$)/.test(normalized) ||
-        /^claude-(?:opus|sonnet|haiku)-[4-9](?:[-.]|$)/.test(normalized)
+        /^claude-(?:opus|sonnet|haiku|fable)-[4-9](?:[-.]|$)/.test(normalized)
     );
 };
 

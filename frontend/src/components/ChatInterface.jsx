@@ -13,6 +13,7 @@ import MarkdownContent from './MarkdownContent';
 import Stage4, { Stage4Skeleton } from './Stage4';
 import RoundNavigator from './RoundNavigator';
 import CostReport from './CostReport';
+import PauseBanner from './PauseBanner';
 import './ChatInterface.css';
 
 function hasStage1Results(msg) {
@@ -122,6 +123,14 @@ export default function ChatInterface({
     debateRounds = 1,
     autoConverge = true,
     convergenceThreshold = 2,
+    onRetryProvider,
+    onFireProvider,
+    runPaused = false,
+    pausedModel = null,
+    pendingCount = 0,
+    continuationMode = 'normal',
+    onContinuationModeChange,
+    onResume,
 }) {
     const [input, setInput] = useState('');
     const [activeSearchProvider, setActiveSearchProvider] = useState(null);
@@ -328,6 +337,8 @@ export default function ChatInterface({
                                         isLoading={isLoading}
                                         stage2AnchorRef={stage2AnchorRef}
                                         stage3AnchorRef={stage3AnchorRef}
+                                        onRetryProvider={onRetryProvider}
+                                        onFireProvider={onFireProvider}
                                     />
                                 )}
                             </div>
@@ -342,6 +353,16 @@ export default function ChatInterface({
 
             {/* Floating Command Capsule — hidden for advisor debates */}
             {mode !== 'advisors' && <div className="input-area">
+                {runPaused && (
+                    <PauseBanner
+                        failedModel={pausedModel}
+                        pendingCount={pendingCount}
+                        continuationMode={continuationMode}
+                        onModeChange={onContinuationModeChange}
+                        onResume={onResume}
+                        onAbort={onAbort}
+                    />
+                )}
                 <DebateConfigBar
                     critiqueMode={critiqueMode}
                     debateRounds={debateRounds}
@@ -450,6 +471,8 @@ function CouncilMessageRenderer({
     isLoading,
     stage2AnchorRef,
     stage3AnchorRef,
+    onRetryProvider,
+    onFireProvider
 }) {
     const [selectedRound, setSelectedRound] = useState(null);
 
@@ -571,6 +594,8 @@ function CouncilMessageRenderer({
                         responses={displayStage1 || []}
                         startTime={msg.timers?.stage1Start}
                         endTime={msg.timers?.stage1End}
+                        onRetryProvider={onRetryProvider}
+                        onFireProvider={onFireProvider}
                     />
                 )
             )}
@@ -590,6 +615,8 @@ function CouncilMessageRenderer({
                         aggregateClaimVerdicts={displayMetadata.aggregate_claim_verdicts}
                         startTime={msg.timers?.stage2Start}
                         endTime={msg.timers?.stage2End}
+                        onRetryProvider={onRetryProvider}
+                        onFireProvider={onFireProvider}
                     />
                 )}
             </div>

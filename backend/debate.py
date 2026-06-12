@@ -105,14 +105,16 @@ async def extract_canonical_claims(
     messages = [{"role": "user", "content": prompt}]
 
     extractor = chairman_model or get_chairman_model()
+    timeout_val = getattr(settings, "claim_extraction_timeout_seconds", 180.0)
     try:
         response = await asyncio.wait_for(
             query_model(extractor, messages, temperature=0.2),
-            timeout=90.0,
+            timeout=timeout_val,
         )
     except asyncio.TimeoutError:
-        logger.warning("Claim extraction timed out after 90s, falling back to free-form")
+        logger.warning(f"Claim extraction timed out after {timeout_val}s, falling back to free-form")
         return None
+
 
     if not response or response.get("error"):
         return None

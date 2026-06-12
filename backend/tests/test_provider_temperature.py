@@ -81,6 +81,7 @@ def test_openai_fixed_temperature_model_detection(model_id):
         "anthropic:claude-opus-4-8",
         "anthropic:claude-sonnet-4-6",
         "openrouter:anthropic/claude-haiku-4-5-20251001",
+        "anthropic:claude-fable-5",
     ],
 )
 def test_anthropic_deprecated_temperature_model_detection(model_id):

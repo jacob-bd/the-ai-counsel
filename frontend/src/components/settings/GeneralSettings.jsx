@@ -10,6 +10,12 @@ export default function GeneralSettings({
   responseLanguage,
   onResponseLanguageChange,
   responseLanguages = RESPONSE_LANGUAGES_FALLBACK,
+  modelTimeoutSeconds,
+  onModelTimeoutChange,
+  preflightTimeoutSeconds,
+  onPreflightTimeoutChange,
+  claimExtractionTimeoutSeconds,
+  onClaimExtractionTimeoutChange,
 }) {
   return (
     <section className="settings-section">
@@ -60,6 +66,71 @@ export default function GeneralSettings({
           </select>
         </div>
       </div>
+
+      <div className="subsection general-subsection-divider">
+        <h4>Timeout Configuration</h4>
+        <p className="section-description general-section-note">
+          Configure maximum execution times for model queries, startup preflight checks, and claim extraction.
+        </p>
+        
+        <div className="general-setting-row">
+          <label htmlFor="model-timeout-input" className="general-setting-label" style={{ minWidth: '220px' }}>
+            Model Query Timeout
+          </label>
+          <input
+            id="model-timeout-input"
+            type="number"
+            min="30"
+            max="1800"
+            value={modelTimeoutSeconds}
+            onChange={(e) => onModelTimeoutChange(parseInt(e.target.value) || 300)}
+            className="select-input general-setting-select"
+            style={{ width: '90px', padding: '6px 10px' }}
+          />
+          <span className="general-setting-hint">
+            Time limit for individual model responses (30–1800s).
+          </span>
+        </div>
+
+        <div className="general-setting-row" style={{ marginTop: '16px' }}>
+          <label htmlFor="preflight-timeout-input" className="general-setting-label" style={{ minWidth: '220px' }}>
+            Preflight Check Timeout
+          </label>
+          <input
+            id="preflight-timeout-input"
+            type="number"
+            min="1"
+            max="120"
+            value={preflightTimeoutSeconds}
+            onChange={(e) => onPreflightTimeoutChange(parseFloat(e.target.value) || 10.0)}
+            className="select-input general-setting-select"
+            style={{ width: '90px', padding: '6px 10px' }}
+          />
+          <span className="general-setting-hint">
+            Timeout for checking model availability on startup (1–120s).
+          </span>
+        </div>
+
+        <div className="general-setting-row" style={{ marginTop: '16px' }}>
+          <label htmlFor="claim-timeout-input" className="general-setting-label" style={{ minWidth: '220px' }}>
+            Claim Extraction Timeout
+          </label>
+          <input
+            id="claim-timeout-input"
+            type="number"
+            min="10"
+            max="600"
+            value={claimExtractionTimeoutSeconds}
+            onChange={(e) => onClaimExtractionTimeoutChange(parseFloat(e.target.value) || 180.0)}
+            className="select-input general-setting-select"
+            style={{ width: '90px', padding: '6px 10px' }}
+          />
+          <span className="general-setting-hint">
+            Limit for the Chairman to decompose responses into claims (10–600s).
+          </span>
+        </div>
+      </div>
     </section>
   );
 }
+

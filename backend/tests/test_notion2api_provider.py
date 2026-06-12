@@ -219,11 +219,17 @@ async def test_notion2api_query_does_not_persist_without_conversation_id(fake_ht
 
     sent = fake_httpx.instances[-1].kwargs["json"]
     assert "conversation_id" not in sent
-    assert "metadata" not in sent
+    assert sent["metadata"] == {
+        "persist_remote_chat": False,
+        "source": "ai-counsel",
+    }
 
 
 @pytest.mark.asyncio
-async def test_notion2api_query_persists_with_stable_per_model_conversation_id(fake_httpx, notion_env):
+async def test_notion2api_query_persists_with_stable_per_model_conversation_id(fake_httpx, notion_env, monkeypatch):
+    from backend.settings import get_settings
+    monkeypatch.setattr(get_settings(), "notion2api_persist_chats", True)
+
     fake_httpx.responses.append((
         200,
         {"choices": [{"message": {"content": "ok"}}]},

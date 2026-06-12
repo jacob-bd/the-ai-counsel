@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
@@ -81,6 +80,7 @@ AVAILABLE_MODELS = [
     {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet [OpenRouter]", "provider": "Anthropic", "source": "openrouter"},
     {"id": "anthropic/claude-3-opus", "name": "Claude 3 Opus [OpenRouter]", "provider": "Anthropic", "source": "openrouter"},
     {"id": "anthropic/claude-3-haiku", "name": "Claude 3 Haiku [OpenRouter]", "provider": "Anthropic", "source": "openrouter"},
+    {"id": "anthropic/claude-fable-5", "name": "Claude Fable 5 [OpenRouter]", "provider": "Anthropic", "source": "openrouter"},
     # Meta
     {"id": "meta-llama/llama-3.1-405b-instruct", "name": "Llama 3.1 405B [OpenRouter]", "provider": "Meta", "source": "openrouter"},
     {"id": "meta-llama/llama-3.1-70b-instruct", "name": "Llama 3.1 70B [OpenRouter]", "provider": "Meta", "source": "openrouter", "is_free": True},
@@ -145,6 +145,13 @@ class Settings(BaseModel):
     notion2api_api_key: Optional[str] = None
     notion2api_root: Optional[str] = None
     notion2api_auto_launch: bool = False
+    notion2api_persist_chats: bool = False
+    # Notion2API request firing mode
+    notion2api_firing_mode: str = "rapid_fire"  # "rapid_fire" | "random_delay" | "sequential"
+    notion2api_sequential_max_concurrent: int = 3  # used when firing_mode == "sequential"
+    # Notion2API failure handling
+    notion2api_pause_on_failure: bool = True  # pause run when a model fails (allow manual retry)
+    notion2api_default_continuation_mode: str = "normal"  # "normal" | "fail_safe" | "conservative"
 
     # Enabled Providers (which sources are available for council selection)
     enabled_providers: Dict[str, bool] = DEFAULT_ENABLED_PROVIDERS.copy()
@@ -191,6 +198,9 @@ class Settings(BaseModel):
     attachment_poll_interval_seconds: float = 2.0
     attachment_poll_timeout_seconds: float = 60.0
     model_timeout_seconds: int = 300
+    preflight_timeout_seconds: float = 10.0
+    claim_extraction_timeout_seconds: float = 180.0
+
 
     # Iterative Debate
     critique_mode: str = "freeform"        # "freeform", "paragraph", "claim"
@@ -376,6 +386,21 @@ def _normalize_display_preferences(data: dict) -> dict:
 def _normalize_prompt_defaults(data: dict) -> dict:
     """Backfill defaults for older settings files that persisted invalid values."""
     normalized = _normalize_display_preferences(dict(data))
+    # Validate notion2api firing mode
+    _VALID_FIRING_MODES = ("rapid_fire", "random_delay", "sequential")
+    if normalized.get("notion2api_firing_mode") not in _VALID_FIRING_MODES:
+        normalized["notion2api_firing_mode"] = "rapid_fire"
+    # Validate notion2api continuation mode
+    _VALID_CONTINUATION_MODES = ("normal", "fail_safe", "conservative")
+    if normalized.get("notion2api_default_continuation_mode") not in _VALID_CONTINUATION_MODES:
+        normalized["notion2api_default_continuation_mode"] = "normal"
+    # Clamp sequential max concurrent
+    seq_max = normalized.get("notion2api_sequential_max_concurrent", 3)
+    if not isinstance(seq_max, int) or seq_max < 1:
+        seq_max = 3
+    elif seq_max > 8:
+        seq_max = 8
+    normalized["notion2api_sequential_max_concurrent"] = seq_max
     for key, default in PROMPT_DEFAULTS.items():
         value = normalized.get(key)
         if not isinstance(value, str) or not value.strip():

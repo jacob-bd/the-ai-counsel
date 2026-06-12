@@ -578,4 +578,34 @@ export const api = {
 
     await _consumeSSEStream(response.body, onEvent);
   },
+
+  async resumeRun(conversationId, continuationMode) {
+    const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/pause/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ continuation_mode: continuationMode })
+    });
+    if (!response.ok) throw new Error('Failed to resume run');
+    return response.json();
+  },
+
+  async retryFailedProvider(conversationId, model, stage) {
+    const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/pause/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, stage })
+    });
+    if (!response.ok) throw new Error('Failed to retry provider');
+    return response.json();
+  },
+
+  async firePendingProvider(conversationId, model, stage) {
+    const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/pause/fire`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, stage })
+    });
+    if (!response.ok) throw new Error('Failed to fire provider');
+    return response.json();
+  },
 };

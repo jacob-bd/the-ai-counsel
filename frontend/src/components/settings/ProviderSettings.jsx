@@ -79,12 +79,22 @@ export default function ProviderSettings({
     setNotion2apiToken,
     notion2apiAutoLaunch,
     setNotion2apiAutoLaunch,
+    notion2apiPersistChats,
+    setNotion2apiPersistChats,
     notion2apiStatus,
     notion2apiModels,
     handleTestNotion2api,
     isTestingNotion2api,
     notion2apiTestResult,
     onRefreshNotion2api,
+    notion2apiFiringMode,
+    setNotion2apiFiringMode,
+    notion2apiSeqMaxConcurrent,
+    setNotion2apiSeqMaxConcurrent,
+    notion2apiPauseOnFailure,
+    setNotion2apiPauseOnFailure,
+    notion2apiDefaultContinuationMode,
+    setNotion2apiDefaultContinuationMode,
     // Custom Endpoint
     customEndpointName,
     setCustomEndpointName,
@@ -451,14 +461,6 @@ export default function ProviderSettings({
                             {isTestingNotion2api ? 'Testing...' : 'Test / Save'}
                         </button>
                     </div>
-                    <label className="checkbox-label" style={{ marginTop: '12px' }}>
-                        <input
-                            type="checkbox"
-                            checked={!!notion2apiAutoLaunch}
-                            onChange={e => setNotion2apiAutoLaunch(e.target.checked)}
-                        />
-                        Auto-launch this provider when desktop launcher support is enabled
-                    </label>
                     <div className="model-options-row" style={{ marginTop: '12px', gap: '8px', flexWrap: 'wrap' }}>
                         <button type="button" className="reset-defaults-button" onClick={onRefreshNotion2api}>
                             Refresh Status / Models
@@ -520,6 +522,193 @@ export default function ProviderSettings({
                         </div>
                     )}
                 </form>
+
+                {/* Notion2API Behavior & Options */}
+                <div className="api-key-section" style={{ marginTop: '16px' }}>
+                    <label style={{ fontSize: '14px', fontWeight: '600', color: '#e5e7eb', marginBottom: '12px', display: 'block' }}>
+                        Notion2API Options
+                    </label>
+                    <label className="checkbox-label" style={{ marginTop: '4px' }}>
+                        <input
+                            type="checkbox"
+                            checked={!!notion2apiAutoLaunch}
+                            onChange={e => setNotion2apiAutoLaunch(e.target.checked)}
+                        />
+                        Auto-launch this provider when desktop launcher support is enabled
+                    </label>
+                    <label className="checkbox-label" style={{ marginTop: '8px' }}>
+                        <input
+                            type="checkbox"
+                            checked={!!notion2apiPersistChats}
+                            onChange={e => setNotion2apiPersistChats(e.target.checked)}
+                        />
+                        Persist conversation threads in Notion (keeps context across turns)
+                    </label>
+
+                    {/* Request Firing Mode */}
+                    <div style={{ marginTop: '20px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: '600', color: '#e5e7eb', marginBottom: '10px', display: 'block' }}>
+                            Request Firing Mode
+                        </label>
+                        <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px', marginTop: 0 }}>
+                            Controls how chat requests are issued to this provider.
+                        </p>
+                        <div className="debate-card-stack" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {/* Rapid Fire */}
+                            <div
+                                className={`debate-mode-list-card ${notion2apiFiringMode === 'rapid_fire' ? 'active' : ''}`}
+                                onClick={() => setNotion2apiFiringMode('rapid_fire')}
+                                style={{
+                                    border: `1px solid ${notion2apiFiringMode === 'rapid_fire' ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
+                                    background: notion2apiFiringMode === 'rapid_fire' ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.02)',
+                                    borderRadius: '8px',
+                                    padding: '12px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <div className="debate-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div className="debate-card-title-block" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                        <span className="debate-card-icon-wrapper freeform-icon" style={{ color: '#3b82f6' }}>
+                                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                        </span>
+                                        <div className="debate-card-title-text">
+                                            <h5 style={{ margin: 0, fontSize: '13px', color: '#f3f4f6' }}>Rapid Fire <span style={{ fontSize: '11px', opacity: 0.6, fontWeight: 'normal' }}>(default)</span></h5>
+                                            <p className="debate-card-concept" style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#94a3b8' }}>All requests fire immediately in parallel</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Random Delay */}
+                            <div
+                                className={`debate-mode-list-card ${notion2apiFiringMode === 'random_delay' ? 'active' : ''}`}
+                                onClick={() => setNotion2apiFiringMode('random_delay')}
+                                style={{
+                                    border: `1px solid ${notion2apiFiringMode === 'random_delay' ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
+                                    background: notion2apiFiringMode === 'random_delay' ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.02)',
+                                    borderRadius: '8px',
+                                    padding: '12px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <div className="debate-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div className="debate-card-title-block" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                        <span className="debate-card-icon-wrapper paragraph-icon" style={{ color: '#3b82f6' }}>
+                                            <circle cx="12" cy="12" r="10" />
+                                            <polyline points="12 6 12 12 16 14" />
+                                        </span>
+                                        <div className="debate-card-title-text">
+                                            <h5 style={{ margin: 0, fontSize: '13px', color: '#f3f4f6' }}>Random Delay</h5>
+                                            <p className="debate-card-concept" style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#94a3b8' }}>5–13s stagger between requests · 30s pause on 502</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Sequential */}
+                            <div
+                                className={`debate-mode-list-card ${notion2apiFiringMode === 'sequential' ? 'active' : ''}`}
+                                onClick={() => setNotion2apiFiringMode('sequential')}
+                                style={{
+                                    border: `1px solid ${notion2apiFiringMode === 'sequential' ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
+                                    background: notion2apiFiringMode === 'sequential' ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.02)',
+                                    borderRadius: '8px',
+                                    padding: '12px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <div className="debate-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div className="debate-card-title-block" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                        <span className="debate-card-icon-wrapper claim-icon" style={{ color: '#3b82f6' }}>
+                                            <line x1="8" y1="6" x2="21" y2="6" />
+                                            <line x1="8" y1="12" x2="21" y2="12" />
+                                            <line x1="8" y1="18" x2="21" y2="18" />
+                                            <line x1="3" y1="6" x2="3.01" y2="6" />
+                                            <line x1="3" y1="12" x2="3.01" y2="12" />
+                                            <line x1="3" y1="18" x2="3.01" y2="18" />
+                                        </span>
+                                        <div className="debate-card-title-text">
+                                            <h5 style={{ margin: 0, fontSize: '13px', color: '#f3f4f6' }}>Sequential</h5>
+                                            <p className="debate-card-concept" style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#94a3b8' }}>Throttled concurrency · one-at-a-time firing with stagger</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {notion2apiFiringMode === 'sequential' && (
+                                    <div style={{ padding: '8px 0 0 0', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.07)' }} onClick={e => e.stopPropagation()}>
+                                        <label style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '10px', margin: 0, cursor: 'default' }}>
+                                            Max concurrent requests:
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={8}
+                                                step={1}
+                                                value={notion2apiSeqMaxConcurrent}
+                                                onChange={e => setNotion2apiSeqMaxConcurrent(Math.max(1, Math.min(8, parseInt(e.target.value, 10) || 1)))}
+                                                style={{
+                                                    width: '60px',
+                                                    background: 'rgba(255,255,255,0.07)',
+                                                    border: '1px solid rgba(255,255,255,0.15)',
+                                                    borderRadius: '6px',
+                                                    color: '#e5e7eb',
+                                                    padding: '4px 8px',
+                                                    fontSize: '13px',
+                                                }}
+                                            />
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Failure Pause Settings */}
+                    <div style={{ marginTop: '20px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: '600', color: '#e5e7eb', marginBottom: '10px', display: 'block' }}>
+                            Failure Handling
+                        </label>
+                        <label className="checkbox-label" style={{ marginTop: '4px' }}>
+                            <input
+                                type="checkbox"
+                                checked={!!notion2apiPauseOnFailure}
+                                onChange={e => setNotion2apiPauseOnFailure(e.target.checked)}
+                            />
+                            Pause run when a model fails (enables manual retry and continuation mode)
+                        </label>
+
+                        {notion2apiPauseOnFailure && (
+                            <div style={{ marginTop: '14px' }}>
+                                <label style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
+                                    Default continuation mode after resuming:
+                                </label>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                    {[['normal', 'Normal', 'Resume normally'], ['fail_safe', 'Fail-Safe', '30s wait + stagger'], ['conservative', 'Conservative', '1 concurrent · slow']].map(([val, label, desc]) => (
+                                        <div
+                                            key={val}
+                                            onClick={() => setNotion2apiDefaultContinuationMode(val)}
+                                            style={{
+                                                padding: '8px 12px',
+                                                borderRadius: '8px',
+                                                border: `1px solid ${notion2apiDefaultContinuationMode === val ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
+                                                background: notion2apiDefaultContinuationMode === val ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                                                cursor: 'pointer',
+                                                flex: '1',
+                                                minWidth: '90px',
+                                                transition: 'all 0.15s ease',
+                                                textAlign: 'center'
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '12px', fontWeight: '600', color: notion2apiDefaultContinuationMode === val ? '#60a5fa' : '#e5e7eb', marginBottom: '3px' }}>{label}</div>
+                                            <div style={{ fontSize: '10px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{desc}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Custom OpenAI-compatible Endpoint */}

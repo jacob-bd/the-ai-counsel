@@ -74,6 +74,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const [responseLanguage, setResponseLanguage] = useState(RESPONSE_LANGUAGE_DEFAULT);
   const [responseLanguages, setResponseLanguages] = useState(RESPONSE_LANGUAGES_FALLBACK);
 
+  // Timeout Settings State
+  const [modelTimeoutSeconds, setModelTimeoutSeconds] = useState(300);
+  const [preflightTimeoutSeconds, setPreflightTimeoutSeconds] = useState(10.0);
+  const [claimExtractionTimeoutSeconds, setClaimExtractionTimeoutSeconds] = useState(180.0);
+
+
   // OpenRouter State
   const [openrouterApiKey, setOpenrouterApiKey] = useState('');
   const [availableModels, setAvailableModels] = useState([]);
@@ -108,6 +114,11 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const [notion2apiModels, setNotion2apiModels] = useState([]);
   const [isTestingNotion2api, setIsTestingNotion2api] = useState(false);
   const [notion2apiTestResult, setNotion2apiTestResult] = useState(null);
+  const [notion2apiPersistChats, setNotion2apiPersistChats] = useState(false);
+  const [notion2apiFiringMode, setNotion2apiFiringMode] = useState('rapid_fire');
+  const [notion2apiSeqMaxConcurrent, setNotion2apiSeqMaxConcurrent] = useState(3);
+  const [notion2apiPauseOnFailure, setNotion2apiPauseOnFailure] = useState(true);
+  const [notion2apiDefaultContinuationMode, setNotion2apiDefaultContinuationMode] = useState('normal');
 
   // Direct Provider State
   const [directKeys, setDirectKeys] = useState({
@@ -228,6 +239,11 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       notion2apiBaseUrl !== (settings.notion2api_base_url || '') ||
       notion2apiRoot !== (settings.notion2api_root || '') ||
       notion2apiAutoLaunch !== (settings.notion2api_auto_launch ?? false) ||
+      notion2apiPersistChats !== (settings.notion2api_persist_chats ?? false) ||
+      notion2apiFiringMode !== (settings.notion2api_firing_mode || 'rapid_fire') ||
+      notion2apiSeqMaxConcurrent !== (settings.notion2api_sequential_max_concurrent ?? 3) ||
+      notion2apiPauseOnFailure !== (settings.notion2api_pause_on_failure ?? true) ||
+      notion2apiDefaultContinuationMode !== (settings.notion2api_default_continuation_mode || 'normal') ||
       JSON.stringify(councilModels) !== JSON.stringify(settings.council_models) ||
       chairmanModel !== (settings.chairman_model || '') ||
       councilTemperature !== (settings.council_temperature ?? 0.5) ||
@@ -239,7 +255,10 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       critiqueMode !== (settings.critique_mode || 'freeform') ||
       debateRounds !== (settings.debate_rounds || 1) ||
       autoConverge !== (settings.auto_converge !== undefined ? settings.auto_converge : true) ||
-      convergenceThreshold !== (settings.convergence_threshold || 2);
+      convergenceThreshold !== (settings.convergence_threshold || 2) ||
+      modelTimeoutSeconds !== (settings.model_timeout_seconds ?? 300) ||
+      preflightTimeoutSeconds !== (settings.preflight_timeout_seconds ?? 10.0) ||
+      claimExtractionTimeoutSeconds !== (settings.claim_extraction_timeout_seconds ?? 180.0);
 
     if (!settingsChanged) return;
 
@@ -271,9 +290,14 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           response_language: responseLanguage,
           enabled_providers: enabledProviders,
           direct_provider_toggles: directProviderToggles,
-          notion2api_base_url: notion2apiBaseUrl,
+           notion2api_base_url: notion2apiBaseUrl,
           notion2api_root: notion2apiRoot,
           notion2api_auto_launch: notion2apiAutoLaunch,
+          notion2api_persist_chats: notion2apiPersistChats,
+          notion2api_firing_mode: notion2apiFiringMode,
+          notion2api_sequential_max_concurrent: notion2apiSeqMaxConcurrent,
+          notion2api_pause_on_failure: notion2apiPauseOnFailure,
+          notion2api_default_continuation_mode: notion2apiDefaultContinuationMode,
           council_models: councilModels,
           chairman_model: chairmanModel,
           council_temperature: councilTemperature,
@@ -285,6 +309,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           debate_rounds: debateRounds,
           auto_converge: autoConverge,
           convergence_threshold: convergenceThreshold,
+          model_timeout_seconds: modelTimeoutSeconds,
+          preflight_timeout_seconds: preflightTimeoutSeconds,
+          claim_extraction_timeout_seconds: claimExtractionTimeoutSeconds,
           ...prompts,
         };
         await api.updateSettings(updates);
@@ -328,7 +355,19 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     debateRounds,
     autoConverge,
     convergenceThreshold,
+    notion2apiBaseUrl,
+    notion2apiRoot,
+    notion2apiAutoLaunch,
+    notion2apiPersistChats,
+    notion2apiFiringMode,
+    notion2apiSeqMaxConcurrent,
+    notion2apiPauseOnFailure,
+    notion2apiDefaultContinuationMode,
+    modelTimeoutSeconds,
+    preflightTimeoutSeconds,
+    claimExtractionTimeoutSeconds,
   ]);
+
 
   // Helper to determine if filters need to switch based on availability
   const isRemoteAvailable = enabledProviders.openrouter || enabledProviders.direct || enabledProviders.groq || enabledProviders.custom || enabledProviders.notion2api;
@@ -438,6 +477,10 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           : RESPONSE_LANGUAGES_FALLBACK
       );
 
+      setModelTimeoutSeconds(data.model_timeout_seconds ?? 300);
+      setPreflightTimeoutSeconds(data.preflight_timeout_seconds ?? 10.0);
+      setClaimExtractionTimeoutSeconds(data.claim_extraction_timeout_seconds ?? 180.0);
+
       // Enabled Providers — never show ON for sources that aren't configured
       if (data.enabled_providers) {
         setEnabledProviders(normalizeEnabledProviders(
@@ -509,6 +552,11 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setNotion2apiBaseUrl(data.notion2api_base_url || 'http://127.0.0.1:8120/v1');
       setNotion2apiRoot(data.notion2api_root || '');
       setNotion2apiAutoLaunch(data.notion2api_auto_launch ?? false);
+      setNotion2apiPersistChats(data.notion2api_persist_chats ?? false);
+      setNotion2apiFiringMode(data.notion2api_firing_mode || 'rapid_fire');
+      setNotion2apiSeqMaxConcurrent(data.notion2api_sequential_max_concurrent ?? 3);
+      setNotion2apiPauseOnFailure(data.notion2api_pause_on_failure ?? true);
+      setNotion2apiDefaultContinuationMode(data.notion2api_default_continuation_mode || 'normal');
       setNotion2apiToken('');
       await loadNotion2apiStatus();
       await loadNotion2apiModels();
@@ -634,6 +682,11 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           notion2api_base_url: notion2apiBaseUrl,
           notion2api_root: notion2apiRoot,
           notion2api_auto_launch: notion2apiAutoLaunch,
+          notion2api_persist_chats: notion2apiPersistChats,
+          notion2api_firing_mode: notion2apiFiringMode,
+          notion2api_sequential_max_concurrent: notion2apiSeqMaxConcurrent,
+          notion2api_pause_on_failure: notion2apiPauseOnFailure,
+          notion2api_default_continuation_mode: notion2apiDefaultContinuationMode,
           enabled_providers: nextEnabled,
         };
         if (notion2apiToken) updates.notion2api_api_key = notion2apiToken;
@@ -1035,6 +1088,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setDateFormat('auto');
       setResponseLanguage(RESPONSE_LANGUAGE_DEFAULT);
       setOllamaBaseUrl('http://localhost:11434');
+      setModelTimeoutSeconds(300);
+      setPreflightTimeoutSeconds(10.0);
+      setClaimExtractionTimeoutSeconds(180.0);
 
       // Reset debate settings
       setCritiqueMode('freeform');
@@ -1087,6 +1143,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         convergence_threshold: 2,
         date_format: 'auto',
         response_language: RESPONSE_LANGUAGE_DEFAULT,
+        model_timeout_seconds: 300,
+        preflight_timeout_seconds: 10.0,
+        claim_extraction_timeout_seconds: 180.0,
         ...defaultPrompts,
       };
       await api.updateSettings(updates);
@@ -1323,6 +1382,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         // Apply Display Preferences
         if (config.date_format) setDateFormat(config.date_format);
         if (config.response_language) setResponseLanguage(config.response_language);
+        if (config.model_timeout_seconds !== undefined) setModelTimeoutSeconds(config.model_timeout_seconds);
+        if (config.preflight_timeout_seconds !== undefined) setPreflightTimeoutSeconds(config.preflight_timeout_seconds);
+        if (config.claim_extraction_timeout_seconds !== undefined) setClaimExtractionTimeoutSeconds(config.claim_extraction_timeout_seconds);
 
         // Apply Prompts
         if (config.prompts) {
@@ -1539,6 +1601,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                 responseLanguage={responseLanguage}
                 onResponseLanguageChange={handleResponseLanguageChange}
                 responseLanguages={responseLanguages}
+                modelTimeoutSeconds={modelTimeoutSeconds}
+                onModelTimeoutChange={setModelTimeoutSeconds}
+                preflightTimeoutSeconds={preflightTimeoutSeconds}
+                onPreflightTimeoutChange={setPreflightTimeoutSeconds}
+                claimExtractionTimeoutSeconds={claimExtractionTimeoutSeconds}
+                onClaimExtractionTimeoutChange={setClaimExtractionTimeoutSeconds}
               />
             )}
 
@@ -1591,6 +1659,16 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                 setNotion2apiToken={(val) => { setNotion2apiToken(val); setNotion2apiTestResult(null); }}
                 notion2apiAutoLaunch={notion2apiAutoLaunch}
                 setNotion2apiAutoLaunch={setNotion2apiAutoLaunch}
+                notion2apiPersistChats={notion2apiPersistChats}
+                setNotion2apiPersistChats={setNotion2apiPersistChats}
+                notion2apiFiringMode={notion2apiFiringMode}
+                setNotion2apiFiringMode={setNotion2apiFiringMode}
+                notion2apiSeqMaxConcurrent={notion2apiSeqMaxConcurrent}
+                setNotion2apiSeqMaxConcurrent={setNotion2apiSeqMaxConcurrent}
+                notion2apiPauseOnFailure={notion2apiPauseOnFailure}
+                setNotion2apiPauseOnFailure={setNotion2apiPauseOnFailure}
+                notion2apiDefaultContinuationMode={notion2apiDefaultContinuationMode}
+                setNotion2apiDefaultContinuationMode={setNotion2apiDefaultContinuationMode}
                 notion2apiStatus={notion2apiStatus}
                 notion2apiModels={notion2apiModels}
                 handleTestNotion2api={handleTestNotion2api}

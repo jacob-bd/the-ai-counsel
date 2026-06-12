@@ -1,13 +1,11 @@
 """3-stage LLM Council orchestration."""
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 import asyncio
 import logging
+import random
 import re
 import time
-import os
-from . import openrouter
-from . import ollama_client
 from .config import get_council_models, get_chairman_model
 from .costs import attach_cost
 from .settings import get_settings
@@ -118,31 +116,10 @@ async def _query_model_gated(
 
     messages = _vary_notion_thread_title(model, messages)
 
-    async with lock:
-        await _wait_notion_stagger()
-        result = await query_model(
-            model,
-            messages,
-            timeout=timeout,
-            temperature=temperature,
-            attachments=attachments,
-            conversation_id=conversation_id,
-        )
-
-        retries = 0
-        while _is_notion_overload_result(result) and retries < _NOTION_503_MAX_RETRIES:
-            retries += 1
-            logger.warning(
-                "Notion2API overload for %s; pausing %.0fs before retry %d/%d",
-                model,
-                _NOTION_503_PAUSE_SECONDS,
-                retries,
-                _NOTION_503_MAX_RETRIES,
-            )
-            await asyncio.sleep(_NOTION_503_PAUSE_SECONDS)
-            global _last_notion_call_started_at
-            _last_notion_call_started_at = time.monotonic()
-            result = await query_model(
+    async def _make_call():
+        async with lock:
+            await _wait_notion_stagger()
+            return await _query_model_raw(
                 model,
                 messages,
                 timeout=timeout,
@@ -151,7 +128,24 @@ async def _query_model_gated(
                 conversation_id=conversation_id,
             )
 
-        return result
+    result = await _make_call()
+
+    retries = 0
+    while _is_notion_overload_result(result) and retries < _NOTION_503_MAX_RETRIES:
+        retries += 1
+        logger.warning(
+            "Notion2API overload for %s; pausing %.0fs before retry %d/%d",
+            model,
+            _NOTION_503_PAUSE_SECONDS,
+            retries,
+            _NOTION_503_MAX_RETRIES,
+        )
+        await asyncio.sleep(_NOTION_503_PAUSE_SECONDS)
+        global _last_notion_call_started_at
+        _last_notion_call_started_at = time.monotonic()
+        result = await _make_call()
+
+    return result
 
 
 THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>[\s\S]*?</think>", re.IGNORECASE)
@@ -199,7 +193,7 @@ def get_provider_for_model(model_id: str) -> Any:
     return PROVIDERS["openrouter"]
 
 
-async def query_model(
+async def _query_model_raw(
     model: str,
     messages: List[Dict[str, str]],
     timeout: float = 120.0,
@@ -207,7 +201,7 @@ async def query_model(
     conversation_id: "str | None" = None,
     attachments: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    """Dispatch query to appropriate provider."""
+    """Dispatch query to appropriate provider directly."""
     provider = get_provider_for_model(model)
     kwargs = {}
     import inspect
@@ -229,6 +223,34 @@ async def query_model(
     if isinstance(response, dict):
         return await attach_cost(model, response)
     return response
+
+
+async def query_model(
+    model: str,
+    messages: List[Dict[str, str]],
+    timeout: float = 120.0,
+    temperature: float = 0.7,
+    conversation_id: "str | None" = None,
+    attachments: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """Dispatch query with serialization for Notion2API."""
+    if _is_notion2api_model(model):
+        return await _query_model_gated(
+            model,
+            messages,
+            timeout=timeout,
+            temperature=temperature,
+            attachments=attachments,
+            conversation_id=conversation_id,
+        )
+    return await _query_model_raw(
+        model,
+        messages,
+        timeout=timeout,
+        temperature=temperature,
+        attachments=attachments,
+        conversation_id=conversation_id,
+    )
 
 
 async def query_models_parallel(
@@ -379,64 +401,174 @@ async def stage1_collect_responses(
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
-    # Create tasks
-    tasks = [asyncio.create_task(_query_safe(m)) for m in models]
-    
-    # Process as they complete
-    pending = set(tasks)
+    from .main import _active_runs
+    run_info = _active_runs.get(conversation_id) if conversation_id else None
+    if run_info:
+        run_info["paused"] = False
+        run_info["pause_event"] = None
+        run_info["continuation_mode"] = "normal"
+        run_info["failed_providers"] = []
+        run_info["pending_providers"] = list(models)
+        run_info["active_providers"] = []
+
+    pending_models = list(models)
+    active_tasks = {}
+    last_notion_fire_time = 0.0
+    fail_safe_initial_wait_done = False
+
+    firing_mode = getattr(settings, "notion2api_firing_mode", "rapid_fire")
+    seq_max = getattr(settings, "notion2api_sequential_max_concurrent", 3)
+    pause_on_failure = getattr(settings, "notion2api_pause_on_failure", True)
+
     try:
-        while pending:
+        while pending_models or active_tasks:
             # Check for client disconnect
             if request and await request.is_disconnected():
-                logger.info("Client disconnected during Stage 1. Cancelling tasks...")
-                for t in pending:
-                    t.cancel()
                 raise asyncio.CancelledError("Client disconnected")
 
-            # Wait for the next task to complete (with timeout to check for disconnects)
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED, timeout=1.0)
+            # Check if paused
+            if run_info and run_info.get("paused"):
+                pause_event = run_info.get("pause_event")
+                if pause_event:
+                    await pause_event.wait()
+                
+                # Check fail-safe mode pause on resume
+                if run_info and run_info.get("continuation_mode") == "fail_safe" and not fail_safe_initial_wait_done:
+                    logger.info("[Fail-Safe] Pausing 30s on resume...")
+                    for _ in range(60):
+                        if request and await request.is_disconnected():
+                            raise asyncio.CancelledError("Client disconnected")
+                        await asyncio.sleep(0.5)
+                    fail_safe_initial_wait_done = True
 
-            for task in done:
-                try:
-                    model, response = await task
-                    
-                    result = None
-                    if response is not None:
-                        if response.get('error'):
-                            # Include failed models with error info
-                            result = {
-                                "model": model,
-                                "response": None,
-                                "error": response.get('error'),
-                                "error_message": response.get('error_message', 'Unknown error'),
-                                "usage": response.get('usage'),
-                                "cost": response.get('cost'),
-                            }
+            # Try to spawn new tasks
+            spawned_any = False
+            for m in list(pending_models):
+                if run_info and run_info.get("paused"):
+                    break
+
+                is_notion = _is_notion2api_model(m)
+                if not is_notion:
+                    # Direct models: spawn immediately
+                    pending_models.remove(m)
+                    if run_info:
+                        run_info["pending_providers"] = list(pending_models)
+                        run_info["active_providers"].append(m)
+                    active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    spawned_any = True
+                else:
+                    # Notion2API model: check concurrency and stagger
+                    current_mode = run_info.get("continuation_mode", "normal") if run_info else "normal"
+                    if current_mode == "conservative":
+                        max_notion_conc = 1
+                    else:
+                        if firing_mode == "sequential":
+                            max_notion_conc = seq_max
+                        elif firing_mode == "random_delay":
+                            max_notion_conc = 1
                         else:
-                            # Successful response - ensure content is always a string
-                            content = response.get('content', '')
-                            if not isinstance(content, str):
-                                # Handle case where API returns non-string content (array, object, etc.)
-                                content = str(content) if content is not None else ''
-                            content = strip_thinking_blocks(content)
-                            result = {
-                                "model": model,
-                                "response": content,
-                                "error": None,
-                                "usage": response.get('usage'),
-                                "cost": response.get('cost'),
-                            }
+                            max_notion_conc = len(models)
+
+                    active_notion_count = sum(1 for am in active_tasks if _is_notion2api_model(am))
+                    if active_notion_count >= max_notion_conc:
+                        continue
+
+                    now = time.monotonic()
+                    if current_mode == "conservative":
+                        stagger_delay = random.uniform(15.0, 25.0)
+                    elif current_mode == "fail_safe":
+                        stagger_delay = random.uniform(5.0, 13.0)
+                    else:
+                        if firing_mode in ("random_delay", "sequential"):
+                            stagger_delay = random.uniform(5.0, 13.0)
+                        else:
+                            stagger_delay = 0.0
+
+                    if now - last_notion_fire_time < stagger_delay:
+                        continue
+
+                    # Spawn Notion task
+                    pending_models.remove(m)
+                    if run_info:
+                        run_info["pending_providers"] = list(pending_models)
+                        run_info["active_providers"].append(m)
+                    active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    last_notion_fire_time = now
+                    spawned_any = True
+
+            # Wait for any active tasks to complete
+            if active_tasks:
+                done, _ = await asyncio.wait(
+                    list(active_tasks.values()),
+                    return_when=asyncio.FIRST_COMPLETED,
+                    timeout=0.2
+                )
+                
+                for task in done:
+                    completed_model = None
+                    for model_id, t in active_tasks.items():
+                        if t == task:
+                            completed_model = model_id
+                            break
                     
-                    if result:
-                        yield result
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    logger.error(f"Error processing Stage 1 task result: {e}")
+                    if completed_model:
+                        active_tasks.pop(completed_model)
+                        if run_info:
+                            if completed_model in run_info["active_providers"]:
+                                run_info["active_providers"].remove(completed_model)
+                        
+                        try:
+                            model, response = await task
+                            result = None
+                            if response is not None:
+                                if response.get('error'):
+                                    result = {
+                                        "model": model,
+                                        "response": None,
+                                        "error": response.get('error'),
+                                        "error_message": response.get('error_message', 'Unknown error'),
+                                        "usage": response.get('usage'),
+                                        "cost": response.get('cost'),
+                                    }
+                                else:
+                                    content = response.get('content', '')
+                                    if not isinstance(content, str):
+                                        content = str(content) if content is not None else ''
+                                    content = strip_thinking_blocks(content)
+                                    result = {
+                                        "model": model,
+                                        "response": content,
+                                        "error": None,
+                                        "usage": response.get('usage'),
+                                        "cost": response.get('cost'),
+                                    }
+                            
+                            if result:
+                                yield result
+
+                            # Check for failure pause!
+                            if response and response.get('error') and pause_on_failure:
+                                if run_info:
+                                    run_info["paused"] = True
+                                    run_info["pause_event"] = asyncio.Event()
+                                    if completed_model not in run_info["failed_providers"]:
+                                        run_info["failed_providers"].append(completed_model)
+                                
+                                # Yield pause event
+                                yield {
+                                    "model": completed_model,
+                                    "paused": True,
+                                    "pending_count": len(pending_models) + len(active_tasks)
+                                }
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as e:
+                            logger.error(f"Error processing Stage 1 task result: {e}")
+            else:
+                await asyncio.sleep(0.1)
 
     except asyncio.CancelledError:
-        # Ensure all tasks are cancelled if we get cancelled
-        for t in tasks:
+        for t in active_tasks.values():
             if not t.done():
                 t.cancel()
         raise
@@ -537,76 +669,186 @@ async def stage2_collect_rankings(
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
-    # Create tasks
-    tasks = [asyncio.create_task(_query_safe(m)) for m in successful_models]
+    from .main import _active_runs
+    run_info = _active_runs.get(conversation_id) if conversation_id else None
+    if run_info:
+        run_info["paused"] = False
+        run_info["pause_event"] = None
+        run_info["continuation_mode"] = "normal"
+        if "failed_providers" not in run_info:
+            run_info["failed_providers"] = []
+        run_info["pending_providers"] = list(successful_models)
+        run_info["active_providers"] = []
 
-    # Process as they complete
-    pending = set(tasks)
+    pending_models = list(successful_models)
+    active_tasks = {}
+    last_notion_fire_time = 0.0
+    fail_safe_initial_wait_done = False
+
+    firing_mode = getattr(settings, "notion2api_firing_mode", "rapid_fire")
+    seq_max = getattr(settings, "notion2api_sequential_max_concurrent", 3)
+    pause_on_failure = getattr(settings, "notion2api_pause_on_failure", True)
+
     try:
-        while pending:
+        while pending_models or active_tasks:
             # Check for client disconnect
             if request and await request.is_disconnected():
-                logger.info("Client disconnected during Stage 2. Cancelling tasks...")
-                for t in pending:
-                    t.cancel()
                 raise asyncio.CancelledError("Client disconnected")
 
-            # Wait for the next task to complete (with timeout to check for disconnects)
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED, timeout=1.0)
+            # Check if paused
+            if run_info and run_info.get("paused"):
+                pause_event = run_info.get("pause_event")
+                if pause_event:
+                    await pause_event.wait()
+                
+                # Check fail-safe mode pause on resume
+                if run_info and run_info.get("continuation_mode") == "fail_safe" and not fail_safe_initial_wait_done:
+                    logger.info("[Fail-Safe] Pausing 30s on resume...")
+                    for _ in range(60):
+                        if request and await request.is_disconnected():
+                            raise asyncio.CancelledError("Client disconnected")
+                        await asyncio.sleep(0.5)
+                    fail_safe_initial_wait_done = True
 
-            for task in done:
-                try:
-                    model, response = await task
-                    
-                    result = None
-                    if response is not None:
-                        if response.get('error'):
-                            # Include failed models with error info
-                            result = {
-                                "model": model,
-                                "ranking": None,
-                                "parsed_ranking": [],
-                                "error": response.get('error'),
-                                "error_message": response.get('error_message', 'Unknown error'),
-                                "usage": response.get('usage'),
-                                "cost": response.get('cost'),
-                            }
+            # Try to spawn new tasks
+            spawned_any = False
+            for m in list(pending_models):
+                if run_info and run_info.get("paused"):
+                    break
+
+                is_notion = _is_notion2api_model(m)
+                if not is_notion:
+                    # Direct models: spawn immediately
+                    pending_models.remove(m)
+                    if run_info:
+                        run_info["pending_providers"] = list(pending_models)
+                        run_info["active_providers"].append(m)
+                    active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    spawned_any = True
+                else:
+                    # Notion2API model: check concurrency and stagger
+                    current_mode = run_info.get("continuation_mode", "normal") if run_info else "normal"
+                    if current_mode == "conservative":
+                        max_notion_conc = 1
+                    else:
+                        if firing_mode == "sequential":
+                            max_notion_conc = seq_max
+                        elif firing_mode == "random_delay":
+                            max_notion_conc = 1
                         else:
-                            # Ensure content is always a string before parsing
-                            full_text = response.get('content', '')
-                            if not isinstance(full_text, str):
-                                # Handle case where API returns non-string content (array, object, etc.)
-                                full_text = str(full_text) if full_text is not None else ''
-                            full_text = strip_thinking_blocks(full_text)
-                            
-                            # Parse with expected count to avoid duplicates
-                            expected_count = len(successful_results)
-                            valid_labels = list(label_to_model.keys())
-                            parsed = parse_ranking_from_text(
-                                full_text,
-                                expected_count=expected_count,
-                                valid_labels=valid_labels,
-                            )
-                            
-                            result = {
-                                "model": model,
-                                "ranking": full_text,
-                                "parsed_ranking": parsed,
-                                "error": None,
-                                "usage": response.get('usage'),
-                                "cost": response.get('cost'),
-                            }
+                            max_notion_conc = len(successful_models)
+
+                    active_notion_count = sum(1 for am in active_tasks if _is_notion2api_model(am))
+                    if active_notion_count >= max_notion_conc:
+                        continue
+
+                    now = time.monotonic()
+                    if current_mode == "conservative":
+                        stagger_delay = random.uniform(15.0, 25.0)
+                    elif current_mode == "fail_safe":
+                        stagger_delay = random.uniform(5.0, 13.0)
+                    else:
+                        if firing_mode in ("random_delay", "sequential"):
+                            stagger_delay = random.uniform(5.0, 13.0)
+                        else:
+                            stagger_delay = 0.0
+
+                    if now - last_notion_fire_time < stagger_delay:
+                        continue
+
+                    # Spawn Notion task
+                    pending_models.remove(m)
+                    if run_info:
+                        run_info["pending_providers"] = list(pending_models)
+                        run_info["active_providers"].append(m)
+                    active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    last_notion_fire_time = now
+                    spawned_any = True
+
+            # Wait for any active tasks to complete
+            if active_tasks:
+                done, _ = await asyncio.wait(
+                    list(active_tasks.values()),
+                    return_when=asyncio.FIRST_COMPLETED,
+                    timeout=0.2
+                )
+                
+                for task in done:
+                    completed_model = None
+                    for model_id, t in active_tasks.items():
+                        if t == task:
+                            completed_model = model_id
+                            break
                     
-                    if result:
-                        yield result
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    logger.error(f"Error processing task result: {e}")
+                    if completed_model:
+                        active_tasks.pop(completed_model)
+                        if run_info:
+                            if completed_model in run_info["active_providers"]:
+                                run_info["active_providers"].remove(completed_model)
+                        
+                        try:
+                            model, response = await task
+                            result = None
+                            if response is not None:
+                                if response.get('error'):
+                                    result = {
+                                        "model": model,
+                                        "ranking": None,
+                                        "parsed_ranking": [],
+                                        "error": response.get('error'),
+                                        "error_message": response.get('error_message', 'Unknown error'),
+                                        "usage": response.get('usage'),
+                                        "cost": response.get('cost'),
+                                    }
+                                else:
+                                    full_text = response.get('content', '')
+                                    if not isinstance(full_text, str):
+                                        full_text = str(full_text) if full_text is not None else ''
+                                    full_text = strip_thinking_blocks(full_text)
+                                    
+                                    expected_count = len(successful_results)
+                                    valid_labels = list(label_to_model.keys())
+                                    parsed = parse_ranking_from_text(
+                                        full_text,
+                                        expected_count=expected_count,
+                                        valid_labels=valid_labels,
+                                    )
+                                    
+                                    result = {
+                                        "model": model,
+                                        "ranking": full_text,
+                                        "parsed_ranking": parsed,
+                                        "error": None,
+                                        "usage": response.get('usage'),
+                                        "cost": response.get('cost'),
+                                    }
+                            
+                            if result:
+                                yield result
+
+                            # Check for failure pause!
+                            if response and response.get('error') and pause_on_failure:
+                                if run_info:
+                                    run_info["paused"] = True
+                                    run_info["pause_event"] = asyncio.Event()
+                                    if completed_model not in run_info["failed_providers"]:
+                                        run_info["failed_providers"].append(completed_model)
+                                
+                                # Yield pause event
+                                yield {
+                                    "model": completed_model,
+                                    "paused": True,
+                                    "pending_count": len(pending_models) + len(active_tasks)
+                                }
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as e:
+                            logger.error(f"Error processing Stage 2 task result: {e}")
+            else:
+                await asyncio.sleep(0.1)
 
     except asyncio.CancelledError:
-        # Ensure all tasks are cancelled if we get cancelled
-        for t in tasks:
+        for t in active_tasks.values():
             if not t.done():
                 t.cancel()
         raise
@@ -742,7 +984,7 @@ async def stage3_synthesize_final(
         logger.error(f"Unexpected error in Stage 3 synthesis: {e}")
         error_response = {
             "model": chairman_model,
-            "response": f"Error: Unable to generate final synthesis due to unexpected error.",
+            "response": "Error: Unable to generate final synthesis due to unexpected error.",
             "error": True,
             "error_message": str(e),
             "usage": None,
