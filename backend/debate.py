@@ -366,6 +366,7 @@ async def run_iterative_debate(
     chairman_override: Optional[str] = None,
     history: Optional[List[Dict[str, str]]] = None,
     debate_rounds: Optional[int] = None,
+    conversation_id: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Orchestrate multi-round debate. Yields SSE-ready event dicts.
@@ -524,6 +525,7 @@ async def run_iterative_debate(
             history=history if round_num == 1 else None,
             messages_override=messages_override,
             per_model_messages=per_model_messages,
+            conversation_id=conversation_id,
         ):
             if isinstance(item, int):
                 total_models = item
@@ -630,6 +632,7 @@ async def run_iterative_debate(
             async for item in stage2_collect_rankings(
                 user_query, stage1_results, search_context, request,
                 prompt_override=stage2_prompt_override,
+                conversation_id=conversation_id,
             ):
                 if isinstance(item, dict) and not item.get("model"):
                     label_to_model = item
@@ -751,6 +754,7 @@ async def run_iterative_debate(
                 user_query, stage1_results, stage2_results, search_context,
                 chairman_override=chairman_override,
                 prompt_override=prompt_override,
+                conversation_id=conversation_id,
             )
             yield {"type": "stage3_complete", "data": stage3_result, "round": round_num}
 
@@ -818,6 +822,7 @@ async def run_iterative_debate(
             user_query, [], [], "",
             chairman_override=chairman_override,
             prompt_override=stage4_prompt,
+            conversation_id=conversation_id,
         )
         yield {"type": "stage4_complete", "data": stage4_result}
 

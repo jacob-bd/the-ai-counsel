@@ -59,16 +59,35 @@ def get_provider_for_model(model_id: str) -> Any:
     return PROVIDERS["openrouter"]
 
 
-async def query_model(model: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
+async def query_model(
+    model: str,
+    messages: List[Dict[str, str]],
+    timeout: float = 120.0,
+    temperature: float = 0.7,
+    conversation_id: "str | None" = None,
+) -> Dict[str, Any]:
     """Dispatch query to appropriate provider."""
     provider = get_provider_for_model(model)
-    response = await provider.query(model, messages, timeout, temperature)
+    if conversation_id and model.startswith(f"{Notion2APIProvider.provider_prefix}:"):
+        response = await provider.query(
+            model,
+            messages,
+            timeout,
+            temperature,
+            conversation_id=conversation_id,
+        )
+    else:
+        response = await provider.query(model, messages, timeout, temperature)
     if isinstance(response, dict):
         return await attach_cost(model, response)
     return response
 
 
-async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
+async def query_models_parallel(
+    models: List[str],
+    messages: List[Dict[str, str]],
+    conversation_id: "str | None" = None,
+) -> Dict[str, Any]:
     """Dispatch parallel query to appropriate providers."""
     tasks = []
     model_to_task_map = {}
@@ -88,7 +107,7 @@ async def query_models_parallel(models: List[str], messages: List[Dict[str, str]
     
     async def _query_safe(m: str):
         try:
-            return m, await query_model(m, messages)
+            return m, await query_model(m, messages, conversation_id=conversation_id)
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
@@ -138,7 +157,8 @@ async def stage1_collect_responses(
     models_override: "List[str] | None" = None,
     history: "List[Dict[str, str]] | None" = None,
     messages_override: "List[Dict[str, str]] | None" = None,
-    per_model_messages: "Dict[str, List[Dict[str, str]]] | None" = None
+    per_model_messages: "Dict[str, List[Dict[str, str]]] | None" = None,
+    conversation_id: "str | None" = None,
 ) -> Any:
     """
     Stage 1: Collect individual responses from all council models.
@@ -197,7 +217,12 @@ async def stage1_collect_responses(
     async def _query_safe(m: str):
         try:
             model_msgs = per_model_messages.get(m, messages) if per_model_messages else messages
-            return m, await query_model(m, model_msgs, temperature=council_temp)
+            return m, await query_model(
+                m,
+                model_msgs,
+                temperature=council_temp,
+                conversation_id=conversation_id,
+            )
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
@@ -270,6 +295,7 @@ async def stage2_collect_rankings(
     search_context: str = "",
     request: Any = None,
     prompt_override: "str | None" = None,
+    conversation_id: "str | None" = None,
 ) -> Any: # Returns an async generator
     """
     Stage 2: Collect peer rankings from all council models.
@@ -347,7 +373,12 @@ async def stage2_collect_rankings(
 
     async def _query_safe(m: str):
         try:
-            return m, await query_model(m, messages, temperature=stage2_temp)
+            return m, await query_model(
+                m,
+                messages,
+                temperature=stage2_temp,
+                conversation_id=conversation_id,
+            )
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
@@ -450,7 +481,8 @@ async def stage3_synthesize_final(
     stage2_results: List[Dict[str, Any]],
     search_context: str = "",
     chairman_override: "str | None" = None,
-    prompt_override: "str | None" = None
+    prompt_override: "str | None" = None,
+    conversation_id: "str | None" = None,
 ) -> Dict[str, Any]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -515,7 +547,12 @@ async def stage3_synthesize_final(
     chairman_temp = settings.chairman_temperature
 
     try:
-        response = await query_model(chairman_model, messages, temperature=chairman_temp)
+        response = await query_model(
+            chairman_model,
+            messages,
+            temperature=chairman_temp,
+            conversation_id=conversation_id,
+        )
 
         # Check for error in response
         if response is None or response.get('error'):

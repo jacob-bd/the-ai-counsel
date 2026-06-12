@@ -49,6 +49,23 @@ class Notion2APIProvider(LLMProvider):
     def _strip_prefix(self, model_id: str) -> str:
         return model_id.removeprefix(f"{self.provider_prefix}:")
 
+    def _persistent_conversation_id(self, conversation_id: str | None, model: str) -> str | None:
+        clean_conversation = str(conversation_id or "").strip()
+        if not clean_conversation:
+            return None
+
+        def _safe(value: str) -> str:
+            return "".join(
+                ch if ch.isalnum() or ch in {"-", "_", "."} else "-"
+                for ch in value.strip()
+            ).strip("-._")
+
+        safe_conversation = _safe(clean_conversation)
+        safe_model = _safe(model)
+        if not safe_conversation or not safe_model:
+            return None
+        return f"ai-counsel-{safe_conversation}-{safe_model}"[:200]
+
     def _effective_timeout(self, timeout: float | None) -> float:
         try:
             requested = float(timeout or 0)
@@ -87,6 +104,7 @@ class Notion2APIProvider(LLMProvider):
         messages: List[Dict[str, str]],
         timeout: float = 120.0,
         temperature: float = 0.7,
+        conversation_id: str | None = None,
     ) -> Dict[str, Any]:
         base_url, token = self._get_config()
         if not base_url:
@@ -99,6 +117,14 @@ class Notion2APIProvider(LLMProvider):
             self.provider_prefix,
             temperature,
         )
+
+        persistent_conversation_id = self._persistent_conversation_id(conversation_id, model)
+        if persistent_conversation_id:
+            payload["conversation_id"] = persistent_conversation_id
+            payload["metadata"] = {
+                "persist_remote_chat": True,
+                "source": "ai-counsel",
+            }
 
         effective_timeout = self._effective_timeout(timeout)
 

@@ -184,3 +184,43 @@ async def test_notion2api_query_respects_longer_explicit_timeout(fake_httpx, not
     )
 
     assert fake_httpx.instances[-1].kwargs["timeout"] == 900.0
+
+
+@pytest.mark.asyncio
+async def test_notion2api_query_does_not_persist_without_conversation_id(fake_httpx, notion_env):
+    fake_httpx.responses.append((
+        200,
+        {"choices": [{"message": {"content": "ok"}}]},
+        "",
+    ))
+
+    await Notion2APIProvider().query(
+        "notion2api:claude-opus4.7",
+        [{"role": "user", "content": "hi"}],
+    )
+
+    sent = fake_httpx.instances[-1].kwargs["json"]
+    assert "conversation_id" not in sent
+    assert "metadata" not in sent
+
+
+@pytest.mark.asyncio
+async def test_notion2api_query_persists_with_stable_per_model_conversation_id(fake_httpx, notion_env):
+    fake_httpx.responses.append((
+        200,
+        {"choices": [{"message": {"content": "ok"}}]},
+        "",
+    ))
+
+    await Notion2APIProvider().query(
+        "notion2api:claude-opus4.7",
+        [{"role": "user", "content": "hi"}],
+        conversation_id="conv-123",
+    )
+
+    sent = fake_httpx.instances[-1].kwargs["json"]
+    assert sent["conversation_id"] == "ai-counsel-conv-123-claude-opus4.7"
+    assert sent["metadata"] == {
+        "persist_remote_chat": True,
+        "source": "ai-counsel",
+    }

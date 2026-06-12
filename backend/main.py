@@ -457,6 +457,7 @@ async def _run_council_pipeline(
     chairman_override: Optional[str] = None,
     request: Optional[Request] = None,
     history: Optional[List[Dict[str, str]]] = None,
+    conversation_id: Optional[str] = None,
     preflight: bool = True,
 ) -> PipelineResult:
     """Shared orchestration for stage1 â†’ stage2 â†’ stage3 (non-streaming)."""
@@ -473,7 +474,14 @@ async def _run_council_pipeline(
         if preflight_error:
             raise HTTPException(status_code=400, detail=preflight_error)
 
-    async for item in stage1_collect_responses(content, search_context, request=request, models_override=models_override, history=history):
+    async for item in stage1_collect_responses(
+        content,
+        search_context,
+        request=request,
+        models_override=models_override,
+        history=history,
+        conversation_id=conversation_id,
+    ):
         if isinstance(item, int):
             continue
         result.stage1.append(item)
@@ -483,7 +491,13 @@ async def _run_council_pipeline(
         raise HTTPException(status_code=502, detail=f"All models failed: {'; '.join(errors)}")
 
     if execution_mode in ("chat_ranking", "full"):
-        async for item in stage2_collect_rankings(content, result.stage1, search_context, request=request):
+        async for item in stage2_collect_rankings(
+            content,
+            result.stage1,
+            search_context,
+            request=request,
+            conversation_id=conversation_id,
+        ):
             if isinstance(item, dict) and not item.get('model'):
                 result.label_to_model = item
                 continue
@@ -493,7 +507,8 @@ async def _run_council_pipeline(
     if execution_mode == "full":
         result.stage3 = await stage3_synthesize_final(
             content, result.stage1, result.stage2, search_context,
-            chairman_override=chairman_override
+            chairman_override=chairman_override,
+            conversation_id=conversation_id,
         )
 
     result.cost_report = build_council_cost_report(result.stage1, result.stage2, result.stage3)
@@ -703,7 +718,14 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
 
             total_models = 0
 
-            async for item in stage1_collect_responses(body.content, search_context, request, models_override=body.council_models, history=history):
+            async for item in stage1_collect_responses(
+                body.content,
+                search_context,
+                request,
+                models_override=body.council_models,
+                history=history,
+                conversation_id=conversation_id,
+            ):
                 if isinstance(item, int):
                     total_models = item
                     _active_runs[conversation_id]["progress"]["stage1"]["total"] = total_models
@@ -732,7 +754,13 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                 await asyncio.sleep(0.05)
 
                 # Iterate over the async generator
-                async for item in stage2_collect_rankings(body.content, stage1_results, search_context, request):
+                async for item in stage2_collect_rankings(
+                    body.content,
+                    stage1_results,
+                    search_context,
+                    request,
+                    conversation_id=conversation_id,
+                ):
                     # First item is the label mapping
                     if isinstance(item, dict) and not item.get('model'):
                         label_to_model = item
@@ -763,7 +791,14 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     print("Client disconnected before Stage 3")
                     raise asyncio.CancelledError("Client disconnected")
 
-                stage3_result = await stage3_synthesize_final(body.content, stage1_results, stage2_results, search_context, chairman_override=body.chairman_model)
+                stage3_result = await stage3_synthesize_final(
+                    body.content,
+                    stage1_results,
+                    stage2_results,
+                    search_context,
+                    chairman_override=body.chairman_model,
+                    conversation_id=conversation_id,
+                )
                 _active_runs[conversation_id]["stage3_response"] = stage3_result
                 yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
@@ -934,6 +969,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                 chairman_override=body.chairman_model,
                 history=history,
                 debate_rounds=effective_rounds,
+                conversation_id=conversation_id,
             ):
                 event_type = event.get("type")
                 yield f"data: {json.dumps(event)}\n\n"
@@ -1274,6 +1310,7 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
         body.content, body.execution_mode, search_context,
         models_override=body.council_models, chairman_override=body.chairman_model,
         history=history,
+        conversation_id=conversation_id,
         preflight=False,
     )
 
