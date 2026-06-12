@@ -14,8 +14,8 @@ from .temperature import add_temperature_if_supported
 
 
 DEFAULT_NOTION2API_BASE_URL = "http://127.0.0.1:8120/v1"
-NOTION2API_QUERY_ATTEMPTS = 3
-NOTION2API_RETRY_BASE_DELAY = 0.75
+NOTION2API_QUERY_ATTEMPTS = 5
+NOTION2API_RETRY_BASE_DELAY = 2.0
 NOTION2API_QUERY_TIMEOUT = 600.0
 
 
@@ -98,6 +98,46 @@ class Notion2APIProvider(LLMProvider):
             or "empty content" in str(error.get("message", "")).lower()
         )
 
+    def _coerce_stream_text(self, value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            parts: List[str] = []
+            for item in value:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    text = item.get("text") or item.get("content")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return "".join(parts)
+        return ""
+
+    def _extract_stream_content(self, event: Any) -> str:
+        if not isinstance(event, dict):
+            return ""
+
+        parts: List[str] = []
+        choices = event.get("choices")
+        if isinstance(choices, list):
+            for choice in choices:
+                if not isinstance(choice, dict):
+                    continue
+
+                delta = choice.get("delta")
+                if isinstance(delta, dict):
+                    parts.append(self._coerce_stream_text(delta.get("content")))
+                    parts.append(self._coerce_stream_text(delta.get("text")))
+
+                message = choice.get("message")
+                if isinstance(message, dict):
+                    parts.append(self._coerce_stream_text(message.get("content")))
+
+                parts.append(self._coerce_stream_text(choice.get("text")))
+
+        parts.append(self._coerce_stream_text(event.get("content")))
+        return "".join(part for part in parts if part)
+
     async def query(
         self,
         model_id: str,
@@ -126,58 +166,116 @@ class Notion2APIProvider(LLMProvider):
                 "source": "ai-counsel",
             }
 
+        payload["stream"] = True
         effective_timeout = self._effective_timeout(timeout)
 
-        try:
-            last_response_text = ""
-            last_status_code = 0
+        last_response_text = ""
+        last_status_code = 0
 
-            for attempt in range(1, NOTION2API_QUERY_ATTEMPTS + 1):
+        for attempt in range(1, NOTION2API_QUERY_ATTEMPTS + 1):
+            content_parts: List[str] = []
+            usage: Any = None
+
+            try:
                 async with httpx.AsyncClient(timeout=effective_timeout) as client:
-                    response = await client.post(
+                    async with client.stream(
+                        "POST",
                         f"{base_url}/chat/completions",
                         headers=self._headers(token),
                         json=payload,
-                    )
+                    ) as response:
+                        last_status_code = response.status_code
 
-                last_status_code = response.status_code
-                last_response_text = response.text
+                        if response.status_code != 200:
+                            raw_body = await response.aread()
+                            last_response_text = raw_body.decode("utf-8", errors="replace")
+                            if (
+                                attempt < NOTION2API_QUERY_ATTEMPTS
+                                and self._is_retryable_empty_response(response.status_code, last_response_text)
+                            ):
+                                await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                                continue
 
-                if response.status_code != 200:
-                    if (
-                        attempt < NOTION2API_QUERY_ATTEMPTS
-                        and self._is_retryable_empty_response(response.status_code, response.text)
-                    ):
-                        await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
-                        continue
+                            suffix = ""
+                            if attempt > 1:
+                                suffix = f" after {attempt} attempts"
+                            return {
+                                "error": True,
+                                "error_message": f"Notion2API error{suffix}: {response.status_code} - {last_response_text}",
+                            }
 
-                    suffix = ""
-                    if attempt > 1:
-                        suffix = f" after {attempt} attempts"
-                    return {
-                        "error": True,
-                        "error_message": f"Notion2API error{suffix}: {response.status_code} - {response.text}",
-                    }
+                        async for line in response.aiter_lines():
+                            stripped = line.strip()
+                            if not stripped or stripped.startswith(":"):
+                                continue
 
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-                if not str(content or "").strip() and attempt < NOTION2API_QUERY_ATTEMPTS:
+                            if stripped.startswith("data:"):
+                                data_text = stripped.removeprefix("data:").strip()
+                            elif stripped.startswith("{"):
+                                data_text = stripped
+                            else:
+                                continue
+
+                            if data_text == "[DONE]":
+                                break
+
+                            try:
+                                event = json.loads(data_text)
+                            except json.JSONDecodeError:
+                                last_response_text = data_text
+                                continue
+
+                            if isinstance(event, dict) and event.get("usage") is not None:
+                                usage = event.get("usage")
+
+                            piece = self._extract_stream_content(event)
+                            if piece:
+                                content_parts.append(piece)
+
+                            if isinstance(event, dict) and event.get("error") is not None:
+                                last_response_text = json.dumps(event.get("error"), ensure_ascii=False)
+
+                content = "".join(content_parts)
+                if str(content or "").strip():
+                    return {"content": content, "usage": usage, "error": False}
+
+                if not last_response_text:
+                    last_response_text = "stream completed without assistant content"
+
+                if (
+                    attempt < NOTION2API_QUERY_ATTEMPTS
+                    and self._is_retryable_empty_response(502, last_response_text)
+                ):
                     await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
                     continue
 
-                return {"content": content, "usage": data.get("usage"), "error": False}
+            except (httpx.ReadError, httpx.RemoteProtocolError, httpx.StreamError) as exc:
+                content = "".join(content_parts)
+                if str(content or "").strip():
+                    return {"content": content, "usage": usage, "error": False}
+                last_response_text = str(exc) or repr(exc)
+                last_status_code = 0
+                if attempt < NOTION2API_QUERY_ATTEMPTS:
+                    await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                    continue
 
-            return {
-                "error": True,
-                "error_message": f"Notion2API error after {NOTION2API_QUERY_ATTEMPTS} attempts: {last_status_code} - {last_response_text}",
-            }
+            except httpx.TimeoutException:
+                content = "".join(content_parts)
+                if str(content or "").strip():
+                    return {"content": content, "usage": usage, "error": False}
+                return {"error": True, "error_message": f"Notion2API request timed out after {int(effective_timeout)}s"}
+            except httpx.ConnectError:
+                return {"error": True, "error_message": f"Could not connect to Notion2API at {base_url}"}
+            except Exception as exc:
+                content = "".join(content_parts)
+                if str(content or "").strip():
+                    return {"content": content, "usage": usage, "error": False}
+                return {"error": True, "error_message": str(exc) or repr(exc)}
 
-        except httpx.TimeoutException:
-            return {"error": True, "error_message": f"Notion2API request timed out after {int(effective_timeout)}s"}
-        except httpx.ConnectError:
-            return {"error": True, "error_message": f"Could not connect to Notion2API at {base_url}"}
-        except Exception as exc:
-            return {"error": True, "error_message": str(exc) or repr(exc)}
+        return {
+            "error": True,
+            "error_message": f"Notion2API error after {NOTION2API_QUERY_ATTEMPTS} attempts: {last_status_code} - {last_response_text}",
+        }
 
     async def get_models(self) -> List[Dict[str, Any]]:
         base_url, token = self._get_config()
