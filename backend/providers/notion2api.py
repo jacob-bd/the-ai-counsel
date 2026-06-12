@@ -14,8 +14,9 @@ from .temperature import add_temperature_if_supported
 
 
 DEFAULT_NOTION2API_BASE_URL = "http://127.0.0.1:8120/v1"
-NOTION2API_QUERY_ATTEMPTS = 5
-NOTION2API_RETRY_BASE_DELAY = 2.0
+NOTION2API_QUERY_ATTEMPTS = 3
+NOTION2API_RETRY_BASE_DELAY = 1.5
+NOTION2API_RETRY_MAX_DELAY = 20.0
 NOTION2API_QUERY_TIMEOUT = 600.0
 
 
@@ -73,14 +74,32 @@ class Notion2APIProvider(LLMProvider):
             requested = 0.0
         return max(requested, NOTION2API_QUERY_TIMEOUT)
 
-    def _is_retryable_empty_response(self, status_code: int, body_text: str) -> bool:
-        if status_code not in {502, 503, 504}:
-            return False
+    def _retry_delay(self, attempt: int) -> float:
+        return min(
+            NOTION2API_RETRY_MAX_DELAY,
+            NOTION2API_RETRY_BASE_DELAY * (2 ** max(attempt - 1, 0)),
+        )
 
+    def _is_retryable_response(self, status_code: int, body_text: str) -> bool:
         lowered = (body_text or "").lower()
-        if "notion_empty" in lowered or "upstream_empty_response" in lowered:
+        retryable_terms = (
+            "notion_empty",
+            "upstream_empty_response",
+            "notion returned empty content",
+            "rate limit",
+            "rate_limit",
+            "ratelimit",
+            "too many requests",
+            "quota",
+            "throttle",
+            "temporarily unavailable",
+            "temporary congestion",
+            "timeout",
+        )
+        if any(term in lowered for term in retryable_terms):
             return True
-        if "notion returned empty content" in lowered:
+
+        if status_code in {408, 409, 425, 429, 500, 502, 503, 504}:
             return True
 
         try:
@@ -92,11 +111,11 @@ class Notion2APIProvider(LLMProvider):
         if not isinstance(error, dict):
             return False
 
-        return (
-            error.get("code") == "NOTION_EMPTY"
-            or error.get("type") == "upstream_empty_response"
-            or "empty content" in str(error.get("message", "")).lower()
-        )
+        code = str(error.get("code", "")).lower()
+        error_type = str(error.get("type", "")).lower()
+        message = str(error.get("message", "")).lower()
+        combined = " ".join([code, error_type, message])
+        return any(term in combined for term in retryable_terms)
 
     def _coerce_stream_text(self, value: Any) -> str:
         if isinstance(value, str):
@@ -191,9 +210,9 @@ class Notion2APIProvider(LLMProvider):
                             last_response_text = raw_body.decode("utf-8", errors="replace")
                             if (
                                 attempt < NOTION2API_QUERY_ATTEMPTS
-                                and self._is_retryable_empty_response(response.status_code, last_response_text)
+                                and self._is_retryable_response(response.status_code, last_response_text)
                             ):
-                                await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                                await asyncio.sleep(self._retry_delay(attempt))
                                 continue
 
                             suffix = ""
@@ -244,9 +263,9 @@ class Notion2APIProvider(LLMProvider):
 
                 if (
                     attempt < NOTION2API_QUERY_ATTEMPTS
-                    and self._is_retryable_empty_response(502, last_response_text)
+                    and self._is_retryable_response(502, last_response_text)
                 ):
-                    await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                    await asyncio.sleep(self._retry_delay(attempt))
                     continue
 
             except (httpx.ReadError, httpx.RemoteProtocolError, httpx.StreamError) as exc:
@@ -256,7 +275,7 @@ class Notion2APIProvider(LLMProvider):
                 last_response_text = str(exc) or repr(exc)
                 last_status_code = 0
                 if attempt < NOTION2API_QUERY_ATTEMPTS:
-                    await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                    await asyncio.sleep(self._retry_delay(attempt))
                     continue
 
             except httpx.TimeoutException:
