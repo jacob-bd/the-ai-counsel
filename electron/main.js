@@ -10,6 +10,8 @@ const ROOT_DIR = app.isPackaged
   : path.join(__dirname, '..');
 const FRONTEND_DIR = path.join(ROOT_DIR, 'frontend');
 const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+const APP_ICON_PNG = path.join(__dirname, 'icon.png');
+const APP_ICON_ICO = path.join(__dirname, 'icon.ico');
 const BACKEND_URL = process.env.AI_COUNSEL_BACKEND_URL || 'http://127.0.0.1:8001';
 const FRONTEND_URL = process.env.AI_COUNSEL_FRONTEND_URL || 'http://127.0.0.1:5173';
 const HEALTH_URL = `${BACKEND_URL}/api/health`;
@@ -312,6 +314,12 @@ function stopStack() {
   stopProvider();
 }
 
+function appIconPath() {
+  if (process.platform === 'win32' && fs.existsSync(APP_ICON_ICO)) return APP_ICON_ICO;
+  if (fs.existsSync(APP_ICON_PNG)) return APP_ICON_PNG;
+  return undefined;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -320,6 +328,7 @@ function createWindow() {
     minHeight: 700,
     title: APP_NAME,
     show: false,
+    icon: appIconPath(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -330,7 +339,14 @@ function createWindow() {
   mainWindow.on('close', event => {
     if (!isQuitting) {
       event.preventDefault();
-      mainWindow.hide();
+      hideToTray();
+    }
+  });
+
+  mainWindow.on('minimize', event => {
+    if (!isQuitting) {
+      event.preventDefault();
+      hideToTray();
     }
   });
 
@@ -338,8 +354,14 @@ function createWindow() {
   return mainWindow;
 }
 
+function hideToTray() {
+  if (!mainWindow) return;
+  mainWindow.hide();
+}
+
 function showWindow() {
   if (!mainWindow) createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
 }
@@ -368,7 +390,8 @@ function menuTemplate() {
     {
       label: APP_NAME,
       submenu: [
-        { label: 'Show / Hide', click: () => (mainWindow && mainWindow.isVisible() ? mainWindow.hide() : showWindow()) },
+        { label: 'Show / Hide', click: () => (mainWindow && mainWindow.isVisible() ? hideToTray() : showWindow()) },
+        { label: 'Minimize to Tray', click: hideToTray },
         { label: 'Reload UI', click: reloadApp },
         { type: 'separator' },
         { label: 'Open in Browser', click: () => shell.openExternal(FRONTEND_URL) },
@@ -399,12 +422,12 @@ function menuTemplate() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'icon.png');
+  const iconPath = APP_ICON_PNG;
   const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
   tray = new Tray(icon);
   tray.setToolTip(APP_NAME);
   tray.setContextMenu(Menu.buildFromTemplate(menuTemplate()[0].submenu));
-  tray.on('click', () => (mainWindow && mainWindow.isVisible() ? mainWindow.hide() : showWindow()));
+  tray.on('click', () => (mainWindow && mainWindow.isVisible() ? hideToTray() : showWindow()));
 }
 
 async function startDesktopApp() {

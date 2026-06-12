@@ -2231,3 +2231,64 @@ input:checked+.slider:before {
   animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+
+
+/* Notion2API diagnostics */
+.notion2api-diagnostic-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.notion2api-diagnostic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.notion2api-diagnostic-header h5 { margin: 0; font-size: 14px; }
+.notion2api-diagnostic-header span { color: #94a3b8; font-size: 12px; }
+.diagnostic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+
+.diagnostic-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.35);
+}
+.diagnostic-label {
+  color: #94a3b8;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.diagnostic-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+.diagnostic-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.diagnostic-model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.diagnostic-model-chips code {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}

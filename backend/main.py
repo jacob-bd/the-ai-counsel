@@ -1,4 +1,4 @@
-"""FastAPI backend for LLM Council."""
+﻿"""FastAPI backend for LLM Council."""
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # In-memory registry of active streaming council/debate runs.
 # Key: conversation_id, Value: progress snapshot updated as stages complete.
-# NOTE: process-local — only valid for single-worker deployments.
+# NOTE: process-local â€” only valid for single-worker deployments.
 _active_runs: Dict[str, Dict[str, Any]] = {}
 
 
@@ -459,7 +459,7 @@ async def _run_council_pipeline(
     history: Optional[List[Dict[str, str]]] = None,
     preflight: bool = True,
 ) -> PipelineResult:
-    """Shared orchestration for stage1 → stage2 → stage3 (non-streaming)."""
+    """Shared orchestration for stage1 â†’ stage2 â†’ stage3 (non-streaming)."""
     result = PipelineResult()
 
     if preflight:
@@ -1581,7 +1581,7 @@ async def get_default_settings():
 async def export_settings():
     """Export complete settings as a downloadable JSON file (includes actual API key values).
 
-    Admin-only — see _require_admin. Without auth, returning plaintext keys to any
+    Admin-only â€” see _require_admin. Without auth, returning plaintext keys to any
     network peer would be a credential disclosure.
     """
     settings = get_settings()
@@ -2093,7 +2093,7 @@ async def test_provider_api(request: TestProviderRequest):
     if not api_key:
         # Try to get from settings
         settings = get_settings()
-        # Provider-id → settings-key map. Falls back to "<id>_api_key".
+        # Provider-id â†’ settings-key map. Falls back to "<id>_api_key".
         _PROVIDER_SETTINGS_KEY_OVERRIDES = {
             "opencode-zen": "opencode_api_key",
             "opencode-go": "opencode_api_key",
@@ -2264,26 +2264,60 @@ async def get_notion2api_models():
     return {"models": models}
 
 
+def _notion2api_web_url(base_url: str) -> str:
+    clean = (base_url or "http://127.0.0.1:8120/v1").rstrip("/")
+    if clean.endswith("/v1"):
+        return clean[:-3] or clean
+    return clean
+
+
+def _notion2api_root_details(root: Optional[str]) -> Dict[str, Any]:
+    if not root:
+        return {"resolved_root": None, "root_exists": False, "server_py_exists": False}
+    resolved = os.path.abspath(os.path.expandvars(os.path.expanduser(root)))
+    return {
+        "resolved_root": resolved,
+        "root_exists": os.path.isdir(resolved),
+        "server_py_exists": os.path.isfile(os.path.join(resolved, "app", "server.py")),
+    }
+
+def _managed_notion2api_details() -> Dict[str, Any]:
+    mp = globals().get("_managed_" + "provider_process")
+    running = bool(mp and mp.poll() is None)
+    return {
+        "managed_running": running,
+        "managed_pid": mp.pid if running else None,
+    }
+
+
 @app.get("/api/notion2api/status")
 async def get_notion2api_status():
-    """Return Notion2API status without exposing credentials."""
+    """Return Notion2API status and non-secret diagnostics."""
     import httpx
 
     settings = get_settings()
     base_url = (settings.notion2api_base_url or os.getenv("NOTION2API_BASE_URL") or "http://127.0.0.1:8120/v1").rstrip("/")
     token = settings.notion2api_api_key or os.getenv("NOTION2API_API_KEY") or ""
     headers = {"Authorization": f"Bearer {token}"} if token else {}
+    details = {
+        "base_url": base_url,
+        "web_url": _notion2api_web_url(base_url),
+        "models_endpoint": f"{base_url}/models",
+        "root": settings.notion2api_root,
+        "api_key_set": bool(token),
+        "auto_launch": settings.notion2api_auto_launch,
+        **_notion2api_root_details(settings.notion2api_root),
+        **_managed_notion2api_details(),
+    }
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{base_url}/models", headers=headers)
+            response = await client.get(details["models_endpoint"], headers=headers)
         if response.status_code != 200:
-            return {"base_url": base_url, "root": settings.notion2api_root, "api_key_set": bool(token), "auto_launch": settings.notion2api_auto_launch, "running": False, "model_count": 0, "error": f"HTTP {response.status_code}"}
+            return {**details, "running": False, "model_count": 0, "error": f"HTTP {response.status_code}"}
         model_count = len(response.json().get("data", []))
-        managed_running = bool(_managed_provider_process and _managed_provider_process.poll() is None)
-        return {"base_url": base_url, "root": settings.notion2api_root, "api_key_set": bool(token), "auto_launch": settings.notion2api_auto_launch, "running": True, "managed_running": managed_running, "model_count": model_count, "error": None}
+        return {**details, "running": True, "model_count": model_count, "error": None}
     except Exception as exc:
-        managed_running = bool(_managed_provider_process and _managed_provider_process.poll() is None)
-        return {"base_url": base_url, "root": settings.notion2api_root, "api_key_set": bool(token), "auto_launch": settings.notion2api_auto_launch, "running": False, "managed_running": managed_running, "model_count": 0, "error": str(exc)}
+        return {**details, "running": False, "model_count": 0, "error": str(exc)}
 
 
 @app.get("/api/models")
@@ -2387,7 +2421,7 @@ try:
     app.mount("/mcp", _mcp.sse_app())
     logger.info("MCP server mounted at /mcp (SSE at /mcp/sse, messages at /mcp/messages)")
 except Exception:
-    logger.warning("MCP server not available — the_ai_counsel_mcp package may not be installed", exc_info=True)
+    logger.warning("MCP server not available â€” the_ai_counsel_mcp package may not be installed", exc_info=True)
 
 
 if os.path.isdir(FRONTEND_DIST_DIR):

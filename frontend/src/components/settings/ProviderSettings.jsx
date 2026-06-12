@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import openrouterIcon from '../../assets/icons/openrouter.svg';
 import groqIcon from '../../assets/icons/groq.svg';
 import ollamaIcon from '../../assets/icons/ollama.svg';
@@ -113,6 +113,49 @@ export default function ProviderSettings({
     };
 
     const groqModelsCount = directAvailableModels.filter(m => m.provider === 'Groq').length;
+
+    const [showNotion2apiDiagnostics, setShowNotion2apiDiagnostics] = useState(false);
+
+    const notion2apiWebUrl = useMemo(() => {
+        const raw = notion2apiStatus?.web_url || notion2apiBaseUrl || settings?.notion2api_base_url || 'http://127.0.0.1:8120/v1';
+        try {
+            const url = new URL(raw);
+            url.pathname = url.pathname.replace(/\/v1\/?$/, '/') || '/';
+            url.search = '';
+            url.hash = '';
+            return url.toString();
+        } catch {
+            return String(raw).replace(/\/v1\/?$/, '/');
+        }
+    }, [notion2apiStatus?.web_url, notion2apiBaseUrl, settings?.notion2api_base_url]);
+
+    const openNotion2apiWebInterface = () => {
+        window.open(notion2apiWebUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    const formatDiagnosticValue = (value) => {
+        if (value === true) return 'Yes';
+        if (value === false) return 'No';
+        if (value === null || value === undefined || value === '') return '—';
+        return String(value);
+    };
+
+    const notion2apiDiagnosticRows = [
+        ['Runtime', notion2apiStatus?.running ? 'Running' : 'Not running'],
+        ['Base URL', notion2apiStatus?.base_url || notion2apiBaseUrl],
+        ['Web UI', notion2apiStatus?.web_url || notion2apiWebUrl],
+        ['Models endpoint', notion2apiStatus?.models_endpoint],
+        ['Configured root', notion2apiStatus?.root || notion2apiRoot],
+        ['Resolved root', notion2apiStatus?.resolved_root],
+        ['Root exists', notion2apiStatus?.root_exists],
+        ['app/server.py', notion2apiStatus?.server_py_exists ? 'Found' : 'Missing'],
+        ['API key', notion2apiStatus?.api_key_set ? 'Configured' : 'Not configured'],
+        ['Auto-launch', notion2apiStatus?.auto_launch ? 'Enabled' : 'Disabled'],
+        ['Managed process', notion2apiStatus?.managed_running ? 'Running' : 'Not running'],
+        ['Managed PID', notion2apiStatus?.managed_pid],
+        ['Model count', notion2apiStatus?.model_count ?? notion2apiModels.length],
+        ['Last error', notion2apiStatus?.error || 'None'],
+    ];
 
     return (
         <section className="settings-section">
@@ -416,9 +459,19 @@ export default function ProviderSettings({
                         />
                         Auto-launch this provider when desktop launcher support is enabled
                     </label>
-                    <div className="model-options-row" style={{ marginTop: '12px' }}>
+                    <div className="model-options-row" style={{ marginTop: '12px', gap: '8px', flexWrap: 'wrap' }}>
                         <button type="button" className="reset-defaults-button" onClick={onRefreshNotion2api}>
                             Refresh Status / Models
+                        </button>
+                        <button type="button" className="reset-defaults-button" onClick={openNotion2apiWebInterface}>
+                            Launch Web Interface
+                        </button>
+                        <button
+                            type="button"
+                            className="reset-defaults-button"
+                            onClick={() => setShowNotion2apiDiagnostics(prev => !prev)}
+                        >
+                            {showNotion2apiDiagnostics ? 'Hide Diagnostics' : 'Diagnostics'}
                         </button>
                     </div>
                     {notion2apiStatus && (
@@ -432,6 +485,33 @@ export default function ProviderSettings({
                     {notion2apiModels.length > 0 && (
                         <div className="key-status set">
                             ✓ Dedicated provider models loaded · {notion2apiModels.length} available
+                        </div>
+                    )}
+                    {showNotion2apiDiagnostics && (
+                        <div className="notion2api-diagnostic-panel">
+                            <div className="notion2api-diagnostic-header">
+                                <h5>Notion2API Diagnostics</h5>
+                                <span>{notion2apiStatus?.running ? 'Service reachable' : 'Service unreachable'}</span>
+                            </div>
+                            <div className="diagnostic-grid">
+                                {notion2apiDiagnosticRows.map(([label, value]) => (
+                                    <div className="diagnostic-row" key={label}>
+                                        <span className="diagnostic-label">{label}</span>
+                                        <code className="diagnostic-value">{formatDiagnosticValue(value)}</code>
+                                    </div>
+                                ))}
+                            </div>
+                            {notion2apiModels.length > 0 && (
+                                <div className="diagnostic-model-list">
+                                    <strong>Loaded models</strong>
+                                    <div className="diagnostic-model-chips">
+                                        {notion2apiModels.slice(0, 12).map(model => (
+                                            <code key={model.id || model.name}>{model.id || model.name}</code>
+                                        ))}
+                                        {notion2apiModels.length > 12 && <span>+{notion2apiModels.length - 12} more</span>}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                     {notion2apiTestResult && (
