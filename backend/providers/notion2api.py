@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 from typing import Any, Dict, List
 
@@ -12,6 +14,9 @@ from .temperature import add_temperature_if_supported
 
 
 DEFAULT_NOTION2API_BASE_URL = "http://127.0.0.1:8120/v1"
+NOTION2API_QUERY_ATTEMPTS = 3
+NOTION2API_RETRY_BASE_DELAY = 0.75
+
 
 
 class Notion2APIProvider(LLMProvider):
@@ -43,6 +48,31 @@ class Notion2APIProvider(LLMProvider):
     def _strip_prefix(self, model_id: str) -> str:
         return model_id.removeprefix(f"{self.provider_prefix}:")
 
+    def _is_retryable_empty_response(self, status_code: int, body_text: str) -> bool:
+        if status_code not in {502, 503, 504}:
+            return False
+
+        lowered = (body_text or "").lower()
+        if "notion_empty" in lowered or "upstream_empty_response" in lowered:
+            return True
+        if "notion returned empty content" in lowered:
+            return True
+
+        try:
+            body = json.loads(body_text)
+        except Exception:
+            return False
+
+        error = body.get("error") if isinstance(body, dict) else None
+        if not isinstance(error, dict):
+            return False
+
+        return (
+            error.get("code") == "NOTION_EMPTY"
+            or error.get("type") == "upstream_empty_response"
+            or "empty content" in str(error.get("message", "")).lower()
+        )
+
     async def query(
         self,
         model_id: str,
@@ -63,22 +93,48 @@ class Notion2APIProvider(LLMProvider):
         )
 
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers=self._headers(token),
-                    json=payload,
-                )
+            last_response_text = ""
+            last_status_code = 0
 
-            if response.status_code != 200:
-                return {
-                    "error": True,
-                    "error_message": f"Notion2API error: {response.status_code} - {response.text}",
-                }
+            for attempt in range(1, NOTION2API_QUERY_ATTEMPTS + 1):
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers=self._headers(token),
+                        json=payload,
+                    )
 
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            return {"content": content, "usage": data.get("usage"), "error": False}
+                last_status_code = response.status_code
+                last_response_text = response.text
+
+                if response.status_code != 200:
+                    if (
+                        attempt < NOTION2API_QUERY_ATTEMPTS
+                        and self._is_retryable_empty_response(response.status_code, response.text)
+                    ):
+                        await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                        continue
+
+                    suffix = ""
+                    if attempt > 1:
+                        suffix = f" after {attempt} attempts"
+                    return {
+                        "error": True,
+                        "error_message": f"Notion2API error{suffix}: {response.status_code} - {response.text}",
+                    }
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                if not str(content or "").strip() and attempt < NOTION2API_QUERY_ATTEMPTS:
+                    await asyncio.sleep(NOTION2API_RETRY_BASE_DELAY * attempt)
+                    continue
+
+                return {"content": content, "usage": data.get("usage"), "error": False}
+
+            return {
+                "error": True,
+                "error_message": f"Notion2API error after {NOTION2API_QUERY_ATTEMPTS} attempts: {last_status_code} - {last_response_text}",
+            }
 
         except httpx.TimeoutException:
             return {"error": True, "error_message": f"Notion2API request timed out after {int(timeout)}s"}

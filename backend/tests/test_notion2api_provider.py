@@ -137,3 +137,32 @@ async def test_notion2api_query_reports_http_error(fake_httpx, notion_env):
 
     assert result["error"] is True
     assert "Notion2API error: 503" in result["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_notion2api_query_retries_upstream_empty_response(fake_httpx, notion_env, monkeypatch):
+    async def _no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("backend.providers.notion2api.asyncio.sleep", _no_sleep)
+    empty_response = {
+        "error": {
+            "message": "Notion returned empty content.",
+            "type": "upstream_empty_response",
+            "param": None,
+            "code": "NOTION_EMPTY",
+            "suggestion": "Send the message again.",
+        }
+    }
+    fake_httpx.responses.extend([
+        (503, empty_response, json.dumps(empty_response)),
+        (200, {"choices": [{"message": {"content": "retried ok"}}]}, ""),
+    ])
+
+    result = await Notion2APIProvider().query(
+        "notion2api:claude-opus4.8",
+        [{"role": "user", "content": "hi"}],
+    )
+
+    assert result == {"content": "retried ok", "usage": None, "error": False}
+    assert len(fake_httpx.instances) == 2
