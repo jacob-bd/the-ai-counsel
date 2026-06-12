@@ -1,3 +1,4 @@
+import contextlib
 import json
 
 import pytest
@@ -14,6 +15,13 @@ class _FakeResponse:
 
     def json(self):
         return self._json
+
+    async def aread(self):
+        return self.text.encode("utf-8")
+
+    async def aiter_lines(self):
+        for line in self.text.splitlines():
+            yield line
 
 
 class _FakeAsyncClient:
@@ -46,6 +54,16 @@ class _FakeAsyncClient:
             raise AssertionError("No scripted response left for httpx get")
         status, body, text = type(self).responses.pop(0)
         return _FakeResponse(status, body, text)
+
+    @contextlib.asynccontextmanager
+    async def stream(self, method, url, **kwargs):
+        self.kwargs["__url__"] = url
+        self.kwargs["__method__"] = method
+        self.kwargs.update(kwargs)
+        if not type(self).responses:
+            raise AssertionError(f"No scripted response left for httpx stream {method}")
+        status, body, text = type(self).responses.pop(0)
+        yield _FakeResponse(status, body, text)
 
 
 @pytest.fixture
@@ -129,7 +147,7 @@ async def test_notion2api_validate_connection_accepts_explicit_url_and_token(fak
 
 @pytest.mark.asyncio
 async def test_notion2api_query_reports_http_error(fake_httpx, notion_env):
-    fake_httpx.responses.append((503, {"error": "unavailable"}, "Service Unavailable"))
+    fake_httpx.responses.append((403, {"error": "forbidden"}, "Forbidden"))
 
     result = await Notion2APIProvider().query(
         "notion2api:gpt-5.2",
@@ -137,7 +155,7 @@ async def test_notion2api_query_reports_http_error(fake_httpx, notion_env):
     )
 
     assert result["error"] is True
-    assert "Notion2API error: 503" in result["error_message"]
+    assert "Notion2API error: 403" in result["error_message"]
 
 
 @pytest.mark.asyncio
