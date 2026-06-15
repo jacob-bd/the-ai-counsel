@@ -5,7 +5,11 @@ from __future__ import annotations
 import base64
 import binascii
 import os
+import re
+import shutil
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -151,3 +155,122 @@ def build_effective_query(content: str, documents: list[dict[str, Any]] | None) 
     if not block:
         return content
     return f"{content}\n\n{block}"
+
+
+def sniff_supported_type(name: str, mime_type: str, data: bytes) -> str:
+    filename = sanitize_filename(name)
+    ext = Path(filename).suffix.lower()
+    declared = (mime_type or "application/octet-stream").lower()
+    if ext == ".pdf" or declared == "application/pdf":
+        if not data.startswith(b"%PDF-"):
+            raise DocumentError(f"{filename} is not a valid PDF.")
+        return "application/pdf"
+    if ext in TEXT_EXTENSIONS or declared in TEXT_MIME_TYPES or declared.startswith("text/"):
+        return declared if declared != "application/octet-stream" else "text/plain"
+    raise DocumentError(f"{filename} has an unsupported file type.")
+
+
+def _decode_text_bytes(data: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def extract_text_bytes(
+    name: str,
+    mime_type: str,
+    data: bytes,
+    limits: DocumentLimits | None = None,
+) -> dict[str, Any]:
+    limits = limits or DocumentLimits()
+    filename = sanitize_filename(name)
+    if len(data) > limits.max_document_bytes:
+        raise DocumentError(f"{filename} is too large.")
+    detected = sniff_supported_type(filename, mime_type, data)
+    if detected == "application/pdf":
+        return extract_pdf_bytes(filename, detected, data, limits)
+    text = _decode_text_bytes(data).replace("\r\n", "\n").replace("\r", "\n")
+    doc = {
+        "name": filename,
+        "mime_type": detected,
+        "text": text,
+        "metadata": {"page_count": None, "warnings": []},
+    }
+    return validate_documents_for_request([doc], limits)[0]
+
+
+def _useful_word_count(text: str) -> int:
+    return len(re.findall(r"[A-Za-z0-9][A-Za-z0-9'-]*", text or ""))
+
+
+def detect_pdf_page_needs_ocr(page: Any, text: str, min_words: int = 8) -> bool:
+    if _useful_word_count(text) >= min_words:
+        return False
+    images = getattr(page, "images", []) or []
+    return len(images) > 0 or _useful_word_count(text) == 0
+
+
+def ocr_available() -> bool:
+    enabled = os.getenv("LLM_COUNCIL_OCR_ENABLED", "0").strip() == "1"
+    if not enabled:
+        return False
+    return all(shutil.which(binary) for binary in ("ocrmypdf", "tesseract", "gs", "qpdf"))
+
+
+def extract_pdf_bytes(
+    name: str,
+    mime_type: str,
+    data: bytes,
+    limits: DocumentLimits | None = None,
+) -> dict[str, Any]:
+    import pdfplumber
+
+    limits = limits or DocumentLimits()
+    filename = sanitize_filename(name)
+    warnings: list[str] = []
+    page_texts: list[str] = []
+    weak_pages: list[int] = []
+    page_count = 0
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
+        tmp.write(data)
+        tmp.flush()
+        try:
+            with pdfplumber.open(tmp.name) as pdf:
+                page_count = len(pdf.pages)
+                if page_count > limits.max_pdf_pages:
+                    raise DocumentError(f"{filename} has too many pages. Maximum is {limits.max_pdf_pages}.")
+                for index, page in enumerate(pdf.pages, start=1):
+                    text = page.extract_text() or ""
+                    if detect_pdf_page_needs_ocr(page, text):
+                        weak_pages.append(index)
+                    if text.strip():
+                        page_texts.append(f"[Page {index}]\n{text.strip()}")
+        except Exception as exc:
+            if exc.__class__.__name__.lower().find("password") >= 0:
+                raise DocumentError(f"{filename} is encrypted and cannot be opened.") from exc
+            raise
+
+    if weak_pages:
+        if len(weak_pages) > limits.max_ocr_pages:
+            warnings.append(
+                f"OCR skipped because {len(weak_pages)} pages need OCR and the limit is {limits.max_ocr_pages}."
+            )
+        elif ocr_available():
+            warnings.append("OCR is available but subprocess OCR is implemented in the OCR task.")
+        else:
+            warnings.append("OCR is unavailable or disabled; some scanned/image-only pages may be missing text.")
+
+    doc = {
+        "name": filename,
+        "mime_type": mime_type,
+        "text": "\n\n".join(page_texts).strip(),
+        "metadata": {
+            "page_count": page_count,
+            "ocr_used": False,
+            "warnings": warnings,
+        },
+    }
+    return validate_documents_for_request([doc], limits)[0]
