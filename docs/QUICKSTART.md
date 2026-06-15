@@ -2,6 +2,16 @@
 
 Get The AI Counsel running in under 5 minutes.
 
+### 📺 Video Overview
+
+Watch the video overview to see how to set up and run The AI Counsel:
+
+<p align="center">
+  <a href="https://youtu.be/OQV92Y_4Wo4" target="_blank">
+    <img src="https://img.youtube.com/vi/OQV92Y_4Wo4/maxresdefault.jpg" alt="The AI Counsel Video Overview" width="75%">
+  </a>
+</p>
+
 ---
 
 ## 1. Prerequisites
