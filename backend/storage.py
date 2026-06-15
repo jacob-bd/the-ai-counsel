@@ -423,13 +423,19 @@ def list_conversations() -> List[Dict[str, Any]]:
     return index
 
 
-def add_user_message(conversation_id: str, content: str, conversation: Optional[Dict[str, Any]] = None):
+def add_user_message(
+    conversation_id: str,
+    content: str,
+    conversation: Optional[Dict[str, Any]] = None,
+    attachments: Optional[List[Dict[str, Any]]] = None,
+):
     """Add a user message to a conversation.
 
     Args:
         conversation_id: Conversation identifier
         content: User message content
         conversation: Pre-loaded conversation dict (avoids redundant disk read)
+        attachments: Optional attachment metadata to store with the message
     """
     if conversation is None:
         conversation = get_conversation(conversation_id)
@@ -440,10 +446,14 @@ def add_user_message(conversation_id: str, content: str, conversation: Optional[
     if len(conversation["messages"]) == 0:
         conversation["created_at"] = datetime.now(timezone.utc).isoformat()
 
-    conversation["messages"].append({
+    message = {
         "role": "user",
         "content": content
-    })
+    }
+    if attachments:
+        message["attachments"] = attachments
+
+    conversation["messages"].append(message)
 
     save_conversation(conversation)
 
