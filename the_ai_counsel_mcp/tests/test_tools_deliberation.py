@@ -1,5 +1,6 @@
 """Tests for deliberation MCP tools."""
 
+import base64
 import json
 import pytest
 import respx
@@ -487,6 +488,78 @@ async def test_quick_chat_returns_single_model_response(server):
     assert ask_calls[0]["models"] == ["openai:gpt-4.1"]
     assert ask_calls[0]["execution_mode"] == "chat_only"
     assert ask_calls[0]["web_search"] is False
+
+
+@pytest.mark.asyncio
+async def test_quick_chat_forwards_text_documents(server):
+    ask_calls = []
+
+    def capture_ask(request):
+        ask_calls.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "response": "Document answer",
+            "model": "openai:gpt-4.1",
+            "error": None,
+        })
+
+    documents = [{"name": "notes.txt", "mime_type": "text/plain", "text": "Alpha"}]
+
+    with respx.mock:
+        respx.post("http://test:8001/api/ask").mock(side_effect=capture_ask)
+
+        result = await server.call_tool("model_chat", {
+            "action": "quick",
+            "query": "Summarize.",
+            "model": "openai:gpt-4.1",
+            "documents": documents,
+        })
+        data = get_json(result)
+
+    assert data["response"] == "Document answer"
+    assert ask_calls[0]["documents"] == documents
+
+
+@pytest.mark.asyncio
+async def test_quick_chat_extracts_base64_documents_before_model_call(server):
+    extract_calls = []
+    ask_calls = []
+    encoded = base64.b64encode(b"Alpha").decode()
+
+    def capture_extract(request):
+        extract_calls.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "documents": [{"name": "notes.txt", "mime_type": "text/plain", "text": "Alpha"}],
+            "attachments": [{"name": "notes.txt", "mime_type": "text/plain", "char_count": 5}],
+            "warnings": [],
+        })
+
+    def capture_ask(request):
+        ask_calls.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "response": "Document answer",
+            "model": "openai:gpt-4.1",
+            "error": None,
+        })
+
+    with respx.mock:
+        respx.post("http://test:8001/api/documents/extract-json").mock(side_effect=capture_extract)
+        respx.post("http://test:8001/api/ask").mock(side_effect=capture_ask)
+
+        result = await server.call_tool("model_chat", {
+            "action": "quick",
+            "query": "Summarize.",
+            "model": "openai:gpt-4.1",
+            "documents": [{
+                "name": "notes.txt",
+                "mime_type": "text/plain",
+                "data_base64": encoded,
+            }],
+        })
+        data = get_json(result)
+
+    assert data["response"] == "Document answer"
+    assert extract_calls[0]["documents"][0]["data_base64"] == encoded
+    assert ask_calls[0]["documents"] == [{"name": "notes.txt", "mime_type": "text/plain", "text": "Alpha"}]
 
 
 @pytest.mark.asyncio

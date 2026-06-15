@@ -31,6 +31,7 @@ def register(server: Any, base_url: str) -> None:
         model_assignments: dict | None = None,
         max_rounds: int = 3,
         search_provider: str | None = None,
+        documents: list[dict] | None = None,
     ) -> str:
         if len(persona_ids) < 2:
             return "Error: at least 2 persona_ids are required."
@@ -41,6 +42,7 @@ def register(server: Any, base_url: str) -> None:
 
         try:
             async with CouncilClient(base_url) as client:
+                prepared_documents = await client.prepare_documents(documents)
                 conv = await client.create_conversation()
                 conversation_id = conv["id"]
                 events = client.stream_debate(
@@ -51,6 +53,7 @@ def register(server: Any, base_url: str) -> None:
                     model_assignments=model_assignments,
                     max_rounds=max_rounds,
                     search_provider=search_provider,
+                    documents=prepared_documents,
                 )
                 result = await buffer_debate(events, conversation_id)
             return json.dumps(result, indent=2)

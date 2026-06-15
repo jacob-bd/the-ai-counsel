@@ -307,6 +307,38 @@ async def test_run_advisor_debate_success(server):
 
 
 @pytest.mark.asyncio
+async def test_run_advisor_debate_forwards_documents(server):
+    stream_calls = []
+    documents = [{"name": "brief.txt", "mime_type": "text/plain", "text": "Gamma"}]
+
+    def capture_stream(request):
+        stream_calls.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text=_make_debate_sse("Should we approve?", consensus=True),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    with respx.mock:
+        respx.post("http://test:8001/api/conversations").mock(
+            return_value=httpx.Response(201, json={"id": "debate-conv-doc", "title": ""})
+        )
+        respx.post("http://test:8001/api/conversations/debate-conv-doc/debate/stream").mock(
+            side_effect=capture_stream
+        )
+
+        result = await server.call_tool("advisor_debate", {
+            "question": "Should we approve?",
+            "persona_ids": ["skeptic", "pragmatist"],
+            "documents": documents,
+        })
+        data = get_json(result)
+
+    assert data["status"] == "success"
+    assert stream_calls[0]["documents"] == documents
+
+
+@pytest.mark.asyncio
 async def test_run_advisor_debate_with_search(server):
     sse_body = (
         "data: " + json.dumps({"type": "advisor_search_start", "data": {"provider": "duckduckgo"}}) + "\n\n"

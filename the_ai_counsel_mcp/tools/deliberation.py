@@ -30,6 +30,7 @@ def register(server, base_url: str) -> None:
         web_search: bool = False,
         conversation_id: str | None = None,
         models: list[str] | None = None,
+        documents: list[dict] | None = None,
     ) -> str:
         action = action.strip().lower()
         if action not in ("stage1", "stage2", "stage3", "full"):
@@ -37,13 +38,15 @@ def register(server, base_url: str) -> None:
 
         try:
             async with CouncilClient(base_url) as client:
+                prepared_documents = await client.prepare_documents(documents)
                 if not conversation_id:
                     conv = await client.create_conversation()
                     conversation_id = conv["id"]
 
                 if action == "stage1":
                     events = client.stream_message(
-                        conversation_id, query, web_search=web_search, execution_mode="chat_only"
+                        conversation_id, query, web_search=web_search, execution_mode="chat_only",
+                        documents=prepared_documents,
                     )
                     result, _ = await buffer_stage1(events, conversation_id, query)
                     result["cost_report"] = _combine_cost_report(result)
@@ -51,7 +54,8 @@ def register(server, base_url: str) -> None:
 
                 if action == "stage2":
                     events = client.stream_message(
-                        conversation_id, query, web_search=False, execution_mode="chat_ranking"
+                        conversation_id, query, web_search=False, execution_mode="chat_ranking",
+                        documents=prepared_documents,
                     )
                     _, remaining = await buffer_stage1(events, conversation_id, query)
                     result, _ = await buffer_stage2(remaining, conversation_id)
@@ -60,7 +64,8 @@ def register(server, base_url: str) -> None:
 
                 if action == "stage3":
                     events = client.stream_message(
-                        conversation_id, query, web_search=False, execution_mode="full"
+                        conversation_id, query, web_search=False, execution_mode="full",
+                        documents=prepared_documents,
                     )
                     _, after1 = await buffer_stage1(events, conversation_id, query)
                     _, after2 = await buffer_stage2(after1, conversation_id)
@@ -72,6 +77,7 @@ def register(server, base_url: str) -> None:
                     conversation_id, query,
                     web_search=web_search, execution_mode="full",
                     council_models=models,
+                    documents=prepared_documents,
                 )
                 stage1, after1 = await buffer_stage1(events, conversation_id, query)
                 stage2, after2 = await buffer_stage2(after1, conversation_id)
@@ -101,6 +107,7 @@ def register(server, base_url: str) -> None:
         model: str,
         conversation_id: str | None = None,
         web_search: bool = False,
+        documents: list[dict] | None = None,
     ) -> str:
         action = action.strip().lower()
         if action not in ("quick", "multi_turn"):
@@ -108,12 +115,14 @@ def register(server, base_url: str) -> None:
 
         try:
             async with CouncilClient(base_url) as client:
+                prepared_documents = await client.prepare_documents(documents)
                 if action == "quick":
                     result = await client.ask(
                         content=query,
                         models=[model],
                         web_search=web_search,
                         execution_mode="chat_only",
+                        documents=prepared_documents,
                     )
                     return json.dumps({
                         "model": result.get("model", model),
@@ -132,6 +141,7 @@ def register(server, base_url: str) -> None:
                     conversation_id, query,
                     web_search=web_search, execution_mode="chat_only",
                     council_models=[model],
+                    documents=prepared_documents,
                 )
                 result, _ = await buffer_stage1(events, conversation_id, query)
 
@@ -169,9 +179,11 @@ def register(server, base_url: str) -> None:
         convergence_threshold: int | None = None,
         web_search: bool = False,
         models: list[str] | None = None,
+        documents: list[dict] | None = None,
     ) -> str:
         try:
             async with CouncilClient(base_url) as client:
+                prepared_documents = await client.prepare_documents(documents)
                 settings_patch = {}
                 if critique_mode:
                     critique_mode = critique_mode.strip().lower()
@@ -197,6 +209,7 @@ def register(server, base_url: str) -> None:
                     execution_mode="full",
                     council_models=models,
                     debate_rounds=debate_rounds,
+                    documents=prepared_documents,
                 )
 
                 result = await buffer_iterative_debate(events, conversation_id)
