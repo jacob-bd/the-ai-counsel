@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Text file uploads**: Council, iterative debate, advisor debate, REST, MCP, and UI flows now accept extracted text documents and PDFs. PDF text extraction uses `pdfplumber`; OCR is optional and gated by `LLM_COUNCIL_OCR_ENABLED=1` plus OCRmyPDF/Tesseract/Ghostscript/qpdf availability. Stored conversations keep attachment metadata only, not raw files or extracted text.
+
 ## [0.9.2] - 2026-06-09
 
 ### Added

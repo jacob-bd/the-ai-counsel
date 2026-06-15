@@ -61,6 +61,8 @@ Server names vary by host: `the-ai-counsel`, `ai-counsel`, `user-the-ai-counsel`
 
 For simple direct-answer prompts, prefer `model_chat` or `council_deliberate`. Use `advisor_debate` when the user wants named personas to work through a decision, risk review, tradeoff, prioritization, strategy, ethics, or genuine disagreement.
 
+For uploaded or attached files, use optional `documents` on `model_chat`, `council_deliberate`, `run_iterative_debate`, or `advisor_debate`. Prefer `text` when the file is already extracted; use `data_base64` only for source files. The MCP client extracts base64 documents through the backend and sends text context to providers, not raw file bytes.
+
 ---
 
 ## Use REST instead of MCP when

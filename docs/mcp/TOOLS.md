@@ -29,6 +29,36 @@ Cost attribution uses provider-reported cost first, then known-free rules (`olla
 
 ---
 
+## Document Inputs
+
+`council_deliberate`, `model_chat`, `advisor_debate`, and `run_iterative_debate` accept optional `documents`. Documents are converted to plain text before model calls, so the same context works across all providers and models.
+
+Tool callers can pass either extracted text:
+
+```json
+{
+  "name": "notes.txt",
+  "mime_type": "text/plain",
+  "text": "Meeting notes: Alpha approved the plan."
+}
+```
+
+Or base64 file data:
+
+```json
+{
+  "name": "report.pdf",
+  "mime_type": "application/pdf",
+  "data_base64": "JVBERi0xLjQK..."
+}
+```
+
+Base64 documents are posted to `/api/documents/extract-json`; raw base64 is not sent to model providers. Conversation storage keeps attachment metadata only.
+
+Supported v1 formats are PDFs plus text-like files (`.txt`, `.md`, `.csv`, `.json`, `.yaml`, `.xml`, `.html`, logs, code files, and common configs). PDF OCR is optional and requires `LLM_COUNCIL_OCR_ENABLED=1` plus OCRmyPDF, Tesseract, Ghostscript, and qpdf in the backend runtime.
+
+---
+
 ## council_deliberate
 
 Run council deliberation. Creates a conversation automatically unless `conversation_id` is provided.
@@ -40,6 +70,7 @@ Run council deliberation. Creates a conversation automatically unless `conversat
 | `web_search` | boolean | No | Enrich query with web search (default `false`) |
 | `conversation_id` | string | No | Continue an existing thread |
 | `models` | string[] | No | Override council members for `full` only (1–8 model IDs) |
+| `documents` | object[] | No | Optional extracted-text or base64 document inputs |
 
 **Example:** Full deliberation with search
 ```json
@@ -80,6 +111,7 @@ Chat with a single model.
 | `model` | string | Yes | Model ID with prefix, e.g. `openai:gpt-4.1` |
 | `conversation_id` | string | No | Required for `multi_turn` follow-ups (from prior response) |
 | `web_search` | boolean | No | Default `false` |
+| `documents` | object[] | No | Optional extracted-text or base64 document inputs |
 
 **Example:** Quick one-shot
 ```json
@@ -87,6 +119,22 @@ Chat with a single model.
   "action": "quick",
   "query": "Summarize quantum computing in one paragraph.",
   "model": "openai:gpt-4.1"
+}
+```
+
+**Example:** Quick one-shot with an extracted text document
+```json
+{
+  "action": "quick",
+  "query": "Summarize the attachment.",
+  "model": "openai:gpt-4.1",
+  "documents": [
+    {
+      "name": "notes.txt",
+      "mime_type": "text/plain",
+      "text": "Meeting notes: Alpha approved the plan."
+    }
+  ]
 }
 ```
 
@@ -106,6 +154,7 @@ Run a multi-round advisor debate with named personas.
 | `model_assignments` | object | No | Per-persona model overrides |
 | `max_rounds` | integer | No | 3–10 (default 3) |
 | `search_provider` | string | No | Override search provider |
+| `documents` | object[] | No | Optional extracted-text or base64 document inputs |
 
 **Example:**
 ```json
@@ -135,6 +184,7 @@ Run a multi-round iterative debate with convergence detection. Models debate acr
 | `convergence_threshold` | integer | No | 1–3, consecutive stable rounds to trigger early stop (default `2`) |
 | `web_search` | boolean | No | Enrich query with web search (default `false`) |
 | `models` | string[] | No | Override council members for the debate |
+| `documents` | object[] | No | Optional extracted-text or base64 document inputs |
 
 **Example:**
 ```json
