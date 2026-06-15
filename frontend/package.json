@@ -1,7 +1,7 @@
 {
   "name": "the-ai-counsel",
   "private": true,
-  "version": "0.9.2",
+  "version": "0.10.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
