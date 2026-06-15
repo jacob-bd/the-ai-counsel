@@ -1,4 +1,5 @@
 import base64
+from pathlib import Path
 
 import pytest
 
@@ -141,3 +142,32 @@ def test_extract_pdf_without_text_warns_when_ocr_disabled(monkeypatch):
 
     assert doc["metadata"]["page_count"] == 1
     assert any("OCR" in warning for warning in doc["metadata"]["warnings"])
+
+
+def test_ocr_skipped_when_too_many_weak_pages():
+    limits = DocumentLimits(max_ocr_pages=0)
+    pdf_bytes = _make_pdf("")
+
+    doc = extract_text_bytes("scan.pdf", "application/pdf", pdf_bytes, limits)
+
+    assert any("OCR skipped" in warning for warning in doc["metadata"]["warnings"])
+
+
+def test_ocr_command_uses_skip_text(monkeypatch):
+    from backend import documents as docs
+
+    calls = []
+
+    def fake_run_ocr(input_path, output_path, limits):
+        calls.append((input_path, output_path, limits))
+        Path(output_path).write_bytes(_make_pdf("OCR text"))
+
+    monkeypatch.setenv("LLM_COUNCIL_OCR_ENABLED", "1")
+    monkeypatch.setattr(docs, "ocr_available", lambda: True)
+    monkeypatch.setattr(docs, "_run_ocrmypdf", fake_run_ocr)
+
+    doc = extract_text_bytes("scan.pdf", "application/pdf", _make_pdf(""))
+
+    assert calls
+    assert "OCR text" in doc["text"]
+    assert doc["metadata"]["ocr_used"] is True

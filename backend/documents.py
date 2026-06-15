@@ -7,6 +7,7 @@ import binascii
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -220,46 +221,88 @@ def ocr_available() -> bool:
     return all(shutil.which(binary) for binary in ("ocrmypdf", "tesseract", "gs", "qpdf"))
 
 
+def _run_ocrmypdf(input_path: str, output_path: str, limits: DocumentLimits) -> None:
+    cmd = [
+        "ocrmypdf",
+        "--skip-text",
+        "--optimize", "0",
+        "--output-type", "pdf",
+        input_path,
+        output_path,
+    ]
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            timeout=limits.ocr_timeout_seconds,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise DocumentError("OCR timed out.") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").splitlines()[:1]
+        message = detail[0] if detail else "OCR failed."
+        raise DocumentError(f"OCR failed: {message[:160]}") from exc
+
+
+def _read_pdf_text(path: str, filename: str, limits: DocumentLimits) -> tuple[int, list[str], list[int]]:
+    import pdfplumber
+
+    page_texts: list[str] = []
+    weak_pages: list[int] = []
+    try:
+        with pdfplumber.open(path) as pdf:
+            page_count = len(pdf.pages)
+            if page_count > limits.max_pdf_pages:
+                raise DocumentError(f"{filename} has too many pages. Maximum is {limits.max_pdf_pages}.")
+            for index, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text() or ""
+                if detect_pdf_page_needs_ocr(page, text):
+                    weak_pages.append(index)
+                if text.strip():
+                    page_texts.append(f"[Page {index}]\n{text.strip()}")
+            return page_count, page_texts, weak_pages
+    except Exception as exc:
+        if exc.__class__.__name__.lower().find("password") >= 0:
+            raise DocumentError(f"{filename} is encrypted and cannot be opened.") from exc
+        raise
+
+
 def extract_pdf_bytes(
     name: str,
     mime_type: str,
     data: bytes,
     limits: DocumentLimits | None = None,
 ) -> dict[str, Any]:
-    import pdfplumber
-
     limits = limits or DocumentLimits()
     filename = sanitize_filename(name)
     warnings: list[str] = []
-    page_texts: list[str] = []
-    weak_pages: list[int] = []
-    page_count = 0
+    ocr_used = False
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
         tmp.write(data)
         tmp.flush()
-        try:
-            with pdfplumber.open(tmp.name) as pdf:
-                page_count = len(pdf.pages)
-                if page_count > limits.max_pdf_pages:
-                    raise DocumentError(f"{filename} has too many pages. Maximum is {limits.max_pdf_pages}.")
-                for index, page in enumerate(pdf.pages, start=1):
-                    text = page.extract_text() or ""
-                    if detect_pdf_page_needs_ocr(page, text):
-                        weak_pages.append(index)
-                    if text.strip():
-                        page_texts.append(f"[Page {index}]\n{text.strip()}")
-        except Exception as exc:
-            if exc.__class__.__name__.lower().find("password") >= 0:
-                raise DocumentError(f"{filename} is encrypted and cannot be opened.") from exc
-            raise
+        page_count, page_texts, weak_pages = _read_pdf_text(tmp.name, filename, limits)
+
+        if weak_pages and len(weak_pages) <= limits.max_ocr_pages and ocr_available():
+            output_path = ""
+            fd, output_path = tempfile.mkstemp(suffix=".pdf")
+            os.close(fd)
+            os.unlink(output_path)
+            try:
+                _run_ocrmypdf(tmp.name, output_path, limits)
+                page_count, page_texts, weak_pages = _read_pdf_text(output_path, filename, limits)
+                ocr_used = True
+            finally:
+                if output_path and os.path.exists(output_path):
+                    os.unlink(output_path)
 
     if weak_pages:
         if len(weak_pages) > limits.max_ocr_pages:
             warnings.append(
                 f"OCR skipped because {len(weak_pages)} pages need OCR and the limit is {limits.max_ocr_pages}."
             )
-        elif ocr_available():
-            warnings.append("OCR is available but subprocess OCR is implemented in the OCR task.")
         else:
             warnings.append("OCR is unavailable or disabled; some scanned/image-only pages may be missing text.")
 
@@ -269,7 +312,7 @@ def extract_pdf_bytes(
         "text": "\n\n".join(page_texts).strip(),
         "metadata": {
             "page_count": page_count,
-            "ocr_used": False,
+            "ocr_used": ocr_used,
             "warnings": warnings,
         },
     }
