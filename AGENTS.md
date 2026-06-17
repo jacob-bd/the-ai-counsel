@@ -81,6 +81,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 | `settings.py` | Config management, persisted to `data/settings.json` |
 | `config.py` | OpenRouter endpoint URL, data dir constant, settings-aware getters (`get_openrouter_api_key`, `get_council_models`, `get_chairman_model`, ...) that bridge env vars and `settings.py` |
 | `costs.py` | Usage normalization, pricing lookup/cache, per-call cost attribution, and run-level cost reports |
+| `documents.py` | Document validation and text extraction for uploads (text-like files and PDFs; optional OCR fallback) |
 | `prompts.py` | Default system prompts for all stages (Stage 1/2/3, Title, Query) |
 | `main.py` | FastAPI app with streaming SSE endpoints, live progress tracking (`_active_runs`), and MCP server mount |
 | `storage.py` | Conversation persistence in `data/conversations/{id}.json`; index entries include optional `run_summary`, `total_cost`, `cost_status`, `total_calls` via `derive_run_summary()` / `derive_conversation_cost()` |
@@ -91,6 +92,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 |-----------|---------|
 | `App.jsx` | Main orchestration, SSE streaming, conversation state |
 | `ChatInterface.jsx` | User input, web search toggle, execution mode |
+| `DocumentUpload.jsx` | File picker/extraction UI for Council and Advisor document context |
 | `Stage1.jsx` | Tab view of individual model responses |
 | `Stage2.jsx` | Peer rankings with de-anonymization, aggregate scores |
 | `Stage3.jsx` | Chairman synthesis (final answer) |
@@ -205,7 +207,9 @@ useEffect(() => {
 ## Data Flow
 
 ```
-User Query (+ optional web search)
+User Query (+ optional web search / file uploads)
+ ↓
+[Document Extraction: text files + PDFs via pdfplumber, optional OCR]
  ↓
 [Web Search: DuckDuckGo/Tavily/Brave + Jina Reader]
  ↓
@@ -225,9 +229,22 @@ Save conversation (stage1, stage2, stage3 only)
 ### One-Shot Query (No State)
 ```
 POST /api/ask
-Body: {content, models?, web_search?, execution_mode?}
+Body: {content, models?, web_search?, execution_mode?, documents?}
 → JSON response (no conversation created)
 ```
+
+### Document Extraction / Uploads
+```
+POST /api/documents/extract
+→ multipart upload endpoint used by the UI
+
+POST /api/documents/extract-json
+Body: {documents: [{name, mime_type?, data_base64}]}
+→ JSON/base64 extraction endpoint used by MCP clients
+```
+Document-bearing requests accept extracted payloads as `documents: [{name, mime_type, text, metadata?}]` on `/api/ask`, conversation message endpoints, council debate, and advisor debate. Providers receive normalized text context; conversation storage keeps attachment metadata only.
+
+PDFs use `pdfplumber` for embedded text. OCR is optional and requires `LLM_COUNCIL_OCR_ENABLED=1` plus OCRmyPDF, Tesseract, Ghostscript, and qpdf in the backend runtime. If OCR is unavailable, extraction continues with warnings instead of blocking normal text extraction.
 
 ### Per-Request Model Overrides
 Both `/api/conversations/{id}/message` (sync) and `/api/conversations/{id}/message/stream` (SSE) accept optional `council_models` and `chairman_model` fields that override global config for that request only. Never mutate settings for ad-hoc queries.

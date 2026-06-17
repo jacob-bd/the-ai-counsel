@@ -31,6 +31,8 @@ def create_server(
             "custom, opencode-zen, and opencode-go. "
             "Deliberation, debate, advisor, and model_chat results include a top-level `cost_report` "
             "(total_cost, total_tokens, by_model, known_cost_calls, unknown_cost_calls, free_calls). "
+            "council_deliberate, model_chat, advisor_debate, and run_iterative_debate accept optional "
+            "`documents`; pass extracted text or base64 source files, which are extracted before model calls. "
             "Prefer these MCP tools over curl. Full REST reference: skills/the-ai-counsel-api/SKILL.md."
         ),
         host=host,

@@ -1,6 +1,6 @@
 ---
 name: the-ai-counsel-api
-version: 0.9.2
+version: 0.10.0
 description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", etc.
 ---
 
@@ -17,7 +17,7 @@ Use **Council** for direct answers, creative prompts, factual questions, and "gi
 
 **Transport rule (read first):** If The AI Counsel **MCP tools are available** in your session, **call them** — do **not** shell out to `curl` for the same operation. This skill’s REST sections are the **fallback reference** when MCP is missing, the SSE session is stale, or you need raw SSE/admin export.
 
-**MCP server (v0.9.1):** Built-in SSE at `http://localhost:8001/mcp/sse` (stdio: `python -m the_ai_counsel_mcp`). Exposes **10 action-based tools** (not 25). Verify via `GET /api/health` → `"mcp": {"tools": 10, "sse_url": "..."}`.
+**MCP server (v0.10.0):** Built-in SSE at `http://localhost:8001/mcp/sse` (stdio: `python -m the_ai_counsel_mcp`). Exposes **10 action-based tools** (not 25). Verify via `GET /api/health` → `"mcp": {"tools": 10, "sse_url": "..."}`.
 
 **Default base URL (REST fallback only):** `http://localhost:8001`  
 **Remote server:** replace with `http://<server-ip>:8001`
@@ -72,6 +72,8 @@ Use MCP when your tool list includes any of these **10 tools** (server may appea
 
 In Claude Code, tools appear as `mcp__the-ai-counsel__<name>` (server identifier may vary). Full parameters: [`docs/mcp/TOOLS.md`](../../docs/mcp/TOOLS.md).
 
+**Document inputs:** `council_deliberate`, `model_chat`, `advisor_debate`, and `run_iterative_debate` accept optional `documents`. Pass already extracted text as `{name, mime_type, text}` or source files as `{name, mime_type, data_base64}`. Base64 documents are extracted by the backend before model calls; providers receive normalized text context, not raw file bytes.
+
 **Agent checklist before running curl:**
 
 1. Are MCP tools for this server visible in my tool list?
@@ -106,6 +108,8 @@ Use this table **only when MCP tools are unavailable** or the operation has no M
 | Create conversation | POST | `/api/conversations` |
 | Get conversation | GET | `/api/conversations/{id}` |
 | **Get live run progress** | **GET** | **`/api/conversations/{id}/progress`** |
+| Extract uploaded documents | POST | `/api/documents/extract` |
+| Extract JSON/base64 documents | POST | `/api/documents/extract-json` |
 | Send message (sync JSON) | POST | `/api/conversations/{id}/message` |
 | Send message (SSE stream) | POST | `/api/conversations/{id}/message/stream` |
 | **Run council debate (SSE stream)** | **POST** | **`/api/conversations/{id}/message/debate`** |
@@ -149,6 +153,7 @@ opencode-go:kimi-k2.5                  → Direct OpenCode Go (chat/completions 
 
 **Key principles:**
 - Never mutate global config for ad-hoc queries. Use per-request `models` / `council_models` / `chairman_model` overrides instead.
+- Use optional `documents` on `/api/ask`, conversation message endpoints, council debate, and advisor debate when prompts need file context.
 - Use conversation endpoints when you need follow-up questions — models automatically receive prior turns as context.
 - `/api/ask` is stateless — no memory between calls.
 - Advisor debates always require a conversation — create one first, then stream the debate to it.
@@ -201,6 +206,51 @@ Custom endpoint note: custom OpenAI-compatible endpoints do not have a universal
 
 ---
 
+## Document uploads and extraction
+
+Document inputs are converted to plain text before model calls so they work consistently across OpenRouter, Ollama, Groq, direct providers, custom endpoints, REST, MCP, and the UI.
+
+Supported v1 formats:
+
+- PDFs
+- Text-like files: `.txt`, `.md`, `.csv`, `.json`, `.yaml`, `.xml`, `.html`
+- Logs, source code, and common config files
+
+REST endpoints:
+
+- `POST /api/documents/extract` accepts multipart uploads from the UI and returns extracted document payloads plus warnings.
+- `POST /api/documents/extract-json` accepts JSON documents with `data_base64` and returns extracted document payloads plus warnings.
+
+Request bodies that accept `documents`:
+
+- `POST /api/ask`
+- `POST /api/conversations/{id}/message`
+- `POST /api/conversations/{id}/message/stream`
+- `POST /api/conversations/{id}/message/debate`
+- `POST /api/conversations/{id}/debate/stream`
+
+Document payload shape:
+
+```json
+{
+  "name": "notes.txt",
+  "mime_type": "text/plain",
+  "text": "Meeting notes..."
+}
+```
+
+For source files over MCP/JSON, use `data_base64` instead of `text`; the MCP client extracts those files through `/api/documents/extract-json` before starting the model run.
+
+Conversation history stores attachment metadata only: file name, MIME type, byte size, extracted character count, page count when available, and warnings. It does not store raw file bytes or extracted text.
+
+PDF handling:
+
+- Embedded text extraction uses `pdfplumber`.
+- OCR is optional. Set `LLM_COUNCIL_OCR_ENABLED=1` and install OCRmyPDF, Tesseract, Ghostscript, and qpdf in the backend runtime.
+- If OCR is disabled or unavailable, extraction continues with embedded text and warnings.
+
+---
+
 ## Examples (REST fallback)
 
 ### 1. One-Shot Query (scripts / REST-only environments)
@@ -244,6 +294,7 @@ async def ask(query, model, web_search=False, base_url="http://localhost:8001"):
 | `chairman_model` | string | No | Global chairman config | Override chairman for `full` mode |
 | `web_search` | boolean | No | `false` | Enable web search context |
 | `execution_mode` | string | No | `"chat_only"` | `chat_only`, `chat_ranking`, or `full` |
+| `documents` | array | No | `[]` | Extracted document payloads from `/api/documents/extract` or `/api/documents/extract-json` |
 
 **Response shapes by mode:**
 

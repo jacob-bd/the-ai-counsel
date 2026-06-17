@@ -69,7 +69,7 @@ Then open **http://localhost:5173** and configure your API keys in Settings.
 The original three-stage pipeline where raw model diversity produces vetted answers:
 
 ```
-YOUR QUESTION (+ optional web search)
+YOUR QUESTION (+ optional web search / file uploads)
          │
          ▼
   ┌─────────────────────────────────┐
@@ -233,6 +233,7 @@ Some provider/model combinations only accept their default temperature. The app 
 
 - **Live Progress Tracking** — See each model or advisor respond in real-time with streaming; reconnect to active runs via `GET /api/conversations/{id}/progress`
 - **Multi-turn Conversations** — Follow-up questions carry full context automatically
+- **Text File Uploads** — Attach PDFs and text/code/config files in Council or Advisor mode; extracted text is sent as normalized prompt context across all providers while conversation history stores attachment metadata only
 - **Council Sizing** — Adjust council from 1 to 8 models; advisors from 2 to 4 personas (select from 12)
 - **Advisor Presets** — Save and load named advisor lineups (personas, model mode, optional rounds/web search) from Advisor Setup
 - **Abort Anytime** — Cancel in-progress requests
@@ -245,6 +246,16 @@ Some provider/model combinations only accept their default temperature. The app 
 - **Per-request Model Overrides** — Use different models for individual requests without changing global config
 - **One-shot API** — `POST /api/ask` for scripts and MCP agents (no conversation state)
 - **Docker Deployment** — Single-container production deployment via `docker compose`
+
+---
+
+### File Uploads
+
+Attach PDFs and text-like files from the Council input or Advisor setup. The backend extracts text once before model calls, so uploads work the same way across OpenRouter, Ollama, Groq, direct providers, custom endpoints, and MCP.
+
+Supported v1 formats include `.pdf`, `.txt`, `.md`, `.csv`, `.json`, `.yaml`, `.xml`, `.html`, logs, code files, and common config files. Conversation history stores file name/type/size metadata only; it does not store raw file bytes or extracted text.
+
+PDFs use embedded text extraction by default. OCR for scanned or image-only PDFs is optional: set `LLM_COUNCIL_OCR_ENABLED=1` and install OCRmyPDF, Tesseract, Ghostscript, and qpdf in the backend runtime. If OCR is unavailable, the run continues with extracted text and warnings.
 
 ---
 
@@ -369,6 +380,8 @@ The server exposes **10 action-based tools** grouped by domain:
 
 Legacy 25-tool names were removed in v0.5.2. `run_iterative_debate` was added in v0.7.0. See [docs/mcp/TOOLS.md](docs/mcp/TOOLS.md) for the action parameter on each tool.
 
+Deliberation tools also accept optional document inputs. Base64 files are extracted by the backend before model calls, so raw file bytes are not sent to providers.
+
 **Quick registration for Claude Code:**
 
 * **Option A: Local stdio (Standard for local development)**
@@ -379,7 +392,7 @@ Legacy 25-tool names were removed in v0.5.2. `run_iterative_debate` was added in
 
 * **Option B: Remote SSE (Zero-install for containers/servers)**
   ```bash
-  claude mcp add the-ai-counsel --url http://yourserver.com:8001/mcp/sse
+  claude mcp add --transport sse the-ai-counsel http://yourserver.com:8001/mcp/sse
   ```
 
 Then ask Claude: "check the council health" to verify the connection (`providers` → action `health`; expect 10 tools in `/api/health`).

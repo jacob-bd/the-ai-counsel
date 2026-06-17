@@ -36,6 +36,9 @@ release/
 BUGS_AND_OPTIMIZATIONS.md
 DESIGN_SESSION_CONTEXT.md
 
+# Internal agent planning and design artifacts
+docs/superpowers/
+
 # Auto Claude data directory
 .auto-claude/
 

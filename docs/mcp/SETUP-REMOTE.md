@@ -20,7 +20,7 @@ If you want to run the MCP server locally and point it at a remote backend, see 
 Because the SSE server is hosted directly under `/mcp`, you can register it with a single command pointing to your server's main port (`8001`):
 
 ```bash
-claude mcp add the-ai-counsel --url http://yourserver.com:8001/mcp/sse
+claude mcp add --transport sse the-ai-counsel http://yourserver.com:8001/mcp/sse
 ```
 
 Replace `yourserver.com` with your server's IP address or domain.

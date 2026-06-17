@@ -1,6 +1,9 @@
 """FastAPI backend for LLM Council."""
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+import base64
+import binascii
+
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +34,14 @@ from .prompts import VALID_RESPONSE_LANGUAGES, RESPONSE_LANGUAGE_DEFAULT
 from .personas import get_all_personas, save_persona_override, delete_persona_override, get_persona
 from .advisors import run_debate
 from .debate import run_iterative_debate, MAX_DEBATE_ROUNDS
+from .documents import (
+    DocumentError,
+    DocumentLimits,
+    build_effective_query,
+    extract_text_bytes,
+    to_attachment_metadata,
+    validate_documents_for_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -348,6 +359,7 @@ class StartDebateRequest(BaseModel):
     max_rounds: int = 3
     web_search: bool = False
     search_provider: Optional[str] = None
+    documents: Optional[List[Dict[str, Any]]] = None
 
 
 ExecutionMode = Literal["chat_only", "chat_ranking", "full"]
@@ -361,6 +373,7 @@ class SendMessageRequest(BaseModel):
     council_models: Optional[List[str]] = None
     chairman_model: Optional[str] = None
     debate_rounds: Optional[int] = None
+    documents: Optional[List[Dict[str, Any]]] = None
 
 
 class AskRequest(BaseModel):
@@ -369,6 +382,67 @@ class AskRequest(BaseModel):
     chairman_model: Optional[str] = None
     web_search: bool = False
     execution_mode: ExecutionMode = "chat_only"
+    documents: Optional[List[Dict[str, Any]]] = None
+
+
+class DocumentExtractJsonRequest(BaseModel):
+    documents: List[Dict[str, Any]]
+
+
+def _documents_response(documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+    validated = validate_documents_for_request(documents)
+    return {
+        "documents": validated,
+        "attachments": to_attachment_metadata(validated),
+        "warnings": [
+            warning
+            for doc in validated
+            for warning in (doc.get("metadata") or {}).get("warnings", [])
+        ],
+    }
+
+
+def _prepare_document_context(content: str, documents: Optional[List[Dict[str, Any]]]) -> tuple[str, List[Dict[str, Any]]]:
+    validated = validate_documents_for_request(documents)
+    return build_effective_query(content, validated), to_attachment_metadata(validated)
+
+
+@app.post("/api/documents/extract")
+async def extract_documents_endpoint(files: List[UploadFile] = File(description="Documents to extract")):
+    documents = []
+    try:
+        for file in files:
+            data = await file.read()
+            documents.append(extract_text_bytes(file.filename or "attachment", file.content_type or "", data))
+        return _documents_response(documents)
+    except DocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/documents/extract-json")
+async def extract_documents_json_endpoint(body: DocumentExtractJsonRequest):
+    documents = []
+    limits = DocumentLimits()
+    try:
+        for item in body.documents:
+            name = item.get("name") or "attachment"
+            mime_type = item.get("mime_type") or item.get("content_type") or ""
+            if item.get("text") is not None:
+                documents.append(item)
+                continue
+            if not item.get("data_base64"):
+                raise DocumentError(f"{name} must include text or data_base64.")
+            b64 = str(item["data_base64"])
+            if len(b64) > limits.max_document_base64_chars:
+                raise DocumentError(f"{name} is too large.")
+            try:
+                data = base64.b64decode(b64, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise DocumentError(f"{name} is not valid base64.") from exc
+            documents.append(extract_text_bytes(name, mime_type, data, limits))
+        return _documents_response(documents)
+    except DocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _validate_execution_mode(mode: str) -> None:
@@ -683,7 +757,8 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
         cost_report = None
         _register_run(conversation_id, body.execution_mode)
         try:
-            storage.add_user_message(conversation_id, body.content, conversation=conversation)
+            effective_content, attachments = _prepare_document_context(body.content, body.documents)
+            storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
             preflight_error = await _run_model_preflight(_build_council_preflight_models(body))
             if preflight_error:
@@ -744,7 +819,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             total_models = 0
 
             async for item in stage1_collect_responses(
-                body.content,
+                effective_content,
                 search_context,
                 request,
                 models_override=body.council_models,
@@ -794,7 +869,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
 
                 # Iterate over the async generator
                 async for item in stage2_collect_rankings(
-                    body.content,
+                    effective_content,
                     stage1_results,
                     search_context,
                     request,
@@ -845,7 +920,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     raise asyncio.CancelledError("Client disconnected")
 
                 stage3_result = await stage3_synthesize_final(
-                    body.content,
+                    effective_content,
                     stage1_results,
                     stage2_results,
                     search_context,
@@ -964,7 +1039,8 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
         debate_converged = False
         _register_run(conversation_id, body.execution_mode)
         try:
-            storage.add_user_message(conversation_id, body.content, conversation=conversation)
+            effective_content, attachments = _prepare_document_context(body.content, body.documents)
+            storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
             preflight_error = await _run_model_preflight(_build_council_preflight_models(body))
             if preflight_error:
@@ -1017,7 +1093,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
             effective_rounds = min(max(effective_rounds, 1), MAX_DEBATE_ROUNDS)
 
             async for event in run_iterative_debate(
-                body.content, search_context, request, body.execution_mode,
+                effective_content, search_context, request, body.execution_mode,
                 models_override=body.council_models,
                 chairman_override=body.chairman_model,
                 history=history,
@@ -1227,7 +1303,8 @@ async def start_debate_stream(conversation_id: str, body: StartDebateRequest, re
         _register_advisor_run(conversation_id, body)
         try:
             conversation["mode"] = "advisors"
-            storage.add_user_message(conversation_id, body.question, conversation=conversation)
+            effective_question, attachments = _prepare_document_context(body.question, body.documents)
+            storage.add_user_message(conversation_id, body.question, conversation=conversation, attachments=attachments)
 
             search_context = ""
             if body.search_provider or body.web_search:
@@ -1250,7 +1327,7 @@ async def start_debate_stream(conversation_id: str, body: StartDebateRequest, re
 
             web_search_used = bool(body.search_provider or body.web_search)
             async for event in run_debate(
-                question=body.question,
+                question=effective_question,
                 persona_ids=body.persona_ids,
                 model_assignments=body.model_assignments,
                 default_model=body.default_model,
@@ -1262,6 +1339,8 @@ async def start_debate_stream(conversation_id: str, body: StartDebateRequest, re
                 preflight=True,
             ):
                 event_type = event.get("type", "")
+                if event_type == "advisor_debate_start" and "data" in event:
+                    event["data"]["question"] = body.question
                 _update_advisor_run(conversation_id, event)
 
                 if event_type == "advisor_complete":
@@ -1351,7 +1430,12 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
     if preflight_error:
         raise HTTPException(status_code=400, detail=preflight_error)
 
-    storage.add_user_message(conversation_id, body.content, conversation=conversation)
+    try:
+        effective_content, attachments = _prepare_document_context(body.content, body.documents)
+    except DocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
     search_context = ""
     search_query = ""
@@ -1360,7 +1444,7 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
         search_context, search_query, _ = await _fetch_search_context(body.content, settings)
 
     result = await _run_council_pipeline(
-        body.content, body.execution_mode, search_context,
+        effective_content, body.execution_mode, search_context,
         models_override=body.council_models, chairman_override=body.chairman_model,
         history=history,
         conversation_id=conversation_id,
@@ -1419,8 +1503,13 @@ async def ask_oneshot(body: AskRequest):
     if body.web_search:
         search_context, _, _ = await _fetch_search_context(body.content, settings)
 
+    try:
+        effective_content, _ = _prepare_document_context(body.content, body.documents)
+    except DocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     result = await _run_council_pipeline(
-        body.content, body.execution_mode, search_context,
+        effective_content, body.execution_mode, search_context,
         models_override=models, chairman_override=body.chairman_model,
         preflight=False,
     )

@@ -61,3 +61,27 @@ def test_rebuild_index_skips_non_conversation_json(tmp_path, monkeypatch):
 
     assert len(index) == 1
     assert index[0]["id"] == "conversation"
+
+
+def test_add_user_message_stores_attachment_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "DATA_DIR", str(tmp_path))
+    conversation = storage.create_conversation("conv-attachments")
+
+    storage.add_user_message(
+        conversation["id"],
+        "Analyze this.",
+        attachments=[{
+            "name": "report.pdf",
+            "mime_type": "application/pdf",
+            "char_count": 123,
+            "truncated": False,
+            "ocr_used": False,
+            "page_count": 1,
+            "warnings": [],
+        }],
+    )
+
+    loaded = storage.get_conversation(conversation["id"])
+    msg = loaded["messages"][0]
+    assert msg["attachments"][0]["name"] == "report.pdf"
+    assert "text" not in msg["attachments"][0]

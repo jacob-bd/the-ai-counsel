@@ -451,6 +451,20 @@ export const api = {
     return response.json();
   },
 
+  async extractDocuments(files) {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await fetch(`${API_BASE}/api/documents/extract`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to extract documents');
+    }
+    return response.json();
+  },
+
   async sendDebateStream(conversationId, options, onEvent, signal) {
     const body = {
       question: options.question,
@@ -461,6 +475,9 @@ export const api = {
       max_rounds: options.maxRounds || 3,
       search_provider: options.searchProvider || null,
     };
+    if (options.documents && options.documents.length > 0) {
+      body.documents = options.documents;
+    }
 
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/debate/stream?_t=${Date.now()}`,
@@ -501,6 +518,7 @@ export const api = {
       executionMode = 'full',
       councilModels = null,
       chairmanModel = null,
+      documents = null,
     } = options;
     const body = {
       content,
@@ -512,6 +530,9 @@ export const api = {
     }
     if (chairmanModel) {
       body.chairman_model = chairmanModel;
+    }
+    if (documents && documents.length > 0) {
+      body.documents = documents;
     }
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream?_t=${Date.now()}`,
@@ -545,6 +566,7 @@ export const api = {
       councilModels = null,
       chairmanModel = null,
       debateRounds = null,
+      documents = null,
     } = options;
     const body = {
       content,
@@ -557,6 +579,9 @@ export const api = {
     }
     if (chairmanModel) {
       body.chairman_model = chairmanModel;
+    }
+    if (documents && documents.length > 0) {
+      body.documents = documents;
     }
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/debate?_t=${Date.now()}`,

@@ -14,6 +14,7 @@ import Stage4, { Stage4Skeleton } from './Stage4';
 import RoundNavigator from './RoundNavigator';
 import CostReport from './CostReport';
 import PauseBanner from './PauseBanner';
+import DocumentUpload from './DocumentUpload';
 import './ChatInterface.css';
 
 function hasStage1Results(msg) {
@@ -135,6 +136,9 @@ export default function ChatInterface({
     const [input, setInput] = useState('');
     const [activeSearchProvider, setActiveSearchProvider] = useState(null);
     const [searchPopoverOpen, setSearchPopoverOpen] = useState(false);
+    const [documentPayload, setDocumentPayload] = useState({ documents: [], attachments: [], warnings: [] });
+    const [documentsBusy, setDocumentsBusy] = useState(false);
+    const [documentResetKey, setDocumentResetKey] = useState(0);
     const searchPopoverRef = useRef(null);
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -183,9 +187,11 @@ export default function ChatInterface({
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (input.trim() && !isLoading) {
-            onSendMessage(input, activeSearchProvider);
+        if (input.trim() && !isLoading && !documentsBusy) {
+            onSendMessage(input, activeSearchProvider, documentPayload);
             setInput('');
+            setDocumentPayload({ documents: [], attachments: [], warnings: [] });
+            setDocumentResetKey((key) => key + 1);
         }
     };
 
@@ -308,7 +314,19 @@ export default function ChatInterface({
 
                             <div className="message-content">
                                 {msg.role === 'user' ? (
-                                    <MarkdownContent>{msg.content}</MarkdownContent>
+                                    <>
+                                        <MarkdownContent>{msg.content}</MarkdownContent>
+                                        {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                            <div className="message-attachments">
+                                                {msg.attachments.map((attachment, attachmentIndex) => (
+                                                    <span className="message-attachment-chip" key={`${attachment.name}-${attachmentIndex}`}>
+                                                        <span className="message-attachment-icon">📎</span>
+                                                        <span>{attachment.name}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
                                 ) : (msg.mode === 'advisors' || msg.type === 'advisor_debate') ? (
                                     <DebateView
                                         personas={msg.personas || []}
@@ -438,13 +456,19 @@ export default function ChatInterface({
                                     ⏹
                                 </button>
                             ) : (
-                                <button type="submit" className="send-button" disabled={!input.trim()}>
+                                <button type="submit" className="send-button" disabled={!input.trim() || documentsBusy}>
                                     ➤
                                 </button>
                             )}
                         </div>
 
                         <div className="input-row-bottom">
+                            <DocumentUpload
+                                disabled={isLoading}
+                                resetKey={documentResetKey}
+                                onChange={setDocumentPayload}
+                                onBusyChange={setDocumentsBusy}
+                            />
                             <ExecutionModeToggle
                                 value={executionMode}
                                 onChange={onExecutionModeChange}

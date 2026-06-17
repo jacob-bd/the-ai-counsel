@@ -245,7 +245,39 @@ The model receives the full prior conversation as context and responds with a re
 
 ---
 
-## Example 5: Run an advisor debate
+## Example 5: Ask with an attached document
+
+**What you say to your AI:**
+
+> "Ask GPT to summarize these notes and list follow-up questions."
+
+**What happens behind the scenes:**
+
+If the document text is already available, the AI can pass it directly:
+
+```json
+{
+  "tool": "model_chat",
+  "input": {
+    "action": "quick",
+    "query": "Summarize the attachment and list follow-up questions.",
+    "model": "openai:gpt-4.1",
+    "documents": [
+      {
+        "name": "notes.txt",
+        "mime_type": "text/plain",
+        "text": "Meeting notes: Alpha approved the plan. Beta needs legal review."
+      }
+    ]
+  }
+}
+```
+
+If the source file is still binary, the AI can pass `data_base64` instead. The MCP client asks the backend to extract text first; raw base64 is not sent to model providers.
+
+---
+
+## Example 6: Run an advisor debate
 
 **What you say to your AI:**
 
@@ -306,7 +338,7 @@ The AI synthesizes a clear narrative of the debate, highlighting the opening sta
 
 ---
 
-## Example 6: Customize and reset a persona
+## Example 7: Customize and reset a persona
 
 **What you say to your AI:**
 
@@ -360,7 +392,7 @@ Behind the scenes:
 
 ---
 
-## Example 7: Configure advisors globally
+## Example 8: Configure advisors globally
 
 **What you say to your AI:**
 
@@ -395,7 +427,7 @@ Response:
 
 ---
 
-## Example 8: Save an advisor preset (MCP)
+## Example 9: Save an advisor preset (MCP)
 
 **What you say to your AI:**
 

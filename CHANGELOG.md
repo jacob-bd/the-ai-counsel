@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-15
+
+### Added
+- **Text file uploads**: Council, iterative debate, advisor debate, REST, MCP, and UI flows now accept extracted text documents and PDFs. The backend exposes `/api/documents/extract` for multipart UI uploads and `/api/documents/extract-json` for MCP/JSON base64 extraction.
+- **PDF extraction with optional OCR**: PDF text extraction uses `pdfplumber`; OCR is optional and gated by `LLM_COUNCIL_OCR_ENABLED=1` plus OCRmyPDF/Tesseract/Ghostscript/qpdf availability.
+- **Attachment metadata in history**: Stored conversations keep attachment metadata only, not raw files or extracted text.
+
+### Fixed
+- **Claude MCP SSE setup docs**: Claude Code registration examples now use `claude mcp add --transport sse <name> <url>`, matching the installed Claude CLI.
+
 ## [0.9.2] - 2026-06-09
 
 ### Added

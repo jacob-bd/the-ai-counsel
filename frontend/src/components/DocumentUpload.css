@@ -1,0 +1,102 @@
+.document-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.document-upload__input {
+  display: none;
+}
+
+.document-upload__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.document-upload__button:hover:not(:disabled),
+.document-upload__button--active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+}
+
+.document-upload__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.document-upload__panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.document-upload__chip,
+.document-upload__warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(100%, 360px);
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.document-upload__chip {
+  background: rgba(59, 130, 246, 0.09);
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  color: var(--text-secondary);
+}
+
+.document-upload__chip-name {
+  color: var(--text-primary);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-upload__chip-meta {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.document-upload__remove {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.document-upload__remove:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fecaca;
+}
+
+.document-upload__warning {
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.09);
+  color: #fcd34d;
+}

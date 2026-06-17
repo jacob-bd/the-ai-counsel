@@ -10,7 +10,7 @@ The AI Counsel exposes a Model Context Protocol (MCP) server that lets AI tools 
 
 ### Option B: Remote SSE (Zero-install for containers / servers)
 1. Run backend container (exposing port `8001`).
-2. Register: `claude mcp add the-ai-counsel --url http://yourserver.com:8001/mcp/sse`
+2. Register: `claude mcp add --transport sse the-ai-counsel http://yourserver.com:8001/mcp/sse`
 
 ---
 
