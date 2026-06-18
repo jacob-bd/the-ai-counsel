@@ -226,12 +226,14 @@ Save conversation (stage1, stage2, stage3 only)
 
 ## API Endpoints
 
-### One-Shot Query (No State)
+### One-Shot Query (Persisted)
 ```
 POST /api/ask
 Body: {content, models?, web_search?, execution_mode?, documents?}
-→ JSON response (no conversation created)
+→ JSON response with conversation_id; completed run appears in the UI
 ```
+Each call creates a new conversation for auditability. The endpoint remains
+one-shot: it does not load prior conversation history.
 
 ### Document Extraction / Uploads
 ```

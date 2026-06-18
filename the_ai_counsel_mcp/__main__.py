@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import sys
 
 from .server import create_server, run_stdio, run_sse
 

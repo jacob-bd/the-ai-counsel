@@ -1,6 +1,4 @@
 """Tests for iterative debate logic."""
-import math
-import pytest
 from backend.debate import (
     check_convergence, truncate_text,
     pre_segment_paragraphs, format_numbered_paragraphs,

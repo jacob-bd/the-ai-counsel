@@ -138,7 +138,11 @@ Chat with a single model.
 }
 ```
 
-Responses include `usage`, `cost`, and `cost_report` alongside the model response. Ollama, NVIDIA, OpenRouter `:free`, known-free OpenCode models, and custom endpoints whose configured URL points at the official `opencode.ai` host report zero cost.
+Quick responses include the saved run's `conversation_id`, plus `usage`, `cost`,
+and `cost_report` alongside the model response. The conversation appears in the
+UI. Ollama, NVIDIA, OpenRouter `:free`, known-free OpenCode models, and custom
+endpoints whose configured URL points at the official `opencode.ai` host report
+zero cost.
 
 ---
 

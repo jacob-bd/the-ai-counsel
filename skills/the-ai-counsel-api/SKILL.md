@@ -1,6 +1,6 @@
 ---
 name: the-ai-counsel-api
-version: 0.10.0
+version: 0.10.4
 description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", etc.
 ---
 
@@ -100,7 +100,7 @@ Use this table **only when MCP tools are unavailable** or the operation has no M
 | Operation | Method | Endpoint |
 |-----------|--------|----------|
 | Health check | GET | `/api/health` (includes `"mcp": {"tools": 10}`) |
-| **One-shot query (no state)** | **POST** | **`/api/ask`** |
+| **One-shot query (persisted, no prior history)** | **POST** | **`/api/ask`** |
 | Get settings (council + advisor config) | GET | `/api/settings` |
 | Update settings | PUT | `/api/settings` |
 | List all models | GET | `/api/models` + `/api/models/direct` + `/api/ollama/tags` + `/api/custom-endpoint/models` |
@@ -142,7 +142,7 @@ opencode-go:kimi-k2.5                  → Direct OpenCode Go (chat/completions 
 
 | Scenario | Endpoint | Why |
 |----------|----------|-----|
-| One-shot query, no history needed | `POST /api/ask` | Simplest path. One call, JSON response, no state. |
+| One-shot query, no history needed | `POST /api/ask` | Simplest path. One call; the completed run is saved and returns `conversation_id`. |
 | One-shot query with web search | `POST /api/ask` with `web_search: true` | Same simplicity, adds search context. |
 | Full deliberation, don't need live progress | `POST /api/ask` with `execution_mode: "full"` | Returns all stages in one JSON response. |
 | Multi-turn conversation with follow-ups | `POST /api/conversations/{id}/message` | Models see full prior context. JSON response. |
@@ -155,7 +155,7 @@ opencode-go:kimi-k2.5                  → Direct OpenCode Go (chat/completions 
 - Never mutate global config for ad-hoc queries. Use per-request `models` / `council_models` / `chairman_model` overrides instead.
 - Use optional `documents` on `/api/ask`, conversation message endpoints, council debate, and advisor debate when prompts need file context.
 - Use conversation endpoints when you need follow-up questions — models automatically receive prior turns as context.
-- `/api/ask` is stateless — no memory between calls.
+- `/api/ask` does not load prior history. Each successful call creates a new saved conversation visible in the UI and returns its `conversation_id`.
 - Advisor debates always require a conversation — create one first, then stream the debate to it.
 - Use `GET /api/conversations/{id}/progress` to check on an active run started by another client (MCP, UI, or another script) — returns `{active: false}` when no run is in progress.
 
@@ -255,7 +255,9 @@ PDF handling:
 
 ### 1. One-Shot Query (scripts / REST-only environments)
 
-The simplest way to query a model. No conversation, no state, no cleanup.
+The simplest way to query a model. Each successful call creates a new
+conversation visible in the UI and returns its `conversation_id`; no prior
+conversation history is loaded.
 
 ```bash
 curl -X POST http://localhost:8001/api/ask \
@@ -265,7 +267,7 @@ curl -X POST http://localhost:8001/api/ask \
     "models": ["custom:moonshotai/kimi-k2.6"],
     "execution_mode": "chat_only"
   }'
-# → {"response": "The capital of France is Paris.", "model": "custom:moonshotai/kimi-k2.6", "error": null}
+# → {"conversation_id": "...", "response": "The capital of France is Paris.", "model": "custom:moonshotai/kimi-k2.6", "error": null}
 ```
 
 ```python
@@ -298,12 +300,15 @@ async def ask(query, model, web_search=False, base_url="http://localhost:8001"):
 
 **Response shapes by mode:**
 
-- **`chat_only` + 1 model:** `{"response": "...", "model": "...", "error": null, "usage": {...}, "cost": {...}, "cost_report": {...}}`
-- **`chat_only` + N models:** `{"responses": [{model, response, error, usage, cost}, ...], "cost_report": {...}}`
-- **`chat_ranking`:** `{"responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}, "cost_report": {...}}`
-- **`full`:** `{"response": "...", "chairman_model": "...", "responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}, "cost_report": {...}}`
+- **`chat_only` + 1 model:** `{"conversation_id": "...", "response": "...", "model": "...", "error": null, "usage": {...}, "cost": {...}, "cost_report": {...}}`
+- **`chat_only` + N models:** `{"conversation_id": "...", "responses": [{model, response, error, usage, cost}, ...], "cost_report": {...}}`
+- **`chat_ranking`:** `{"conversation_id": "...", "responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}, "cost_report": {...}}`
+- **`full`:** `{"conversation_id": "...", "response": "...", "chairman_model": "...", "responses": [...], "rankings": [...], "aggregate_rankings": [...], "label_to_model": {...}, "cost_report": {...}}`
 
-`cost_report` is always in USD. It summarizes `total_cost`, `input_tokens`, `output_tokens`, `total_tokens`, `total_calls`, `known_cost_calls`, `unknown_cost_calls`, `estimated_calls`, `free_calls`, `by_model`, `by_stage`, and raw `calls`.
+`conversation_id` identifies the saved UI conversation. `cost_report` is always
+in USD. It summarizes `total_cost`, `input_tokens`, `output_tokens`,
+`total_tokens`, `total_calls`, `known_cost_calls`, `unknown_cost_calls`,
+`estimated_calls`, `free_calls`, `by_model`, `by_stage`, and raw `calls`.
 
 ---
 
@@ -337,7 +342,8 @@ async def deliberate(query, models, base_url="http://localhost:8001"):
         return data["response"]  # Chairman's synthesized answer
 ```
 
-No conversation management. No config mutation. One call.
+No conversation setup. No config mutation. One call; use the returned
+`conversation_id` to inspect the saved run.
 
 ---
 
@@ -428,7 +434,7 @@ async def multi_turn_chat(base_url="http://localhost:8001"):
 **How context works:**
 - Each message sent to a conversation endpoint includes all prior user/assistant turns as chat history
 - For assistant context, the system uses the chairman synthesis (stage3) when available, otherwise the first successful model response from stage1
-- `/api/ask` is stateless — no multi-turn memory (use conversations for that)
+- `/api/ask` creates a new saved conversation per call but has no multi-turn memory (use conversation message endpoints for follow-ups)
 - You can reuse the same `conversation_id` across sessions — history is persisted to disk
 
 **When to use multi-turn vs one-shot:**

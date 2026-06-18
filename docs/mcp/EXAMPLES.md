@@ -165,11 +165,14 @@ The AI recognizes you want a direct single-model response, not a full deliberati
 }
 ```
 
-This uses the one-shot `/api/ask` endpoint internally — no conversation is created, no settings are mutated.
+This uses the one-shot `/api/ask` endpoint internally. The completed run is
+saved as a conversation visible in the UI, and the response includes its
+`conversation_id`. No settings are mutated.
 
 Response:
 ```json
 {
+  "conversation_id": "7c658b52-...",
   "model": "openai:gpt-4.1",
   "response": "REST and GraphQL are both approaches to building APIs, but they differ fundamentally in how clients request data.\n\n**REST** organizes endpoints around resources (e.g., `/users/123`, `/posts`). Each endpoint returns a fixed shape of data. If you need user data plus their posts, you typically make two requests.\n\n**GraphQL** provides a single endpoint where clients specify exactly what fields they need in a query. You can fetch a user and their posts in one request, getting precisely the fields you want — nothing more.\n\n**When to use REST:** Simpler CRUD APIs, public APIs where caching is important, teams unfamiliar with GraphQL.\n\n**When to use GraphQL:** Complex, nested data requirements; mobile clients sensitive to over-fetching; rapidly evolving frontends that need flexibility.",
   "error": null,

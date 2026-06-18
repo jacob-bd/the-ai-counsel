@@ -244,7 +244,7 @@ Some provider/model combinations only accept their default temperature. The app 
 - **"I'm Feeling Lucky"** — Randomize your council composition
 - **Import & Export** — Backup and share your settings, API keys, and prompts
 - **Per-request Model Overrides** — Use different models for individual requests without changing global config
-- **One-shot API** — `POST /api/ask` for scripts and MCP agents (no conversation state)
+- **One-shot API** — `POST /api/ask` for scripts and MCP agents; each completed run is saved to the UI and returns a `conversation_id`
 - **Docker Deployment** — Single-container production deployment via `docker compose`
 
 ---

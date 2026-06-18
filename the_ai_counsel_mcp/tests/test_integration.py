@@ -100,7 +100,7 @@ def server():
     return create_server(base_url=BASE_URL)
 
 
-from the_ai_counsel_mcp.tests.conftest import get_json, get_text
+from the_ai_counsel_mcp.tests.conftest import get_json
 
 
 # ── Integration: full deliberation workflow ─────────────────────────────────────

@@ -1,6 +1,5 @@
 """Error classification for The AI Counsel MCP server."""
 
-from typing import Optional
 
 
 ERROR_TYPES = {

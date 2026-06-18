@@ -1,7 +1,6 @@
 """Integration tests for iterative debate orchestration."""
-import asyncio
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from backend.debate import run_iterative_debate
 
 

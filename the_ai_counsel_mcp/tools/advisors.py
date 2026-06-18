@@ -7,7 +7,7 @@ from typing import Any
 
 from ..client import CouncilClient
 from .. import presets as preset_ops
-from ..stream_buffer import buffer_debate
+from ..stream_buffer import buffer_debate, wrap_with_progress
 
 VALID_PERSONA_IDS = (
     "skeptic, pragmatist, innovator, historian, ethicist, analyst, contrarian, "
@@ -55,6 +55,7 @@ def register(server: Any, base_url: str) -> None:
                     search_provider=search_provider,
                     documents=prepared_documents,
                 )
+                events = wrap_with_progress(events)
                 result = await buffer_debate(events, conversation_id)
             return json.dumps(result, indent=2)
         except Exception as exc:

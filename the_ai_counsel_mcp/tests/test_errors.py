@@ -1,4 +1,3 @@
-import pytest
 from the_ai_counsel_mcp.errors import classify_http_error, classify_exception
 
 

@@ -125,6 +125,60 @@ def test_sync_message_passes_effective_content_and_stores_attachment_metadata(tm
     assert "text" not in user_message["attachments"][0]
 
 
+def test_ask_oneshot_persists_visible_conversation_and_returns_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "DATA_DIR", str(tmp_path))
+
+    result = PipelineResult(
+        stage1=[{
+            "model": "openai:gpt-4.1",
+            "response": "Persisted answer",
+            "error": None,
+            "usage": {"total_tokens": 12},
+            "cost": {"total_cost": 0.001},
+        }],
+        cost_report={"total_cost": 0.001, "total_calls": 1},
+    )
+
+    with patch("backend.main.get_settings") as settings:
+        settings.return_value.council_models = ["openai:gpt-4.1"]
+        with patch("backend.main._run_model_preflight", new_callable=AsyncMock) as preflight:
+            preflight.return_value = ""
+            with patch("backend.main._run_council_pipeline", new_callable=AsyncMock) as pipeline:
+                pipeline.return_value = result
+                with TestClient(app) as client:
+                    response = client.post(
+                        "/api/ask",
+                        json={
+                            "content": "Run this automatically.",
+                            "execution_mode": "chat_only",
+                            "documents": [{
+                                "name": "context.txt",
+                                "mime_type": "text/plain",
+                                "text": "Important context",
+                            }],
+                        },
+                    )
+                    conversations_response = client.get("/api/conversations")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["response"] == "Persisted answer"
+    assert payload["conversation_id"]
+
+    saved = storage.get_conversation(payload["conversation_id"])
+    assert saved["title"] == "Run this automatically."
+    assert saved["messages"][0]["role"] == "user"
+    assert saved["messages"][0]["content"] == "Run this automatically."
+    assert saved["messages"][0]["attachments"][0]["name"] == "context.txt"
+    assert "text" not in saved["messages"][0]["attachments"][0]
+    assert saved["messages"][1]["stage1"] == result.stage1
+    assert saved["messages"][1]["metadata"]["execution_mode"] == "chat_only"
+    assert saved["messages"][1]["metadata"]["cost_report"] == result.cost_report
+
+    visible_ids = {conversation["id"] for conversation in conversations_response.json()}
+    assert payload["conversation_id"] in visible_ids
+
+
 def test_iterative_debate_passes_effective_content(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DATA_DIR", str(tmp_path))
     storage.create_conversation("conv-doc-debate")

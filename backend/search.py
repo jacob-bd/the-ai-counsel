@@ -1,7 +1,7 @@
 """Web search module with multiple provider support."""
 
 from ddgs import DDGS
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Set
 from enum import Enum
 import ipaddress
 import logging
@@ -226,7 +226,7 @@ def optimize_search_query(user_query: str) -> Dict:
     # For current events, add temporal context
     if intent == "current_event":
         # Check if year is already mentioned
-        if not re.search(rf'\b20\d{{2}}\b', cleaned):
+        if not re.search(r'\b20\d{2}\b', cleaned):
             news_query = f"{cleaned} {CURRENT_YEAR}"
         else:
             news_query = cleaned
@@ -988,7 +988,7 @@ async def _search_brave(query: str, max_results: int = 5, full_content_results: 
             remaining = SEARCH_TIMEOUT_BUDGET - elapsed
 
             if remaining <= 5:  # Need at least 5s to fetch content
-                logger.warning(f"Search timeout budget exhausted, skipping remaining content fetches")
+                logger.warning("Search timeout budget exhausted, skipping remaining content fetches")
                 break
 
             # Use remaining time as timeout for this fetch

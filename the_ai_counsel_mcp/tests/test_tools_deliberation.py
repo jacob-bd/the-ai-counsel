@@ -6,14 +6,12 @@ import pytest
 import respx
 import httpx
 from the_ai_counsel_mcp.server import create_server
+from the_ai_counsel_mcp.tests.conftest import get_json
 
 
 @pytest.fixture
 def server():
     return create_server(base_url="http://test:8001")
-
-
-from the_ai_counsel_mcp.tests.conftest import get_json, get_text
 
 
 # ── Helpers to build SSE bodies ────────────────────────────────────────────────
@@ -464,6 +462,7 @@ async def test_quick_chat_returns_single_model_response(server):
         body = json.loads(request.content)
         ask_calls.append(body)
         return httpx.Response(200, json={
+            "conversation_id": "quick-conv-1",
             "response": "Quick answer from GPT",
             "model": "openai:gpt-4.1",
             "error": None,
@@ -478,6 +477,7 @@ async def test_quick_chat_returns_single_model_response(server):
         })
         data = get_json(result)
 
+    assert data["conversation_id"] == "quick-conv-1"
     assert data["model"] == "openai:gpt-4.1"
     assert data["response"] == "Quick answer from GPT"
     assert data.get("error") is None

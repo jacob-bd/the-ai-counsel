@@ -1947,7 +1947,7 @@ wheels = [
 
 [[package]]
 name = "the-ai-counsel"
-version = "0.10.0"
+version = "0.10.4"
 source = { virtual = "." }
 dependencies = [
     { name = "ddgs" },

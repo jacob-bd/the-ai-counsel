@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from ..client import CouncilClient
-from ..stream_buffer import buffer_stage1, buffer_stage2, buffer_stage3, buffer_iterative_debate
+from ..stream_buffer import buffer_stage1, buffer_stage2, buffer_stage3, buffer_iterative_debate, wrap_with_progress
 
 
 def _combine_cost_report(*stage_results: dict) -> dict:
@@ -48,6 +48,7 @@ def register(server, base_url: str) -> None:
                         conversation_id, query, web_search=web_search, execution_mode="chat_only",
                         documents=prepared_documents,
                     )
+                    events = wrap_with_progress(events)
                     result, _ = await buffer_stage1(events, conversation_id, query)
                     result["cost_report"] = _combine_cost_report(result)
                     return json.dumps(result, indent=2)
@@ -57,6 +58,7 @@ def register(server, base_url: str) -> None:
                         conversation_id, query, web_search=False, execution_mode="chat_ranking",
                         documents=prepared_documents,
                     )
+                    events = wrap_with_progress(events)
                     _, remaining = await buffer_stage1(events, conversation_id, query)
                     result, _ = await buffer_stage2(remaining, conversation_id)
                     result["cost_report"] = _combine_cost_report(result)
@@ -67,6 +69,7 @@ def register(server, base_url: str) -> None:
                         conversation_id, query, web_search=False, execution_mode="full",
                         documents=prepared_documents,
                     )
+                    events = wrap_with_progress(events)
                     _, after1 = await buffer_stage1(events, conversation_id, query)
                     _, after2 = await buffer_stage2(after1, conversation_id)
                     result = await buffer_stage3(after2, conversation_id)
@@ -79,6 +82,7 @@ def register(server, base_url: str) -> None:
                     council_models=models,
                     documents=prepared_documents,
                 )
+                events = wrap_with_progress(events)
                 stage1, after1 = await buffer_stage1(events, conversation_id, query)
                 stage2, after2 = await buffer_stage2(after1, conversation_id)
                 stage3 = await buffer_stage3(after2, conversation_id)
@@ -96,7 +100,7 @@ def register(server, base_url: str) -> None:
             return json.dumps({"status": "error", "message": str(exc)}, indent=2)
 
     @server.tool(description=(
-        "Chat with a single model. action: 'quick' (one-shot, no memory) or "
+        "Chat with a single model. action: 'quick' (one-shot, saved with no prior memory) or "
         "'multi_turn' (pass conversation_id from prior response to continue). "
         "model must include provider prefix, e.g. openai:gpt-4.1 or ollama:llama3. "
         "Results include usage/cost details and a cost_report."
@@ -125,6 +129,7 @@ def register(server, base_url: str) -> None:
                         documents=prepared_documents,
                     )
                     return json.dumps({
+                        "conversation_id": result.get("conversation_id"),
                         "model": result.get("model", model),
                         "response": result.get("response"),
                         "error": result.get("error"),
@@ -211,6 +216,7 @@ def register(server, base_url: str) -> None:
                     debate_rounds=debate_rounds,
                     documents=prepared_documents,
                 )
+                events = wrap_with_progress(events)
 
                 result = await buffer_iterative_debate(events, conversation_id)
                 return json.dumps(result, indent=2)
