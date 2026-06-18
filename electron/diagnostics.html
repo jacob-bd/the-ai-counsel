@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>The AI Counsel Diagnostics</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101418;
+      --panel: #171d23;
+      --panel-2: #202832;
+      --border: #34404d;
+      --text: #e8edf2;
+      --muted: #9aa8b5;
+      --accent: #3b82f6;
+      --bad: #ef4444;
+      --ok: #10b981;
+      --warn: #f59e0b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 'Plus Jakarta Sans', Segoe UI, system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .muted { color: var(--muted); }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 8px 14px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 500;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: #60a5fa;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background: #27303b;
+    }
+
+    button.primary:hover {
+      background: #2563eb;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .wide { grid-column: 1 / -1; }
+
+    .service {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 0;
+      border-top: 1px solid rgba(52, 64, 77, 0.72);
+    }
+
+    .service:first-of-type { border-top: 0; padding-top: 0; }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 5px;
+      background: var(--warn);
+    }
+
+    .dot.ok { background: var(--ok); }
+    .dot.bad { background: var(--bad); }
+
+    .name { font-weight: 600; }
+
+    .url, .path {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px 12px;
+      margin: 0;
+    }
+
+    dt { color: var(--muted); font-weight: 500; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+
+    pre {
+      margin: 0;
+      max-height: 250px;
+      overflow: auto;
+      background: #0b0f14;
+      border: 1px solid #26313c;
+      border-radius: 8px;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #d5dde5;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .tabs button {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .tabs button.active {
+      border-color: var(--accent);
+      background: var(--panel-2);
+      color: #93c5fd;
+    }
+
+    .status {
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      header { display: block; }
+      .actions { justify-content: flex-start; margin-top: 12px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Connection Diagnostics</h1>
+        <div id="checkedAt" class="muted">Checking services...</div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="refresh">Refresh</button>
+        <button id="start">Start Stack</button>
+        <button id="stop">Stop Stack</button>
+        <button id="openUi">Open Council</button>
+        <button id="openDocs">Open API Docs</button>
+        <button id="openLogs">Open Logs</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="section">
+        <h2>Health Checks</h2>
+        <div id="services"></div>
+      </section>
+
+      <section class="section">
+        <h2>Backend Capabilities</h2>
+        <dl id="capabilities"></dl>
+      </section>
+
+      <section class="section wide">
+        <h2>Configuration Status</h2>
+        <dl id="config"></dl>
+      </section>
+
+      <section class="section wide">
+        <h2>Recent Logs</h2>
+        <div class="tabs">
+          <button class="active" data-log="desktop">Desktop log</button>
+          <button data-log="backend">Backend log</button>
+          <button data-log="frontend">Frontend log</button>
+          <button data-log="notion2api">Notion2API log</button>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </div>
+
+    <div id="status" class="status"></div>
+  </main>
+
+  <script src="diagnostics-renderer.js"></script>
+</body>
+</html>

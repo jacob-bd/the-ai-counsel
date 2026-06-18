@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>The AI Counsel Hotkeys</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --border: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --ok: #22c55e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0b1120, var(--bg));
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    main {
+      padding: 22px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .subhead {
+      color: var(--muted);
+      margin-bottom: 20px;
+      line-height: 1.45;
+    }
+
+    .card {
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.22);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 185px 1fr;
+      gap: 14px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.65);
+    }
+
+    .row:last-child { border-bottom: none; }
+
+    label {
+      font-weight: 650;
+      color: #f8fafc;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #0b1220;
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+      font: inherit;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 13px;
+      font: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: #60a5fa;
+      color: white;
+      font-weight: 700;
+    }
+
+    button:hover { filter: brightness(1.12); }
+
+    .status {
+      margin-top: 14px;
+      min-height: 22px;
+      color: var(--muted);
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.error { color: var(--danger); }
+
+    code {
+      background: rgba(148, 163, 184, 0.16);
+      padding: 2px 5px;
+      border-radius: 6px;
+      color: #dbeafe;
+    }
+
+    .path {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Hotkey Settings</h1>
+    <div class="subhead">
+      Use Electron accelerator syntax. Examples: <code>Alt+Space</code>, <code>CommandOrControl+Shift+L</code>, <code>CommandOrControl+Shift+V</code>.
+    </div>
+
+    <section class="card">
+      <div class="row">
+        <div>
+          <label for="toggleWindow">Show / Hide</label>
+          <div class="hint">Toggle the desktop shell window.</div>
+        </div>
+        <input id="toggleWindow" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="openChat">Open Chat</label>
+          <div class="hint">Open the Council chat and focus the input.</div>
+        </div>
+        <input id="openChat" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="openNewDebate">New Debate</label>
+          <div class="hint">Force a fresh Council debate thread and focus input.</div>
+        </div>
+        <input id="openNewDebate" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="openNewAdvisors">New Advisors</label>
+          <div class="hint">Force a fresh Advisors debate thread and focus input.</div>
+        </div>
+        <input id="openNewAdvisors" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="clipboardToChat">Clipboard to Chat</label>
+          <div class="hint">Open chat and place clipboard text into the prompt box.</div>
+        </div>
+        <input id="clipboardToChat" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="clipboardToNewDebate">Clipboard to New Debate</label>
+          <div class="hint">Start a fresh Council debate thread and paste clipboard.</div>
+        </div>
+        <input id="clipboardToNewDebate" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="clipboardToNewAdvisors">Clipboard to New Advisors</label>
+          <div class="hint">Start a fresh Advisors debate thread and paste clipboard.</div>
+        </div>
+        <input id="clipboardToNewAdvisors" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="openNotion2Api">Open Notion2API Browser</label>
+          <div class="hint">Open Notion2API console dashboard in browser.</div>
+        </div>
+        <input id="openNotion2Api" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="openHotkeySettings">Open Hotkey Settings</label>
+          <div class="hint">Open this settings window.</div>
+        </div>
+        <input id="openHotkeySettings" autocomplete="off" spellcheck="false" />
+      </div>
+    </section>
+
+    <div class="buttons">
+      <button class="primary" id="save">Save and Register</button>
+      <button id="reset">Reset Defaults</button>
+      <button id="testClipboard">Test Clipboard to Chat</button>
+      <button id="testClipboardToNewDebate">Test Clipboard to New Debate</button>
+      <button id="testClipboardToNewAdvisors">Test Clipboard to New Advisors</button>
+      <button id="reload">Reload</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="path" class="path"></div>
+  </main>
+
+  <script src="hotkeys-renderer.js"></script>
+</body>
+</html>

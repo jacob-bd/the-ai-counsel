@@ -1,8 +1,13 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, globalShortcut, clipboard, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+
+const { readHotkeys, writeHotkeys, defaultHotkeys, getHotkeyConfigPath } = require('./lib/config');
+const { openHotkeySettings } = require('./windows/hotkeys');
+const { openDiagnostics } = require('./windows/diagnostics');
+const { getDiagnosticsStatus } = require('./lib/diagnostics');
 
 const APP_NAME = 'The AI Counsel';
 const ROOT_DIR = app.isPackaged
@@ -459,6 +464,16 @@ function reloadApp() {
   if (mainWindow) mainWindow.loadURL(FRONTEND_URL);
 }
 
+function restartApplication() {
+  log('Restarting application...');
+  isQuitting = true;
+  stopStack();
+  setTimeout(() => {
+    app.relaunch();
+    app.exit(0);
+  }, 1000);
+}
+
 function openLogs() {
   ensureLogDir();
   shell.openPath(LOG_DIR);
@@ -474,14 +489,274 @@ function showAbout() {
   });
 }
 
+// Browser Interaction Helpers
+async function focusChatInput(text, submit = false) {
+  if (!mainWindow) return false;
+  const safeText = JSON.stringify(text || '');
+  const shouldSubmit = JSON.stringify(!!submit);
+  return mainWindow.webContents.executeJavaScript(`
+    (() => {
+      const selectors = [
+        'textarea.message-input',
+        'textarea.council-message-input',
+        'textarea#chat-input',
+        '.chat-container textarea.message-input',
+        '.input-area textarea',
+        'textarea'
+      ];
+
+      let input = null;
+      for (const selector of selectors) {
+        const found = document.querySelector(selector);
+        if (found && found.offsetParent !== null && !found.disabled) {
+          input = found;
+          break;
+        }
+      }
+
+      if (!input) return false;
+
+      const text = ${safeText};
+      input.focus();
+
+      if (text) {
+        const descriptor = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          'value'
+        );
+        const setter = descriptor && descriptor.set;
+
+        if (setter) {
+          setter.call(input, text);
+        } else {
+          input.value = text;
+        }
+
+        input.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: text
+        }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+
+        if (${shouldSubmit}) {
+          input.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            bubbles: true
+          }));
+        }
+      }
+
+      return true;
+    })();
+  `).catch(error => {
+    log(`focusChatInput failed: ${error.message}`);
+    return false;
+  });
+}
+
+async function ensureChatInputReady(type = 'council') {
+  if (!mainWindow) return false;
+  const buttonSelector = type === 'advisors' ? '.sidebar-action-btn--advisors' : '.sidebar-action-btn--council';
+  const searchRegex = type === 'advisors' ? /new\s+advisors/i : /new\s+council|new\s+chat/i;
+  const searchRegexStr = searchRegex.toString();
+
+  return mainWindow.webContents.executeJavaScript(`
+    (async () => {
+      const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const hasInput = () => !!document.querySelector('textarea.message-input, .input-area textarea, textarea');
+
+      if (hasInput()) return true;
+
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const newChatButton = document.querySelector(${JSON.stringify(buttonSelector)}) || 
+                            buttons.find(btn => ${searchRegexStr}.test(btn.textContent || ''));
+
+      if (newChatButton && !newChatButton.disabled) {
+        newChatButton.click();
+        for (let i = 0; i < 40; i += 1) {
+          if (hasInput()) return true;
+          await sleep(250);
+        }
+      }
+
+      return hasInput();
+    })();
+  `).catch(error => {
+    log(`ensureChatInputReady failed: ${error.message}`);
+    return false;
+  });
+}
+
+async function openChat() {
+  showWindow();
+  try {
+    const ready = await ensureChatInputReady('council');
+    if (!ready) {
+      log('Could not open chat input');
+      return false;
+    }
+    return focusChatInput('');
+  } catch (error) {
+    log(`Could not open chat: ${error.message}`);
+    return false;
+  }
+}
+
+async function openChatWithClipboard() {
+  const text = clipboard.readText() || '';
+  const opened = await openChat();
+  if (!opened) return;
+  const injected = await focusChatInput(text);
+  if (!injected) {
+    log('Clipboard to Chat failed: chat input was not found');
+  }
+}
+
+async function openNewDebate() {
+  showWindow();
+  try {
+    const ready = await ensureChatInputReady('council');
+    if (!ready) {
+      log('Could not open new debate input');
+      return false;
+    }
+    return focusChatInput('');
+  } catch (error) {
+    log(`Could not open new debate: ${error.message}`);
+    return false;
+  }
+}
+
+async function openNewDebateWithClipboard() {
+  const text = clipboard.readText() || '';
+  showWindow();
+  try {
+    const ready = await mainWindow.webContents.executeJavaScript(`
+      (async () => {
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const newChatButton = document.querySelector('.sidebar-action-btn--council') || 
+                              buttons.find(btn => /new\\s+council|new\\s+chat/i.test(btn.textContent || ''));
+        if (newChatButton && !newChatButton.disabled) {
+          newChatButton.click();
+          for (let i = 0; i < 40; i += 1) {
+            if (document.querySelector('textarea')) return true;
+            await sleep(250);
+          }
+        }
+        return !!document.querySelector('textarea');
+      })();
+    `);
+    if (!ready) {
+      log('Could not open new debate input');
+      return;
+    }
+    const injected = await focusChatInput(text);
+    if (!injected) {
+      log('Clipboard to New Debate failed: chat input was not found');
+    }
+  } catch (error) {
+    log(`Could not open new debate: ${error.message}`);
+  }
+}
+
+async function openNewAdvisors() {
+  showWindow();
+  try {
+    const ready = await ensureChatInputReady('advisors');
+    if (!ready) {
+      log('Could not open new advisors input');
+      return false;
+    }
+    return focusChatInput('');
+  } catch (error) {
+    log(`Could not open new advisors: ${error.message}`);
+    return false;
+  }
+}
+
+async function openNewAdvisorsWithClipboard() {
+  const text = clipboard.readText() || '';
+  showWindow();
+  try {
+    const ready = await mainWindow.webContents.executeJavaScript(`
+      (async () => {
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const newChatButton = document.querySelector('.sidebar-action-btn--advisors') || 
+                              buttons.find(btn => /new\\s+advisors/i.test(btn.textContent || ''));
+        if (newChatButton && !newChatButton.disabled) {
+          newChatButton.click();
+          for (let i = 0; i < 40; i += 1) {
+            if (document.querySelector('textarea')) return true;
+            await sleep(250);
+          }
+        }
+        return !!document.querySelector('textarea');
+      })();
+    `);
+    if (!ready) {
+      log('Could not open new advisors input');
+      return;
+    }
+    const injected = await focusChatInput(text);
+    if (!injected) {
+      log('Clipboard to New Advisors failed: chat input was not found');
+    }
+  } catch (error) {
+    log(`Could not open new advisors: ${error.message}`);
+  }
+}
+
+function getNotion2ApiBrowserUrl() {
+  let url = 'http://127.0.0.1:8120';
+  try {
+    const settingsPath = path.join(ROOT_DIR, 'data', 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      if (data && data.notion2api_base_url) {
+        url = data.notion2api_base_url;
+      }
+    }
+  } catch (err) {
+    log(`Error reading settings for notion2api_base_url: ${err.message}`);
+  }
+  return url.replace(/\/v1\/?$/, '').replace(/\/+$/, '');
+}
+
+async function openNotion2ApiBrowser() {
+  const url = getNotion2ApiBrowserUrl();
+  log(`Opening Notion2API in browser: ${url}`);
+  try {
+    await shell.openExternal(url);
+  } catch (error) {
+    log(`Failed to open Notion2API browser: ${error.message}`);
+  }
+}
+
 function menuTemplate() {
+  const hotkeys = readHotkeys();
   return [
     {
       label: APP_NAME,
       submenu: [
-        { label: 'Show / Hide', click: () => (mainWindow && mainWindow.isVisible() ? hideToTray() : showWindow()) },
+        { label: 'Show / Hide', accelerator: hotkeys.toggleWindow, click: () => (mainWindow && mainWindow.isVisible() ? hideToTray() : showWindow()) },
         { label: 'Minimize to Tray', click: hideToTray },
+        { label: 'Open Chat', accelerator: hotkeys.openChat, click: openChat },
+        { label: 'New Debate', accelerator: hotkeys.openNewDebate, click: openNewDebate },
+        { label: 'New Advisors', accelerator: hotkeys.openNewAdvisors, click: openNewAdvisors },
+        { label: 'Clipboard to Chat', accelerator: hotkeys.clipboardToChat, click: openChatWithClipboard },
+        { label: 'Clipboard to New Debate', accelerator: hotkeys.clipboardToNewDebate, click: openNewDebateWithClipboard },
+        { label: 'Clipboard to New Advisors', accelerator: hotkeys.clipboardToNewAdvisors, click: openNewAdvisorsWithClipboard },
+        { label: 'Open Notion2API Browser', accelerator: hotkeys.openNotion2Api, click: openNotion2ApiBrowser },
+        { type: 'separator' },
+        { label: 'Hotkey Settings', accelerator: hotkeys.openHotkeySettings, click: () => openHotkeySettings(mainWindow) },
+        { label: 'Diagnostics', click: () => openDiagnostics(mainWindow) },
+        { type: 'separator' },
         { label: 'Reload UI', click: reloadApp },
+        { label: 'Restart Application', click: restartApplication },
         { type: 'separator' },
         { label: 'Open in Browser', click: () => shell.openExternal(FRONTEND_URL) },
         { label: 'Open Backend Health', click: () => shell.openExternal(HEALTH_URL) },
@@ -510,6 +785,13 @@ function menuTemplate() {
   ];
 }
 
+function updateApplicationMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
+  if (tray) {
+    tray.setContextMenu(Menu.buildFromTemplate(menuTemplate()[0].submenu));
+  }
+}
+
 function createTray() {
   const iconPath = APP_ICON_PNG;
   const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
@@ -519,11 +801,102 @@ function createTray() {
   tray.on('click', () => (mainWindow && mainWindow.isVisible() ? hideToTray() : showWindow()));
 }
 
+function registerHotkeys() {
+  globalShortcut.unregisterAll();
+  const hotkeys = readHotkeys();
+  const registrations = [];
+  const bind = (name, accelerator, handler) => {
+    if (!accelerator) return;
+    const ok = globalShortcut.register(accelerator, handler);
+    registrations.push({ name, accelerator, ok });
+    if (!ok) log(`Failed to register hotkey ${name}: ${accelerator}`);
+  };
+
+  bind('toggleWindow', hotkeys.toggleWindow, () => (mainWindow && mainWindow.isVisible() && mainWindow.isFocused() ? mainWindow.hide() : showWindow()));
+  bind('openChat', hotkeys.openChat, openChat);
+  bind('openNewDebate', hotkeys.openNewDebate, openNewDebate);
+  bind('openNewAdvisors', hotkeys.openNewAdvisors, openNewAdvisors);
+  bind('clipboardToChat', hotkeys.clipboardToChat, openChatWithClipboard);
+  bind('clipboardToNewDebate', hotkeys.clipboardToNewDebate, openNewDebateWithClipboard);
+  bind('clipboardToNewAdvisors', hotkeys.clipboardToNewAdvisors, openNewAdvisorsWithClipboard);
+  bind('openNotion2Api', hotkeys.openNotion2Api, openNotion2ApiBrowser);
+  bind('openHotkeySettings', hotkeys.openHotkeySettings, () => openHotkeySettings(mainWindow));
+
+  return registrations;
+}
+
+// IPC Handlers for Hotkeys
+ipcMain.handle('hotkeys:get', () => ({ 
+  defaults: defaultHotkeys, 
+  current: readHotkeys(), 
+  configPath: getHotkeyConfigPath() 
+}));
+
+ipcMain.handle('hotkeys:save', (_event, hotkeys) => {
+  writeHotkeys(hotkeys);
+  const registrations = registerHotkeys();
+  updateApplicationMenu();
+  return { ok: registrations.every(item => item.ok), registrations, current: readHotkeys() };
+});
+
+ipcMain.handle('hotkeys:reset', () => {
+  writeHotkeys(defaultHotkeys);
+  const registrations = registerHotkeys();
+  updateApplicationMenu();
+  return { ok: registrations.every(item => item.ok), registrations, current: readHotkeys() };
+});
+
+ipcMain.handle('hotkeys:testClipboardToChat', async () => {
+  await openChatWithClipboard();
+  return { ok: true };
+});
+
+ipcMain.handle('hotkeys:testClipboardToNewDebate', async () => {
+  await openNewDebateWithClipboard();
+  return { ok: true };
+});
+
+ipcMain.handle('hotkeys:testClipboardToNewAdvisors', async () => {
+  await openNewAdvisorsWithClipboard();
+  return { ok: true };
+});
+
+// IPC Handlers for Diagnostics
+ipcMain.handle('diagnostics:status', () => {
+  return getDiagnosticsStatus(ROOT_DIR, BACKEND_URL, FRONTEND_URL);
+});
+
+ipcMain.handle('diagnostics:start', () => {
+  startStack();
+  return { ok: true };
+});
+
+ipcMain.handle('diagnostics:stop', () => {
+  stopStack();
+  return { ok: true };
+});
+
+ipcMain.handle('diagnostics:openCouncil', async () => {
+  await shell.openExternal(FRONTEND_URL);
+  return { ok: true };
+});
+
+ipcMain.handle('diagnostics:openDocs', async () => {
+  await shell.openExternal(`${BACKEND_URL}/docs`);
+  return { ok: true };
+});
+
+ipcMain.handle('diagnostics:openLogs', () => {
+  openLogs();
+  return { ok: true };
+});
+
 async function startDesktopApp() {
   log(`${APP_NAME} desktop starting`);
-  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
+  updateApplicationMenu();
   createWindow();
   createTray();
+  registerHotkeys();
 
   try {
     startStack();
@@ -563,6 +936,10 @@ app.on('before-quit', event => {
 
 app.on('window-all-closed', () => {
   // Keep tray app alive until explicit Quit.
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 process.on('uncaughtException', error => {
