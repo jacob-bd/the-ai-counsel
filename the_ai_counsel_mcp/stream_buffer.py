@@ -1,6 +1,8 @@
 """SSE stream buffer — converts raw backend events into structured stage results."""
 
 from __future__ import annotations
+import asyncio
+
 
 from collections.abc import AsyncIterator
 from typing import Any
@@ -121,9 +123,9 @@ async def _events_from_list(events: list[dict]) -> AsyncIterator[dict]:
 
 async def wrap_with_progress(events: AsyncIterator[dict]) -> AsyncIterator[dict]:
     """
-    Wrap an event stream, emitting MCP progress notifications as events pass through.
-    This continuous heartbeat prevents client-side read timeouts (e.g., 60 seconds)
-    during long-running deliberations.
+    Wrap an event stream, emitting MCP progress notifications in the background.
+    This continuous heartbeat prevents client-side timeouts (e.g., 60 seconds)
+    during long-running, silent deliberations (like stage 2 ranking).
     """
     try:
         from mcp.server.lowlevel.server import request_ctx
@@ -134,23 +136,33 @@ async def wrap_with_progress(events: AsyncIterator[dict]) -> AsyncIterator[dict]
         ctx = None
         progress_token = None
 
-    progress_val = 0.0
+    if not (progress_token and ctx):
+        async for event in events:
+            yield event
+        return
 
-    async for event in events:
-        yield event
-
-        if progress_token and ctx:
-            progress_val += 1.0
-            event_type = event.get("type", "processing")
+    # Background heartbeat task to prevent 60s client timeouts during silent inference
+    async def heartbeat():
+        progress_val = 0.0
+        while True:
+            await asyncio.sleep(10)
+            progress_val += 0.1
             try:
                 await ctx.session.send_progress_notification(
                     progress_token=progress_token,
                     progress=progress_val,
-                    message=f"Event: {event_type}",
+                    message="Deliberating...",
                 )
             except Exception:
-                # Suppress errors so a failed notification doesn't kill the stream
-                pass
+                # Connection closed or session destroyed, stop heartbeat
+                break
+
+    task = asyncio.create_task(heartbeat())
+    try:
+        async for event in events:
+            yield event
+    finally:
+        task.cancel()
 
 
 async def buffer_stage1(
