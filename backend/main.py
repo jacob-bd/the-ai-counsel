@@ -729,6 +729,8 @@ async def get_conversation_progress(conversation_id: str):
         "paused": run.get("paused", False),
         "failed_model": run.get("failed_providers")[0] if run.get("failed_providers") else None,
         "pending_count": len(run.get("pending_providers", [])),
+        "active_providers": list(run.get("active_providers", [])),
+        "pending_providers": list(run.get("pending_providers", [])),
         "continuation_mode": run.get("continuation_mode", "normal"),
     }
 
@@ -830,8 +832,9 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     continue
 
                 if isinstance(item, dict) and item.get("paused"):
-                    yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage1'}})}\n\n"
-                    
+                    _run = _active_runs.get(conversation_id, {})
+                    yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage1', 'active_providers': list(_run.get('active_providers', [])), 'pending_providers': list(_run.get('pending_providers', [])) }})}\n\n"
+
                     q = _active_runs[conversation_id].get("queue")
                     while _active_runs.get(conversation_id, {}).get("paused"):
                         if await request.is_disconnected():
@@ -881,8 +884,9 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                         continue
 
                     if isinstance(item, dict) and item.get("paused"):
-                        yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage2'}})}\n\n"
-                        
+                        _run = _active_runs.get(conversation_id, {})
+                        yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage2', 'active_providers': list(_run.get('active_providers', [])), 'pending_providers': list(_run.get('pending_providers', [])) }})}\n\n"
+
                         q = _active_runs[conversation_id].get("queue")
                         while _active_runs.get(conversation_id, {}).get("paused"):
                             if await request.is_disconnected():
@@ -1089,14 +1093,28 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
             effective_rounds = body.debate_rounds if body.debate_rounds is not None else settings.debate_rounds
             effective_rounds = min(max(effective_rounds, 1), MAX_DEBATE_ROUNDS)
 
-            async for event in run_iterative_debate(
-                effective_content, search_context, request, body.execution_mode,
-                models_override=body.council_models,
-                chairman_override=body.chairman_model,
-                history=history,
-                debate_rounds=effective_rounds,
-                conversation_id=conversation_id,
-            ):
+            if debate_critique_mode == "audit":
+                from .audit_pipeline import run_audit_pipeline
+                generator = run_audit_pipeline(
+                    effective_content, search_context, request, body.execution_mode,
+                    models_override=body.council_models,
+                    chairman_override=body.chairman_model,
+                    history=history,
+                    debate_rounds=effective_rounds,
+                    conversation_id=conversation_id,
+                )
+            else:
+                from .debate import run_iterative_debate
+                generator = run_iterative_debate(
+                    effective_content, search_context, request, body.execution_mode,
+                    models_override=body.council_models,
+                    chairman_override=body.chairman_model,
+                    history=history,
+                    debate_rounds=effective_rounds,
+                    conversation_id=conversation_id,
+                )
+
+            async for event in generator:
                 event_type = event.get("type")
                 yield f"data: {json.dumps(event)}\n\n"
                 await asyncio.sleep(0.01)
@@ -1120,12 +1138,12 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                         if model_id not in seen:
                             seen.add(model_id)
                             responses.append(stage1_data)
-                elif event_type == "stage2_start":
-                    run_info["stage"] = "stage2"
+                elif event_type == "stage2_start" or event_type == "stage2a_start":
+                    run_info["stage"] = "stage2" if event_type == "stage2_start" else "stage2a"
                     run_info["progress"]["stage2"] = {"total": 0}
-                elif event_type == "stage2_init":
+                elif event_type == "stage2_init" or event_type == "stage2a_init":
                     run_info["progress"]["stage2"]["total"] = event.get("total", 0)
-                elif event_type in ["stage2_complete", "stage2_progress"]:
+                elif event_type in ["stage2_complete", "stage2_progress", "stage2a_complete", "stage2a_progress"]:
                     stage2_data = event.get("data")
                     if isinstance(stage2_data, list):
                         run_info["stage2_responses"] = stage2_data
@@ -1136,6 +1154,14 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                         if model_id not in seen:
                             seen.add(model_id)
                             responses.append(stage2_data)
+                elif event_type == "stage2b_start":
+                    run_info["stage"] = "stage2b"
+                elif event_type == "stage2b_progress" or event_type == "stage2b_complete":
+                    pass
+                elif event_type == "stage2c_start":
+                    run_info["stage"] = "stage2c"
+                elif event_type == "stage2c_complete":
+                    pass
                 elif event_type == "stage3_start":
                     run_info["stage"] = "stage3"
                 elif event_type == "stage3_complete":
@@ -1628,7 +1654,7 @@ class UpdateSettingsRequest(BaseModel):
     # Council Configuration (unified)
     council_models: Optional[List[str]] = None
     chairman_model: Optional[str] = None
-    
+
     # Remote/Local filters
     council_member_filters: Optional[Dict[int, str]] = None
     chairman_filter: Optional[str] = None
@@ -1946,7 +1972,7 @@ async def update_app_settings(request: UpdateSettingsRequest):
 
     if request.openrouter_api_key is not None:
         updates["openrouter_api_key"] = request.openrouter_api_key
-        
+
     # Direct Provider Keys
     if request.openai_api_key is not None:
         updates["openai_api_key"] = request.openai_api_key
@@ -1983,7 +2009,7 @@ async def update_app_settings(request: UpdateSettingsRequest):
 
     if request.chairman_model is not None:
         updates["chairman_model"] = request.chairman_model
-        
+
     # Remote/Local filters
     if request.council_member_filters is not None:
         updates["council_member_filters"] = request.council_member_filters
@@ -1999,7 +2025,7 @@ async def update_app_settings(request: UpdateSettingsRequest):
         updates["chairman_temperature"] = request.chairman_temperature
     if request.stage2_temperature is not None:
         updates["stage2_temperature"] = request.stage2_temperature
-        
+
     # Timeout Settings
     if request.model_timeout_seconds is not None:
         if request.model_timeout_seconds < 30 or request.model_timeout_seconds > 1800:
@@ -2034,8 +2060,8 @@ async def update_app_settings(request: UpdateSettingsRequest):
         updates["execution_mode"] = request.execution_mode
 
     if request.critique_mode is not None:
-        if request.critique_mode not in ("freeform", "paragraph", "claim"):
-            raise HTTPException(status_code=400, detail="critique_mode must be freeform, paragraph, or claim")
+        if request.critique_mode not in ("freeform", "paragraph", "claim", "audit"):
+            raise HTTPException(status_code=400, detail="critique_mode must be freeform, paragraph, claim, or audit")
         updates["critique_mode"] = request.critique_mode
     if request.debate_rounds is not None:
         if not (1 <= request.debate_rounds <= MAX_DEBATE_ROUNDS):
@@ -2162,20 +2188,20 @@ async def update_app_settings(request: UpdateSettingsRequest):
 async def get_direct_models():
     """Get available models from all configured direct providers."""
     all_models = []
-    
+
     # Iterate over all providers
     for provider_id, provider in PROVIDERS.items():
         # Skip OpenRouter and Ollama as they are handled separately
         if provider_id in ["openrouter", "ollama", "hybrid"]:
             continue
-            
+
         try:
             # Fetch models from provider
             models = await provider.get_models()
             all_models.extend(models)
         except Exception as e:
             print(f"Error fetching models for {provider_id}: {e}")
-            
+
     return all_models
 
 
@@ -2329,7 +2355,7 @@ async def test_provider_api(request: TestProviderRequest):
     """Test an API key for a specific provider."""
     from .council import PROVIDERS
     from .settings import get_settings
-    
+
     if request.provider_id not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Invalid provider ID")
 
@@ -2347,7 +2373,7 @@ async def test_provider_api(request: TestProviderRequest):
         )
         if hasattr(settings, setting_key):
              api_key = getattr(settings, setting_key)
-    
+
     if not api_key:
          return {"success": False, "message": "No API key provided or configured"}
 
@@ -2396,20 +2422,20 @@ async def get_ollama_tags(base_url: Optional[str] = None):
     """Fetch available models from Ollama."""
     import httpx
     from .config import get_ollama_base_url
-    
+
     if not base_url:
         base_url = get_ollama_base_url()
-        
+
     if base_url.endswith('/'):
         base_url = base_url[:-1]
-        
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{base_url}/api/tags")
-            
+
             if response.status_code != 200:
                 return {"models": [], "error": f"Ollama API error: {response.status_code}"}
-                
+
             data = response.json()
             models = []
             for model in data.get("models", []):
@@ -2421,11 +2447,11 @@ async def get_ollama_tags(base_url: Optional[str] = None):
                     "is_free": True,
                     "modified_at": model.get("modified_at")
                 })
-                
+
             # Sort by modified_at (newest first), fallback to name
             models.sort(key=lambda x: x.get("modified_at", ""), reverse=True)
             return {"models": models}
-            
+
     except httpx.ConnectError:
         return {"models": [], "error": "Could not connect to Ollama. Is it running?"}
     except Exception as e:
@@ -2436,20 +2462,20 @@ async def get_ollama_tags(base_url: Optional[str] = None):
 async def test_ollama_connection(request: TestOllamaRequest):
     """Test connection to Ollama instance."""
     import httpx
-    
+
     base_url = request.base_url
     if base_url.endswith('/'):
         base_url = base_url[:-1]
-        
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{base_url}/api/tags")
-            
+
             if response.status_code == 200:
                 return {"success": True, "message": "Successfully connected to Ollama"}
             else:
                 return {"success": False, "message": f"Ollama API error: {response.status_code}"}
-                
+
     except httpx.ConnectError:
         return {"success": False, "message": "Could not connect to Ollama. Is it running at this URL?"}
     except Exception as e:
@@ -2586,17 +2612,17 @@ async def get_openrouter_models():
 
             data = response.json()
             models = []
-            
+
             # Comprehensive exclusion list for non-text/chat models
             excluded_terms = [
-                "embed", "audio", "whisper", "tts", "dall-e", "realtime", 
+                "embed", "audio", "whisper", "tts", "dall-e", "realtime",
                 "vision-only", "voxtral", "speech", "transcribe", "sora"
             ]
 
             for model in data.get("data", []):
                 mid = model.get("id", "").lower()
                 name_lower = model.get("name", "").lower()
-                
+
                 if any(term in mid for term in excluded_terms) or any(term in name_lower for term in excluded_terms):
                     continue
 
@@ -2632,7 +2658,7 @@ async def test_openrouter_api(request: TestOpenRouterRequest):
 
     # Use provided key or fall back to saved key
     api_key = request.api_key if request.api_key else get_openrouter_api_key()
-    
+
     if not api_key:
         return {"success": False, "message": "No API key provided or configured"}
 
@@ -2667,21 +2693,21 @@ async def resume_run(conversation_id: str, body: ResumeRequest):
     run_info = _active_runs.get(conversation_id)
     if not run_info:
         raise HTTPException(status_code=404, detail="Active run not found")
-    
+
     if not run_info.get("paused"):
         return {"success": False, "message": "Run is not paused"}
-    
+
     run_info["continuation_mode"] = body.continuation_mode
     run_info["paused"] = False
-    
+
     pause_event = run_info.get("pause_event")
     if pause_event:
         pause_event.set()
-        
+
     queue = run_info.get("queue")
     if queue:
         await queue.put(f"data: {json.dumps({'type': 'run_resumed', 'continuation_mode': body.continuation_mode})}\n\n")
-        
+
     return {"success": True}
 
 
@@ -2695,7 +2721,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
     run_info = _active_runs.get(conversation_id)
     if not run_info:
         raise HTTPException(status_code=404, detail="Active run not found")
-        
+
     if not run_info.get("paused"):
         raise HTTPException(status_code=400, detail="Run is not paused")
 
@@ -2709,7 +2735,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
     conversation = storage.get_conversation(conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-        
+
     history = _build_chat_history(conversation)
     user_query = conversation["messages"][-1]["content"] if conversation["messages"] else ""
     is_first_message = len(conversation["messages"]) == 1
@@ -2721,7 +2747,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
         if search_context:
             from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
             search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
-            
+
         try:
             prompt_template = settings.stage1_prompt or ""
             if not prompt_template:
@@ -2733,12 +2759,12 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
 
         prompt = apply_response_language(prompt, settings.response_language)
         messages = (history[:-1] if is_first_message else history) + [{"role": "user", "content": prompt}]
-        
+
         from .council import _query_model_gated, strip_thinking_blocks
         model_timeout = getattr(settings, "model_timeout_seconds", 300)
         if run_info.get("continuation_mode") == "conservative":
             model_timeout = model_timeout * 2
-            
+
         try:
             response = await _query_model_gated(
                 model_id,
@@ -2749,7 +2775,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
             )
         except Exception as e:
             response = {"error": True, "error_message": str(e)}
-            
+
         if response.get("error"):
             new_result = {
                 "model": model_id,
@@ -2771,7 +2797,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
                 "usage": response.get("usage"),
                 "cost": response.get("cost"),
             }
-            
+
         responses = run_info.get("stage1_responses", [])
         updated = False
         for idx, r in enumerate(responses):
@@ -2782,7 +2808,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
                 break
         if not updated:
             responses.append(new_result)
-            
+
         if new_result.get("error") is None:
             if model_id in run_info.get("failed_providers", []):
                 run_info["failed_providers"].remove(model_id)
@@ -2799,10 +2825,10 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
             f"Response {label}:\n{result['response']}"
             for label, result in zip(labels, successful_results)
         ])
-        
+
         search_context = run_info.get("search_context", "")
         search_context_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
-        
+
         try:
             prompt_template = settings.stage2_prompt or ""
             if not prompt_template:
@@ -2826,7 +2852,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
         model_timeout = getattr(settings, "model_timeout_seconds", 300)
         if run_info.get("continuation_mode") == "conservative":
             model_timeout = model_timeout * 2
-            
+
         try:
             response = await _query_model_gated(
                 model_id,
@@ -2853,7 +2879,7 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
             if not isinstance(full_text, str):
                 full_text = str(full_text) if full_text is not None else ""
             full_text = strip_thinking_blocks(full_text)
-            
+
             parsed = parse_ranking_from_text(
                 full_text,
                 expected_count=len(successful_results),
@@ -2910,7 +2936,7 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
     run_info = _active_runs.get(conversation_id)
     if not run_info:
         raise HTTPException(status_code=404, detail="Active run not found")
-        
+
     if not run_info.get("paused"):
         raise HTTPException(status_code=400, detail="Run is not paused")
 
@@ -2925,6 +2951,12 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
     if "active_providers" not in run_info:
         run_info["active_providers"] = []
     run_info["active_providers"].append(model_id)
+
+    try:
+        from .providers.notion2api import _circuit_breaker
+        _circuit_breaker.force_fire(model_id)
+    except Exception as e:
+        logger.warning(f"Could not force fire on circuit breaker: {e}")
 
     queue = run_info.get("queue")
     if queue:
@@ -2944,7 +2976,7 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
         if search_context:
             from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
             search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
-            
+
         try:
             prompt_template = settings.stage1_prompt or ""
             if not prompt_template:
@@ -2956,12 +2988,12 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
 
         prompt = apply_response_language(prompt, settings.response_language)
         messages = (history[:-1] if is_first_message else history) + [{"role": "user", "content": prompt}]
-        
+
         from .council import _query_model_gated, strip_thinking_blocks
         model_timeout = getattr(settings, "model_timeout_seconds", 300)
         if run_info.get("continuation_mode") == "conservative":
             model_timeout = model_timeout * 2
-            
+
         try:
             response = await _query_model_gated(
                 model_id,
@@ -2972,7 +3004,7 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
             )
         except Exception as e:
             response = {"error": True, "error_message": str(e)}
-            
+
         if response.get("error"):
             new_result = {
                 "model": model_id,
@@ -2994,7 +3026,7 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
                 "usage": response.get("usage"),
                 "cost": response.get("cost"),
             }
-            
+
         responses = run_info.get("stage1_responses", [])
         responses.append(new_result)
         if model_id in run_info["active_providers"]:
@@ -3020,10 +3052,10 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
             f"Response {label}:\n{result['response']}"
             for label, result in zip(labels, successful_results)
         ])
-        
+
         search_context = run_info.get("search_context", "")
         search_context_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
-        
+
         try:
             prompt_template = settings.stage2_prompt or ""
             if not prompt_template:
@@ -3047,7 +3079,7 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
         model_timeout = getattr(settings, "model_timeout_seconds", 300)
         if run_info.get("continuation_mode") == "conservative":
             model_timeout = model_timeout * 2
-            
+
         try:
             response = await _query_model_gated(
                 model_id,
@@ -3074,7 +3106,7 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
             if not isinstance(full_text, str):
                 full_text = str(full_text) if full_text is not None else ""
             full_text = strip_thinking_blocks(full_text)
-            
+
             parsed = parse_ranking_from_text(
                 full_text,
                 expected_count=len(successful_results),

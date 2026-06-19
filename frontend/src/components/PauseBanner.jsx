@@ -3,6 +3,8 @@ import React from 'react';
 export default function PauseBanner({
   failedModel,
   pendingCount,
+  activeProviders = [],
+  pendingProviders = [],
   continuationMode,
   onModeChange,
   onResume,
@@ -14,6 +16,8 @@ export default function PauseBanner({
     if (modelId.includes(':')) return modelId.split(':').pop();
     return modelId;
   };
+
+  const hasProviderDetail = activeProviders.length > 0 || pendingProviders.length > 0;
 
   return (
     <div style={{
@@ -28,13 +32,9 @@ export default function PauseBanner({
       gap: '14px',
       boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4)'
     }}>
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <span style={{
-          color: '#fbbf24',
-          fontSize: '20px',
-          display: 'flex',
-          alignItems: 'center'
-        }}>
+        <span style={{ color: '#fbbf24', fontSize: '20px', display: 'flex', alignItems: 'center' }}>
           ⚠️
         </span>
         <div style={{ flex: 1 }}>
@@ -42,11 +42,98 @@ export default function PauseBanner({
             Run Paused — {getShortModelName(failedModel)} Failed
           </h4>
           <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
-            {pendingCount} provider(s) still pending. Choose a continuation mode and click Resume, or manually fire pending models.
+            {hasProviderDetail
+              ? `${activeProviders.length} in-flight · ${pendingProviders.length} not yet started`
+              : `${pendingCount} provider(s) still pending`}
+            . Choose a continuation mode and click Resume, or manually fire pending models.
           </p>
         </div>
       </div>
 
+      {/* Provider status breakdown */}
+      {hasProviderDetail && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          paddingTop: '12px',
+        }}>
+          {/* In-flight */}
+          {activeProviders.length > 0 && (
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: '#fbbf24', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                🔄 In-Flight — Already Executing
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {activeProviders.map((m) => (
+                  <span key={m} style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    background: 'rgba(251, 191, 36, 0.1)',
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                    fontSize: '11px',
+                    color: '#fbbf24',
+                    fontWeight: '500',
+                  }}>
+                    <span style={{
+                      width: '6px', height: '6px', borderRadius: '50%',
+                      background: '#fbbf24',
+                      boxShadow: '0 0 0 0 rgba(251,191,36,0.4)',
+                      animation: 'pausePulse 1.4s ease-in-out infinite',
+                    }} />
+                    {getShortModelName(m)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Not yet started */}
+          {pendingProviders.length > 0 && (
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                ⏸ Not Yet Started — Can Fire Manually
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {pendingProviders.map((m) => (
+                  <span key={m} style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    background: 'rgba(148, 163, 184, 0.08)',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    fontSize: '11px',
+                    color: '#94a3b8',
+                    fontWeight: '500',
+                  }}>
+                    <span style={{
+                      width: '6px', height: '6px', borderRadius: '50%',
+                      background: '#64748b',
+                    }} />
+                    {getShortModelName(m)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <style>{`
+            @keyframes pausePulse {
+              0%   { box-shadow: 0 0 0 0   rgba(251,191,36,0.5); }
+              70%  { box-shadow: 0 0 0 6px rgba(251,191,36,0); }
+              100% { box-shadow: 0 0 0 0   rgba(251,191,36,0); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* Continuation mode selector */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -91,6 +178,7 @@ export default function PauseBanner({
         </div>
       </div>
 
+      {/* Action buttons */}
       <div style={{
         display: 'flex',
         justifyContent: 'flex-end',

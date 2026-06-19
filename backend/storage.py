@@ -50,7 +50,8 @@ def maybe_repair_conversation_title(conversation: Dict[str, Any]) -> bool:
 CRITIQUE_MODE_LABELS = {
     "freeform": "Freeform",
     "paragraph": "Paragraph",
-    "claim": "Claim-by-Claim",
+    "claim": "Claim-by-Claim (Legacy)",
+    "audit": "Structured Audit",
 }
 
 
@@ -277,7 +278,7 @@ def rebuild_index() -> List[Dict[str, Any]]:
     """
     ensure_data_dir()
     index = []
-    
+
     for filename in os.listdir(DATA_DIR):
         if filename.endswith('.json') and filename != INDEX_FILE_NAME:
             path = os.path.join(DATA_DIR, filename)
@@ -306,10 +307,10 @@ def _update_index_entry(conversation: Dict[str, Any], *, mode: Optional[str] = N
     entry = _build_index_entry(conversation, mode=mode)
     # Remove existing entry if present
     index = [item for item in index if item["id"] != conversation["id"]]
-    
+
     # Add new entry
     index.append(entry)
-    
+
     # Sort and save
     index.sort(key=lambda x: x["created_at"], reverse=True)
     _save_index(index)
@@ -323,7 +324,7 @@ def _remove_from_index(conversation_id: str):
 
     # Filter out the deleted conversation
     new_index = [item for item in index if item["id"] != conversation_id]
-    
+
     if len(new_index) != len(index):
         _save_index(new_index)
 
@@ -415,11 +416,11 @@ def list_conversations() -> List[Dict[str, Any]]:
 
     # Try to load from index first
     index = _load_index()
-    
+
     # If index missing or invalid, rebuild it
     if index is None:
         return rebuild_index()
-        
+
     return index
 
 
@@ -598,8 +599,8 @@ def delete_conversation(conversation_id: str) -> bool:
         return False
 
     os.remove(path)
-    
+
     # Update index
     _remove_from_index(conversation_id)
-    
+
     return True

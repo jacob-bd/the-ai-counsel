@@ -165,7 +165,7 @@ def test_run_summary_claim_critique_mode(tmp_path, monkeypatch):
     )
 
     listed = storage.list_conversations()
-    assert listed[0]["run_summary"] == "1 rnd · Claim-by-Claim"
+    assert listed[0]["run_summary"] == "1 rnd · Claim-by-Claim (Legacy)"
 
 
 def test_run_summary_full_deliberation_standard(tmp_path, monkeypatch):

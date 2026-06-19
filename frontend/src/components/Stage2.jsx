@@ -165,14 +165,14 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                         </div>
                         {aggregateRankings.length >= 3 && (
                             <div className="view-mode-toggle">
-                                <button 
+                                <button
                                     className={`toggle-btn ${viewMode === 'leaderboard' ? 'active' : ''}`}
                                     onClick={() => setViewMode('leaderboard')}
                                     title="Show Leaderboard List"
                                 >
                                     🏆 Leaderboard
                                 </button>
-                                <button 
+                                <button
                                     className={`toggle-btn ${viewMode === 'heatmap' ? 'active' : ''}`}
                                     onClick={() => setViewMode('heatmap')}
                                     title="Show Detailed Matrix"
@@ -386,6 +386,8 @@ function RawEvaluationTabs({
 
                         {currentRanking.pending ? (
                             <span className="model-status pending" style={{ borderColor: '#6b7280', color: '#94a3b8' }}>Pending</span>
+                        ) : currentRanking.firing ? (
+                            <span className="model-status firing" style={{ borderColor: '#3b82f6', color: '#60a5fa' }}>Executing...</span>
                         ) : hasError ? (
                             <span className="model-status error">Failed</span>
                         ) : (
@@ -426,6 +428,16 @@ function RawEvaluationTabs({
                                 ▶ Fire Manually
                             </button>
                         )}
+                    </div>
+                ) : currentRanking.firing ? (
+                    <div className="response-firing" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                            <div className="firing-icon" style={{ fontSize: '24px', color: '#60a5fa' }}>↻</div>
+                            <div className="firing-details">
+                                <div className="firing-title" style={{ fontSize: '15px', fontWeight: '600', color: '#60a5fa' }}>Actively Firing</div>
+                                <div className="firing-message" style={{ fontSize: '13px', color: '#94a3b8' }}>Waiting for the model to generate a ranking...</div>
+                            </div>
+                        </div>
                     </div>
                 ) : hasError ? (
                     <div className="response-error" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

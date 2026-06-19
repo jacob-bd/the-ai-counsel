@@ -150,6 +150,8 @@ function App() {
   const [pausedModel, setPausedModel] = useState(null);
   const [pausedStage, setPausedStage] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [activeProviders, setActiveProviders] = useState([]);
+  const [pendingProviders, setPendingProviders] = useState([]);
   const [continuationMode, setContinuationMode] = useState('normal');
   const abortControllerRef = useRef(null);
   const advisorAbortControllerRef = useRef(null);
@@ -684,13 +686,13 @@ function App() {
         try {
           const newConv = await api.createConversation({ mode: 'advisors' });
           activeConversationId = newConv.id;
-          
+
           // Pre-populate index states so it appears immediately in the sidebar list
           setConversations((prev) => [
             { id: newConv.id, created_at: newConv.created_at, message_count: 0, mode: 'advisors', title: 'New Conversation' },
             ...prev,
           ]);
-          
+
           // Update draft references safely
           conversationVersionRef.current++;
           skipLoadForIdRef.current = newConv.id;
@@ -956,13 +958,13 @@ function App() {
         try {
           const newConv = await api.createConversation({ mode: 'council' });
           activeConversationId = newConv.id;
-          
+
           // Pre-populate index states so it appears immediately in the sidebar list
           setConversations((prev) => [
             { id: newConv.id, created_at: newConv.created_at, message_count: 0, mode: 'council', title: 'New Conversation' },
             ...prev,
           ]);
-          
+
           // Update draft references safely
           conversationVersionRef.current++;
           skipLoadForIdRef.current = newConv.id;
@@ -1399,7 +1401,7 @@ function App() {
               setCurrentConversation((prev) => {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
-                
+
                 const currentRoundData = {
                   round_number: event.round,
                   stage1: lastMsg.stage1,
@@ -1562,6 +1564,8 @@ function App() {
               setPausedModel(event.data.failed_model);
               setPausedStage(event.data.stage);
               setPendingCount(event.data.pending_count);
+              setActiveProviders(event.data.active_providers || []);
+              setPendingProviders(event.data.pending_providers || []);
               break;
 
             case 'run_resumed':
@@ -1569,6 +1573,8 @@ function App() {
               setPausedModel(null);
               setPausedStage(null);
               setPendingCount(0);
+              setActiveProviders([]);
+              setPendingProviders([]);
               break;
 
             case 'provider_retrying':
@@ -1577,11 +1583,11 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = { ...messages[messages.length - 1] };
                 const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
-                
+
                 if (Array.isArray(lastMsg[targetStage])) {
-                  lastMsg[targetStage] = lastMsg[targetStage].map(item => 
-                    item.model === event.data.model 
-                      ? { ...item, retrying: true, error: false, error_message: null } 
+                  lastMsg[targetStage] = lastMsg[targetStage].map(item =>
+                    item.model === event.data.model
+                      ? { ...item, retrying: true, error: false, error_message: null }
                       : item
                   );
                 }
@@ -1596,7 +1602,7 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = { ...messages[messages.length - 1] };
                 const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
-                
+
                 if (Array.isArray(lastMsg[targetStage])) {
                   lastMsg[targetStage] = lastMsg[targetStage].map(item => {
                     if (item.model === event.data.model) {
@@ -1630,11 +1636,11 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = { ...messages[messages.length - 1] };
                 const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
-                
+
                 if (Array.isArray(lastMsg[targetStage])) {
-                  lastMsg[targetStage] = lastMsg[targetStage].map(item => 
-                    item.model === event.data.model 
-                      ? { ...item, pending: false } 
+                  lastMsg[targetStage] = lastMsg[targetStage].map(item =>
+                    item.model === event.data.model
+                      ? { ...item, pending: false, firing: true }
                       : item
                   );
                 }
@@ -1772,7 +1778,7 @@ function App() {
   const resetAppState = (mode) => {
     abortAllStreams();
     setIsLoading(false);
-    
+
     if (mode === 'advisors') {
       setCurrentConversationId('draft');
       setCurrentConversation({
@@ -1785,7 +1791,7 @@ function App() {
       setCurrentConversationId(null);
       setCurrentConversation(null);
     }
-    
+
     setAppMode(mode);
     setSidebarOpen(false);
   };
@@ -1862,6 +1868,8 @@ function App() {
                 runPaused={runPaused}
                 pausedModel={pausedModel}
                 pendingCount={pendingCount}
+                activeProviders={activeProviders}
+                pendingProviders={pendingProviders}
                 continuationMode={continuationMode}
                 onContinuationModeChange={setContinuationMode}
                 onResume={handleResume}

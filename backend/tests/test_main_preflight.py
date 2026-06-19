@@ -192,7 +192,7 @@ def test_iterative_debate_passes_effective_content(tmp_path, monkeypatch):
         preflight.return_value = ""
         with patch("backend.main.generate_conversation_title", new_callable=AsyncMock) as title:
             title.return_value = "Document Debate"
-            with patch("backend.main.run_iterative_debate", side_effect=fake_debate):
+            with patch("backend.debate.run_iterative_debate", side_effect=fake_debate):
                 with TestClient(app) as client:
                     with client.stream(
                         "POST",

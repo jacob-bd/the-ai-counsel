@@ -106,9 +106,14 @@ async def extract_canonical_claims(
 
     extractor = chairman_model or get_chairman_model()
     timeout_val = getattr(settings, "claim_extraction_timeout_seconds", 180.0)
+    # For Notion2API models the provider clamps to max(timeout_val, 600s), so
+    # pass timeout_val explicitly so both the httpx connection and the outer
+    # asyncio.wait_for share the same budget.  Previously query_model used its
+    # default of 120 s while wait_for used 180 s — on slow requests httpx could
+    # be the first to give up, discarding partial content.
     try:
         response = await asyncio.wait_for(
-            query_model(extractor, messages, temperature=0.2),
+            query_model(extractor, messages, temperature=0.2, timeout=timeout_val),
             timeout=timeout_val,
         )
     except asyncio.TimeoutError:
@@ -348,6 +353,53 @@ def _parse_claim_verdicts_from_ranking(ranking_text: str) -> Optional[Dict[str, 
     return None
 
 
+def _parse_audit_verdicts(ranking_text: str, expected_claim_ids: list = None) -> dict:
+    from .json_repair import extract_json_block
+    from .council import EvaluationError
+    if not ranking_text:
+        raise EvaluationError("Empty output from evaluator")
+
+    result = extract_json_block(ranking_text)
+    if not isinstance(result, dict):
+        raise EvaluationError("Output JSON is not a dictionary mapping claim IDs to verdicts")
+
+    VALID_SOURCE = {"supported", "partially_supported", "unsupported", "contradicted", "unverifiable"}
+    VALID_SUBSTANTIVE = {"sound", "requires_qualification", "unsound", "unverifiable"}
+
+    if expected_claim_ids:
+        missing = set(expected_claim_ids) - set(result.keys())
+        if missing:
+            raise EvaluationError(f"Missing expected claim IDs: {missing}")
+
+    verdict_combos = []
+
+    for claim_id, v in result.items():
+        if not isinstance(v, dict):
+            raise EvaluationError(f"Claim {claim_id} value is not a dictionary")
+        if v.get("source_support") not in VALID_SOURCE:
+            raise EvaluationError(f"Claim {claim_id} has invalid source_support: {v.get('source_support')}")
+        if v.get("substantive_assessment") not in VALID_SUBSTANTIVE:
+            raise EvaluationError(f"Claim {claim_id} has invalid substantive_assessment: {v.get('substantive_assessment')}")
+
+        reason = str(v.get("reason", "")).strip()
+        if len(reason) < 20 or not any(ch.isalnum() for ch in reason):
+            raise EvaluationError(f"Degenerate reason for claim {claim_id}; retry evaluator. Reason given: '{reason}'")
+
+        if reason.lower() in ("supported.", "correct.", "accurate.", "yes.", "supported", "correct"):
+            raise EvaluationError(f"Boilerplate reason for claim {claim_id}: {reason}")
+
+        verdict_combos.append((v["source_support"], v["substantive_assessment"]))
+
+    if len(verdict_combos) >= 10:
+        from collections import Counter
+        counts = Counter(verdict_combos)
+        most_common, count = counts.most_common(1)[0]
+        if count / len(verdict_combos) > 0.95:
+            raise EvaluationError("Repetitive boilerplate and verdict-collapse detected (>95% identical verdicts)")
+
+    return result
+
+
 def _parse_paragraph_annotations_from_ranking(ranking_text: str) -> Optional[List[Dict[str, Any]]]:
     """Extract paragraph annotation JSON from a Stage 2 ranking response."""
     from .json_repair import extract_json_block
@@ -533,6 +585,12 @@ async def run_iterative_debate(
                 total_models = item
                 yield {"type": "stage1_init", "total": total_models, "round": round_num}
                 continue
+            # Skip pause-event sentinels — they must not pollute stage1_results
+            # (they have no 'error' key, so they would survive Stage 2's
+            # successful_results filter and produce a duplicate model entry).
+            if isinstance(item, dict) and item.get("paused"):
+                yield {"type": "stage1_pause", "data": item, "round": round_num}
+                continue
             stage1_results.append(item)
             yield {
                 "type": "stage1_progress",
@@ -639,6 +697,10 @@ async def run_iterative_debate(
                 if isinstance(item, dict) and not item.get("model"):
                     label_to_model = item
                     yield {"type": "stage2_init", "total": len(label_to_model), "round": round_num}
+                    continue
+                # Skip pause-event sentinels — same reason as Stage 1 above.
+                if isinstance(item, dict) and item.get("paused"):
+                    yield {"type": "stage2_pause", "data": item, "round": round_num}
                     continue
                 # Post-process: extract structured data from ranking text
                 if effective_mode == "claim" and item.get("ranking"):

@@ -220,6 +220,117 @@ FINAL RANKING:
 1. Response A
 2. Response B"""
 
+# --- Phase 2: Audit Mode Prompts ---
+
+STAGE2_RESPONSE_EVALUATION_PROMPT = """You are evaluating responses to: {user_query}
+
+{search_context_block}
+{responses_text}
+
+Evaluate each of the complete answers holistically using 6-8 dimensions:
+- Instruction compliance
+- Record grounding
+- Authority discipline
+- Legal reasoning
+- Remedy calibration
+- Completeness
+- Preservation and standard-of-review treatment
+- Practical usefulness
+
+Provide ONE concise evaluation per response.
+After your evaluations, provide a ranked list of the responses.
+
+Respond with ONLY valid JSON:
+```json
+{{
+  "responses": {{
+    "Response A": {{
+      "instruction_compliance": 4,
+      "record_grounding": 3,
+      "authority_discipline": 4,
+      "reasoning_quality": 3,
+      "remedy_calibration": 2,
+      "completeness": 4,
+      "clarity": 4,
+      "material_defects": [
+        "Treats a disputed record inference as established."
+      ],
+      "overall_assessment": "Useful but materially overstates the remedy."
+    }}
+  }},
+  "ranking": [
+    "Response C",
+    "Response A",
+    "Response B"
+  ]
+}}
+```"""
+
+MATERIAL_CLAIM_EXTRACTION_PROMPT = """Decompose each response into material, disputed claims.
+Extract NO MORE THAN 6-8 material claims from each response.
+A material claim involves:
+- jurisdiction, disposition, remedy, controlling legal authority, preservation/waiver, standards of review, material record facts, evidentiary rulings, or conflicting legal conclusions.
+
+{responses_text}
+
+Respond with ONLY valid JSON (no other text). Do NOT exceed 8 claims per response.
+```json
+{{
+  "Response A": [
+    {{"id": "A1", "claim": "specific material claim"}}
+  ]
+}}
+```"""
+
+STAGE2_CLAIM_AUDIT_PROMPT = """You are evaluating specific claims extracted from responses to: {user_query}
+
+{search_context_block}
+{responses_text}
+
+These material claims have been extracted:
+{canonical_claims_text}
+
+A claim is NOT supported merely because it appears in a candidate response. Evaluate the claim itself against the supplied evidence and applicable reasoning.
+
+Rate each claim using these two axes:
+1. source_support: "supported", "partially_supported", "unsupported", "contradicted", "unverifiable"
+2. substantive_assessment: "sound", "requires_qualification", "unsound", "unverifiable"
+
+Respond with ONLY valid JSON:
+```json
+{{
+  "A1": {{
+    "source_support": "partially_supported",
+    "substantive_assessment": "requires_qualification",
+    "materiality": "high",
+    "reason": "explanation under 40 words",
+    "correction": "suggested correction or qualification"
+  }}
+}}
+```"""
+
+STAGE2_CORRECTION_RECORD_PROMPT = """You are an independent adjudicator conducting a final review of a council deliberation.
+Your task is to produce a single, compact correction record.
+
+You are provided with aggregated claim audits from multiple evaluators:
+{aggregated_audits_text}
+
+Produce a compact correction record synthesizing these audits.
+Output ONLY valid JSON:
+```json
+{{
+  "adopt": ["A1", "B2"],
+  "reject": ["A2"],
+  "qualify": ["B1"],
+  "authority_gaps": ["Missing citation for clear-error standard"],
+  "record_gaps": ["No evidence of identical act of consent"],
+  "recommended_disposition": "Affirmed in part; reversed and remanded in part",
+  "stage3_constraints": ["Must address the consent paradox"]
+}}
+```"""
+
+
+
 STAGE1_ROUND_N_CLAIM_PROMPT = """You are refining your answer in Round {round_number} of a multi-round deliberation.
 
 Original question: {user_query}

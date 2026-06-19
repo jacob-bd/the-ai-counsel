@@ -162,12 +162,12 @@ class Settings(BaseModel):
     # Council Configuration (unified across all providers)
     council_models: List[str] = DEFAULT_COUNCIL_MODELS.copy()
     chairman_model: str = DEFAULT_CHAIRMAN_MODEL
-    
+
     # Temperature Settings
     council_temperature: float = 0.5
     chairman_temperature: float = 0.4
     stage2_temperature: float = 0.3  # Lower for consistent ranking output
-    
+
     # Remote/Local filters
     council_member_filters: Optional[Dict[int, str]] = None
     chairman_filter: Optional[str] = None
@@ -183,7 +183,7 @@ class Settings(BaseModel):
     stage4_prompt: str = STAGE4_CORRECTED_DRAFT_PROMPT
     title_prompt: str = TITLE_PROMPT_DEFAULT
     query_prompt: str = QUERY_PROMPT_DEFAULT
-    
+
     # Display Preferences
     date_format: str = "auto"  # "auto", "MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"
     response_language: str = RESPONSE_LANGUAGE_DEFAULT
@@ -199,11 +199,11 @@ class Settings(BaseModel):
     attachment_poll_timeout_seconds: float = 60.0
     model_timeout_seconds: int = 300
     preflight_timeout_seconds: float = 10.0
-    claim_extraction_timeout_seconds: float = 180.0
+    claim_extraction_timeout_seconds: float = 600.0  # Notion2API can take up to 600 s for large claim sets
 
 
     # Iterative Debate
-    critique_mode: str = "freeform"        # "freeform", "paragraph", "claim"
+    critique_mode: str = "freeform"        # "freeform", "paragraph", "claim", "audit"
     debate_rounds: int = 1                 # Number of rounds (1 = current behavior)
     auto_converge: bool = True             # Stop early if rankings stabilize
     convergence_threshold: int = 2         # Consecutive stable rounds to trigger

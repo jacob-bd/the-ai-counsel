@@ -129,6 +129,8 @@ export default function ChatInterface({
     runPaused = false,
     pausedModel = null,
     pendingCount = 0,
+    activeProviders = [],
+    pendingProviders = [],
     continuationMode = 'normal',
     onContinuationModeChange,
     onResume,
@@ -375,6 +377,8 @@ export default function ChatInterface({
                     <PauseBanner
                         failedModel={pausedModel}
                         pendingCount={pendingCount}
+                        activeProviders={activeProviders}
+                        pendingProviders={pendingProviders}
                         continuationMode={continuationMode}
                         onModeChange={onContinuationModeChange}
                         onResume={onResume}
@@ -501,8 +505,8 @@ function CouncilMessageRenderer({
     const [selectedRound, setSelectedRound] = useState(null);
 
     const hasRounds = Array.isArray(msg.metadata?.rounds) && msg.metadata.rounds.length > 0;
-    const totalRounds = hasRounds 
-        ? msg.metadata.rounds.length 
+    const totalRounds = hasRounds
+        ? msg.metadata.rounds.length
         : (msg.metadata?.debate_rounds_configured || 1);
     const currentActiveRound = msg.metadata?.current_round || 1;
 
@@ -512,8 +516,8 @@ function CouncilMessageRenderer({
         }
     }, [hasRounds]);
 
-    const activeRoundNum = selectedRound !== null 
-        ? selectedRound 
+    const activeRoundNum = selectedRound !== null
+        ? selectedRound
         : (hasRounds ? msg.metadata.rounds.length : currentActiveRound);
 
     let displayStage1 = msg.stage1;

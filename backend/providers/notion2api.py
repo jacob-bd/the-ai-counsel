@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class Notion2APICircuitBreaker:
     """Process-level circuit breaker for notion2api 502 errors.
-    
+
     When a 502 is detected, all notion2api calls pause for 30 seconds.
     After the pause, each subsequent request waits a random 5-13s stagger
     slot before firing (sequential slot ordering).
@@ -45,6 +45,7 @@ class Notion2APICircuitBreaker:
         self._pause_lock: asyncio.Lock = asyncio.Lock()
         self._stagger_lock: asyncio.Lock = asyncio.Lock()
         self._semaphores: Dict[int, asyncio.Semaphore] = {}
+        self._force_fire_models: set = set()
 
     @property
     def is_paused(self) -> bool:
@@ -54,6 +55,9 @@ class Notion2APICircuitBreaker:
         if max_concurrent not in self._semaphores:
             self._semaphores[max_concurrent] = asyncio.Semaphore(max_concurrent)
         return self._semaphores[max_concurrent]
+
+    def force_fire(self, model_id: str) -> None:
+        self._force_fire_models.add(model_id)
 
     def trigger_502_pause(self, model_id: str) -> None:
         """Trigger or extend the 30-second 502 pause."""
@@ -75,6 +79,11 @@ class Notion2APICircuitBreaker:
 
     async def wait_if_paused(self, model_id: str) -> None:
         """Wait for the 502 pause to expire, then take a sequential stagger slot."""
+        if model_id in self._force_fire_models:
+            self._force_fire_models.remove(model_id)
+            logger.info("[Notion2API] Bypassing circuit breaker and stagger for %s (forced manually)", model_id)
+            return
+
         # Wait for the pause window to expire
         while True:
             now = time.monotonic()
@@ -364,7 +373,7 @@ class Notion2APIProvider(LLMProvider):
                         if response.status_code != 200:
                             raw_body = await response.aread()
                             last_response_text = raw_body.decode("utf-8", errors="replace")
-                            
+
                             # Trigger 502 circuit breaker if needed
                             if response.status_code == 502 and firing_mode in ("random_delay", "sequential"):
                                 _circuit_breaker.trigger_502_pause(model_id)

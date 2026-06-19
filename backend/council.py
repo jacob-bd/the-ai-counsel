@@ -1,6 +1,6 @@
 """3-stage LLM Council orchestration."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 import asyncio
 import logging
 import random
@@ -12,6 +12,10 @@ from .settings import get_settings
 from .prompts import apply_response_language
 
 logger = logging.getLogger(__name__)
+
+class EvaluationError(Exception):
+    """Raised when an evaluator produces invalid, unparseable, or degenerate output."""
+    pass
 
 _NOTION_COUNCIL_LOCK: asyncio.Lock | None = None
 _NOTION_STAGGER_SECONDS = 3.0
@@ -101,6 +105,7 @@ async def _query_model_gated(
     temperature: float,
     attachments: List[Dict[str, Any]] | None = None,
     conversation_id: str | None = None,
+    max_tokens: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Serialize Notion2API custom and direct calls with stagger and 503 backoff."""
     lock = _notion_council_lock() if _is_notion2api_model(model) else None
@@ -112,6 +117,7 @@ async def _query_model_gated(
             temperature=temperature,
             attachments=attachments,
             conversation_id=conversation_id,
+            max_tokens=max_tokens,
         )
 
     messages = _vary_notion_thread_title(model, messages)
@@ -126,6 +132,7 @@ async def _query_model_gated(
                 temperature=temperature,
                 attachments=attachments,
                 conversation_id=conversation_id,
+                max_tokens=max_tokens,
             )
 
     result = await _make_call()
@@ -200,6 +207,7 @@ async def _query_model_raw(
     temperature: float = 0.7,
     conversation_id: "str | None" = None,
     attachments: List[Dict[str, Any]] | None = None,
+    max_tokens: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Dispatch query to appropriate provider directly."""
     provider = get_provider_for_model(model)
@@ -211,7 +219,9 @@ async def _query_model_raw(
             kwargs["conversation_id"] = conversation_id
         if "attachments" in sig.parameters:
             kwargs["attachments"] = attachments
-        
+        if "max_tokens" in sig.parameters and max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+
         response = await provider.query(model, messages, timeout, temperature, **kwargs)
     except Exception:
         # Fallback to plain query
@@ -232,6 +242,7 @@ async def query_model(
     temperature: float = 0.7,
     conversation_id: "str | None" = None,
     attachments: List[Dict[str, Any]] | None = None,
+    max_tokens: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Dispatch query with serialization for Notion2API."""
     if _is_notion2api_model(model):
@@ -242,6 +253,7 @@ async def query_model(
             temperature=temperature,
             attachments=attachments,
             conversation_id=conversation_id,
+            max_tokens=max_tokens,
         )
     return await _query_model_raw(
         model,
@@ -250,6 +262,7 @@ async def query_model(
         temperature=temperature,
         attachments=attachments,
         conversation_id=conversation_id,
+        max_tokens=max_tokens,
     )
 
 
@@ -261,20 +274,20 @@ async def query_models_parallel(
     """Dispatch parallel query to appropriate providers."""
     tasks = []
     model_to_task_map = {}
-    
+
     # Group models by provider to optimize batching if supported (mostly for OpenRouter/Ollama legacy)
     # But for simplicity and modularity, we'll just spawn individual tasks for now
     # OpenRouter and Ollama wrappers might handle their own internal concurrency if we called a batch method,
     # but the base interface is single query.
     # To maintain OpenRouter's batch efficiency if it exists, we could check type, but let's stick to simple asyncio.gather first.
-    
+
     # Actually, the previous implementation used specific batch logic for Ollama and OpenRouter.
     # We should preserve that if possible, OR just rely on asyncio.gather which is fine for HTTP clients.
     # The previous `_query_ollama_batch` was just a helper to strip prefixes.
     # `openrouter.query_models_parallel` was doing the gather.
-    
+
     # Let's just use asyncio.gather for all. It's clean and effective.
-    
+
     async def _query_safe(m: str):
         try:
             return m, await query_model(m, messages, conversation_id=conversation_id)
@@ -283,7 +296,7 @@ async def query_models_parallel(
 
     tasks = [_query_safe(m) for m in models]
     results = await asyncio.gather(*tasks)
-    
+
     return dict(results)
 
 
@@ -380,7 +393,7 @@ async def stage1_collect_responses(
         messages = (history or []) + [{"role": "user", "content": prompt}]
 
     models = models_override if models_override is not None and len(models_override) > 0 else get_council_models()
-    
+
     # Yield total count first
     yield len(models)
 
@@ -431,7 +444,7 @@ async def stage1_collect_responses(
                 pause_event = run_info.get("pause_event")
                 if pause_event:
                     await pause_event.wait()
-                
+
                 # Check fail-safe mode pause on resume
                 if run_info and run_info.get("continuation_mode") == "fail_safe" and not fail_safe_initial_wait_done:
                     logger.info("[Fail-Safe] Pausing 30s on resume...")
@@ -503,20 +516,20 @@ async def stage1_collect_responses(
                     return_when=asyncio.FIRST_COMPLETED,
                     timeout=0.2
                 )
-                
+
                 for task in done:
                     completed_model = None
                     for model_id, t in active_tasks.items():
                         if t == task:
                             completed_model = model_id
                             break
-                    
+
                     if completed_model:
                         active_tasks.pop(completed_model)
                         if run_info:
                             if completed_model in run_info["active_providers"]:
                                 run_info["active_providers"].remove(completed_model)
-                        
+
                         try:
                             model, response = await task
                             result = None
@@ -542,7 +555,7 @@ async def stage1_collect_responses(
                                         "usage": response.get('usage'),
                                         "cost": response.get('cost'),
                                     }
-                            
+
                             if result:
                                 yield result
 
@@ -553,7 +566,7 @@ async def stage1_collect_responses(
                                     run_info["pause_event"] = asyncio.Event()
                                     if completed_model not in run_info["failed_providers"]:
                                         run_info["failed_providers"].append(completed_model)
-                                
+
                                 # Yield pause event
                                 yield {
                                     "model": completed_model,
@@ -584,15 +597,20 @@ async def stage2_collect_rankings(
 ) -> Any: # Returns an async generator
     """
     Stage 2: Collect peer rankings from all council models.
-    
+
     Yields:
         - First yield: label_to_model mapping (dict)
         - Subsequent yields: Individual model results (dict)
     """
     settings = get_settings()
 
-    # Filter to only successful responses for ranking
-    successful_results = [r for r in stage1_results if not r.get('error')]
+    # Filter to only successful responses for ranking.
+    # Also exclude pause-event sentinels ({"model": X, "paused": True}) — they
+    # carry no ranking content and would cause duplicate model entries if included.
+    successful_results = [
+        r for r in stage1_results
+        if not r.get('error') and not r.get('paused')
+    ]
 
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(successful_results))]  # A, B, C, ...
@@ -602,7 +620,7 @@ async def stage2_collect_rankings(
         f"Response {label}": result['model']
         for label, result in zip(labels, successful_results)
     }
-    
+
     # Yield the mapping first so the caller has it
     yield label_to_model
 
@@ -700,7 +718,7 @@ async def stage2_collect_rankings(
                 pause_event = run_info.get("pause_event")
                 if pause_event:
                     await pause_event.wait()
-                
+
                 # Check fail-safe mode pause on resume
                 if run_info and run_info.get("continuation_mode") == "fail_safe" and not fail_safe_initial_wait_done:
                     logger.info("[Fail-Safe] Pausing 30s on resume...")
@@ -772,20 +790,20 @@ async def stage2_collect_rankings(
                     return_when=asyncio.FIRST_COMPLETED,
                     timeout=0.2
                 )
-                
+
                 for task in done:
                     completed_model = None
                     for model_id, t in active_tasks.items():
                         if t == task:
                             completed_model = model_id
                             break
-                    
+
                     if completed_model:
                         active_tasks.pop(completed_model)
                         if run_info:
                             if completed_model in run_info["active_providers"]:
                                 run_info["active_providers"].remove(completed_model)
-                        
+
                         try:
                             model, response = await task
                             result = None
@@ -805,7 +823,7 @@ async def stage2_collect_rankings(
                                     if not isinstance(full_text, str):
                                         full_text = str(full_text) if full_text is not None else ''
                                     full_text = strip_thinking_blocks(full_text)
-                                    
+
                                     expected_count = len(successful_results)
                                     valid_labels = list(label_to_model.keys())
                                     parsed = parse_ranking_from_text(
@@ -813,7 +831,7 @@ async def stage2_collect_rankings(
                                         expected_count=expected_count,
                                         valid_labels=valid_labels,
                                     )
-                                    
+
                                     result = {
                                         "model": model,
                                         "ranking": full_text,
@@ -822,7 +840,7 @@ async def stage2_collect_rankings(
                                         "usage": response.get('usage'),
                                         "cost": response.get('cost'),
                                     }
-                            
+
                             if result:
                                 yield result
 
@@ -833,7 +851,7 @@ async def stage2_collect_rankings(
                                     run_info["pause_event"] = asyncio.Event()
                                     if completed_model not in run_info["failed_providers"]:
                                         run_info["failed_providers"].append(completed_model)
-                                
+
                                 # Yield pause event
                                 yield {
                                     "model": completed_model,
@@ -1003,62 +1021,89 @@ def parse_ranking_from_text(
     valid_labels: List[str] = None,
 ) -> List[str]:
     """
-    Parse the FINAL RANKING section from the model's response.
+    Parse a numbered FINAL RANKING section.
 
-    Args:
-        ranking_text: The full text response from the model
-        expected_count: Optional number of expected ranked items (to truncate duplicates)
-        valid_labels: Optional allow-list of labels (e.g. Response A, Response B)
-
-    Returns:
-        List of response labels in ranked order
+    The legacy parser tolerates duplicate and unknown response labels by
+    discarding them, but requires the resulting ranking to contain exactly
+    the expected number of valid unique labels.
     """
     import re
 
-    # Defensive: ensure ranking_text is a string
     if not isinstance(ranking_text, str):
         ranking_text = str(ranking_text) if ranking_text is not None else ''
 
-    matches = []
     valid_set = set(valid_labels) if valid_labels else None
 
-    # Look for "FINAL RANKING:" section
-    if "FINAL RANKING:" in ranking_text:
-        # Extract everything after "FINAL RANKING:"
-        parts = ranking_text.split("FINAL RANKING:")
-        if len(parts) >= 2:
-            ranking_section = parts[1]
-            # Try to extract numbered list format (e.g., "1. Response A")
-            # This pattern looks for: number, period, optional space, "Response X"
-            numbered_matches = re.findall(r'\d+\.\s*Response [A-Z]', ranking_section)
-            if numbered_matches:
-                # Extract just the "Response X" part
-                matches = [re.search(r'Response [A-Z]', m).group() for m in numbered_matches]
-            else:
-                # Fallback: Extract all "Response X" patterns in order from the section
-                matches = re.findall(r'Response [A-Z]', ranking_section)
-    
-    # If no matches found in section (or section missing), fallback to full text search
-    if not matches:
-        matches = re.findall(r'Response [A-Z]', ranking_text)
+    if "FINAL RANKING:" not in ranking_text:
+        raise EvaluationError("Missing FINAL RANKING: section")
 
-    # Drop duplicates and labels outside the allow-list (e.g. hallucinated Response C)
+    parts = ranking_text.split("FINAL RANKING:")
+    ranking_section = parts[-1]
+
+    # Look for numbered list: "1. Response A"
+    numbered_matches = re.findall(r'(\d+)\.\s*(Response [A-Z])', ranking_section)
+    if not numbered_matches:
+        if valid_set and any(label in ranking_section for label in valid_set):
+            raise EvaluationError("Ranking is unnumbered. Output must be a numbered list (1. Response X).")
+        raise EvaluationError("No valid numbered ranking found (e.g., '1. Response A').")
+
+    matches = [m[1] for m in numbered_matches]
+
     seen = set()
     filtered = []
     for label in matches:
-        if label in seen:
+        if valid_set and label not in valid_set:
             continue
-        if valid_set is not None and label not in valid_set:
+        if label in seen:
             continue
         seen.add(label)
         filtered.append(label)
-    matches = filtered
 
-    # Truncate if expected_count is provided
-    if expected_count and len(matches) > expected_count:
-        matches = matches[:expected_count]
-        
-    return matches
+    if expected_count and len(filtered) != expected_count:
+        raise EvaluationError(f"Expected {expected_count} ranked items, got {len(filtered)}.")
+
+    return filtered
+
+
+def parse_stage2a_output(
+    ranking_text: str,
+    valid_labels: List[str],
+) -> Dict[str, Any]:
+    """
+    Parse the Stage 2A JSON-native response evaluation and ranking.
+    Requires exact set equality between valid_labels, keys in 'responses', and labels in 'ranking'.
+    """
+    from .json_repair import extract_json_block
+    if not ranking_text:
+        raise EvaluationError("Empty output from evaluator")
+
+    result = extract_json_block(ranking_text)
+    if not isinstance(result, dict):
+        raise EvaluationError("Output JSON is not a dictionary")
+
+    responses = result.get("responses")
+    ranking = result.get("ranking")
+
+    if not isinstance(responses, dict):
+        raise EvaluationError("Output JSON missing 'responses' dictionary")
+    if not isinstance(ranking, list):
+        raise EvaluationError("Output JSON missing 'ranking' list")
+
+    expected_set = set(valid_labels)
+    responses_set = set(responses.keys())
+    ranking_set = set(ranking)
+
+    if expected_set != responses_set:
+        raise EvaluationError(f"Keys in 'responses' do not match expected labels. Expected: {expected_set}, Got: {responses_set}")
+
+    if expected_set != ranking_set:
+        raise EvaluationError(f"Labels in 'ranking' do not match expected labels. Expected: {expected_set}, Got: {ranking_set}")
+
+    # Verify no duplicates in ranking
+    if len(ranking) != len(ranking_set):
+        raise EvaluationError("Duplicate labels found in ranking array")
+
+    return result
 
 
 def calculate_aggregate_rankings(
@@ -1143,7 +1188,7 @@ async def generate_conversation_title(user_query: str) -> str:
 
     chairman_model = get_chairman_model()
     messages = [{"role": "user", "content": prompt}]
-    
+
     try:
         response = await query_model(chairman_model, messages, temperature=0.3)
         if response and not response.get('error'):
@@ -1159,10 +1204,10 @@ async def generate_conversation_title(user_query: str) -> str:
 
 async def generate_search_query(user_query: str) -> str:
     """Generate search query from user query using the Chairman model.
-    
+
     Args:
         user_query: The user's full question
-    
+
     Returns:
         Search query truncated to 100 characters for safety
     """
@@ -1179,7 +1224,7 @@ async def generate_search_query(user_query: str) -> str:
 
     chairman_model = get_chairman_model()
     messages = [{"role": "user", "content": prompt}]
-    
+
     try:
         response = await query_model(chairman_model, messages, temperature=0.1)
         if response and not response.get('error'):

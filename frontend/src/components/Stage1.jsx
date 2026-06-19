@@ -127,6 +127,8 @@ export default function Stage1({ responses, startTime, endTime, onRetryProvider,
 
             {currentResponse.pending ? (
               <span className="model-status pending" style={{ borderColor: '#6b7280', color: '#94a3b8' }}>Pending</span>
+            ) : currentResponse.firing ? (
+              <span className="model-status firing" style={{ borderColor: '#3b82f6', color: '#60a5fa' }}>Executing...</span>
             ) : hasError ? (
               <span className="model-status error">Failed</span>
             ) : (
@@ -167,6 +169,16 @@ export default function Stage1({ responses, startTime, endTime, onRetryProvider,
                 ▶ Fire Manually
               </button>
             )}
+          </div>
+        ) : currentResponse.firing ? (
+          <div className="response-firing" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+              <div className="firing-icon" style={{ fontSize: '24px', color: '#60a5fa' }}>↻</div>
+              <div className="firing-details">
+                <div className="firing-title" style={{ fontSize: '15px', fontWeight: '600', color: '#60a5fa' }}>Actively Firing</div>
+                <div className="firing-message" style={{ fontSize: '13px', color: '#94a3b8' }}>Waiting for the model to generate a response...</div>
+              </div>
+            </div>
           </div>
         ) : hasError ? (
           <div className="response-error" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
