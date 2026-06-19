@@ -51,6 +51,11 @@ export const getModelVisuals = (modelId) => {
     return { name: 'DeepSeek', color: '#4e80ee', short: 'DeepSeek', icon: '🐋' };
   }
 
+  // Kimi / Moonshot
+  if (id.includes('kimi') || id.includes('moonshot')) {
+    return { name: 'Kimi', color: '#111827', short: 'Kimi', icon: '月' };
+  }
+
   // Local (fallback for models without provider prefix or slash)
   if (!id.includes('/') && !id.includes(':')) {
     return { name: 'Local', color: '#f1f5f9', short: 'Local', icon: '💻' };
@@ -63,15 +68,68 @@ export const getModelVisuals = (modelId) => {
 export const getShortModelName = (modelId) => {
   if (!modelId) return 'Unknown';
 
-  let name = modelId.replace(/:free$/, '');
+  const formatVersionSuffix = (value) => {
+    return value
+      .replace(/(\d(?:\.\d+)*)(pro|flash|turbo|mini|nano|opus|sonnet|haiku)\b/gi, '$1 $2')
+      .replace(/\b(pro|flash|turbo|mini|nano|opus|sonnet|haiku)(\d(?:\.\d+)*)\b/gi, '$1 $2');
+  };
 
-  if (name.includes(':')) {
-    name = name.split(':').slice(1).join(':');
+  const titleCaseWords = (value) =>
+    value
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+  const cleanModelId = String(modelId)
+    .trim()
+    .replace(/:free$/i, '')
+    .replace(/^custom:/i, '')
+    .replace(/^notion2api:/i, '')
+    .replace(/^ollama:/i, '')
+    .replace(/^groq:/i, '')
+    .replace(/^openai:/i, '')
+    .replace(/^anthropic:/i, '')
+    .replace(/^google:/i, '')
+    .replace(/^mistral:/i, '')
+    .replace(/^deepseek:/i, '');
+
+  // Handle "provider/model-name" format
+  const rawName = cleanModelId.includes('/') ? cleanModelId.split('/').pop() : cleanModelId;
+  const id = rawName.toLowerCase();
+
+  if (id.startsWith('gpt-')) {
+    return rawName.replace(/^gpt-/i, 'GPT ').replace(/-/g, ' ');
   }
 
-  if (name.includes('/')) {
-    name = name.split('/').pop();
+  if (id.startsWith('gemini-')) {
+    const suffix = formatVersionSuffix(rawName.replace(/^gemini-/i, '').replace(/-/g, ' '));
+    return `Gemini ${titleCaseWords(suffix)}`;
   }
 
-  return name;
+  if (id.startsWith('claude-')) {
+    const suffix = formatVersionSuffix(rawName.replace(/^claude-/i, '').replace(/-/g, ' '));
+    const withoutFamilyVersion = suffix.replace(/^(\d+(?:\.\d+)?\s*)/i, '');
+    return titleCaseWords(withoutFamilyVersion);
+  }
+
+  if (id.startsWith('kimi-')) {
+    return rawName.replace(/^kimi-/i, 'Kimi ').replace(/-/g, ' ');
+  }
+
+  if (id.startsWith('moonshot-')) {
+    return rawName.replace(/^moonshot-/i, 'Kimi ').replace(/-/g, ' ');
+  }
+
+  if (id.startsWith('mistral-')) {
+    const suffix = formatVersionSuffix(rawName.replace(/^mistral-/i, '').replace(/-/g, ' '));
+    return `Mistral ${titleCaseWords(suffix)}`;
+  }
+
+  if (id.startsWith('deepseek-')) {
+    const suffix = formatVersionSuffix(rawName.replace(/^deepseek-/i, '').replace(/-/g, ' '));
+    return `DeepSeek ${titleCaseWords(suffix)}`;
+  }
+
+  return titleCaseWords(formatVersionSuffix(rawName.replace(/[-_]+/g, ' ')));
 };

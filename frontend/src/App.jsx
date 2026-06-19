@@ -165,6 +165,7 @@ function App() {
   const isInitialMount = useRef(true);
   const conversationVersionRef = useRef(0);
   const skipLoadForIdRef = useRef(null);
+  const activeConversationIdRef = useRef(null);
 
   const computeCouncilConfigured = useCallback((models) => {
     const members = (models || []).filter((m) => m && m.trim());
@@ -654,6 +655,7 @@ function App() {
       abortControllerRef.current = null;
     }
     setIsLoading(false);
+    activeConversationIdRef.current = id;
     setCurrentConversationId(id);
     // Auto-switch mode based on conversation mode
     const conv = conversations.find(c => c.id === id);
@@ -727,6 +729,8 @@ function App() {
           return;
         }
       }
+
+      activeConversationIdRef.current = activeConversationId;
 
       setAppMode('advisors');
 
@@ -999,6 +1003,8 @@ function App() {
           return;
         }
       }
+
+      activeConversationIdRef.current = activeConversationId;
 
       // Optimistically update conversation title in list and current state if it is a new/untitled conversation
       const currentConvInList = conversations.find(c => c.id === activeConversationId);
