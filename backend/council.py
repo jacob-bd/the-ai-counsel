@@ -8,7 +8,7 @@ import re
 import time
 from .config import get_council_models, get_chairman_model
 from .costs import attach_cost
-from .settings import get_settings
+from .settings import get_settings, normalize_model_ids
 from .prompts import apply_response_language
 
 logger = logging.getLogger(__name__)
@@ -393,7 +393,11 @@ async def stage1_collect_responses(
     else:
         messages = (history or []) + [{"role": "user", "content": prompt}]
 
-    models = models_override if models_override is not None and len(models_override) > 0 else get_council_models()
+    models = (
+        normalize_model_ids(models_override)
+        if models_override is not None
+        else get_council_models()
+    )
 
     # Yield total count first
     yield len(models)
@@ -1109,10 +1113,13 @@ def parse_stage2a_output(
 
 def calculate_aggregate_rankings(
     stage2_results: List[Dict[str, Any]],
-    label_to_model: Dict[str, str]
+    label_to_model: Dict[str, str],
 ) -> List[Dict[str, Any]]:
     """
     Calculate aggregate rankings across all models.
+
+    Skips failed, missing, blank, or malformed evaluator rankings. Returns an
+    empty list when no valid rankings survive (never fabricates a default order).
 
     Args:
         stage2_results: Rankings from each model
@@ -1123,40 +1130,51 @@ def calculate_aggregate_rankings(
     """
     from collections import defaultdict
 
-    # Track positions for each model
     model_positions = defaultdict(list)
+    valid_ranking_count = 0
 
-    for ranking in stage2_results:
-        ranking_text = ranking['ranking']
+    for result in stage2_results:
+        if not isinstance(result, dict) or result.get("error"):
+            continue
 
-        # Parse the ranking from the structured format
-        expected_count = len(label_to_model)
-        valid_labels = list(label_to_model.keys())
-        parsed_ranking = parse_ranking_from_text(
-            ranking_text,
-            expected_count=expected_count,
-            valid_labels=valid_labels,
-        )
+        ranking_text = result.get("ranking")
+        if not isinstance(ranking_text, str) or not ranking_text.strip():
+            continue
+
+        try:
+            parsed_ranking = parse_ranking_from_text(
+                ranking_text,
+                expected_count=len(label_to_model),
+                valid_labels=list(label_to_model),
+            )
+        except (EvaluationError, TypeError, ValueError):
+            logger.warning(
+                "Skipping malformed Stage 2 ranking from model %s",
+                result.get("model", "<unknown>"),
+            )
+            continue
+
+        valid_ranking_count += 1
 
         for position, label in enumerate(parsed_ranking, start=1):
-            if label in label_to_model:
-                model_name = label_to_model[label]
-                model_positions[model_name].append(position)
+            model = label_to_model.get(label)
+            if model:
+                model_positions[model].append(position)
 
-    # Calculate average position for each model
-    aggregate = []
-    for model, positions in model_positions.items():
-        if positions:
-            avg_rank = sum(positions) / len(positions)
-            aggregate.append({
-                "model": model,
-                "average_rank": round(avg_rank, 2),
-                "rankings_count": len(positions)
-            })
+    if valid_ranking_count == 0:
+        logger.warning("No valid Stage 2 rankings survived aggregation")
+        return []
 
-    # Sort by average rank (lower is better)
-    aggregate.sort(key=lambda x: x['average_rank'])
-
+    aggregate = [
+        {
+            "model": model,
+            "average_rank": round(sum(positions) / len(positions), 2),
+            "rankings_count": len(positions),
+        }
+        for model, positions in model_positions.items()
+        if positions
+    ]
+    aggregate.sort(key=lambda item: item["average_rank"])
     return aggregate
 
 

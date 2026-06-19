@@ -151,9 +151,6 @@ function providerRootCandidates(settings = {}) {
     path.join(ROOT_DIR, 'vendor', 'notion2api'),
     path.join(path.dirname(ROOT_DIR), 'notion2api'),
   ];
-  if (process.platform === 'win32') {
-    roots.push('X:\\Code\\notion2api');
-  }
   return roots.filter(Boolean);
 }
 

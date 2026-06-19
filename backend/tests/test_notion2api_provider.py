@@ -248,3 +248,72 @@ async def test_notion2api_query_persists_with_stable_per_model_conversation_id(f
         "persist_remote_chat": True,
         "source": "ai-counsel",
     }
+
+
+def _script_success(fake_httpx):
+    fake_httpx.responses.append((
+        200,
+        {"choices": [{"message": {"content": "ok"}}], "usage": {"total_tokens": 3}},
+        "",
+    ))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "claude-fable-5",
+        "notion2api:claude-fable-5",
+        "anthropic:claude-fable-5",
+    ],
+)
+async def test_notion2api_omits_temperature_for_fable_models(fake_httpx, notion_env, model_id):
+    _script_success(fake_httpx)
+    provider = Notion2APIProvider()
+
+    result = await provider.query(
+        model_id,
+        [{"role": "user", "content": "hi"}],
+        temperature=0.4,
+    )
+
+    assert result["error"] is False
+    captured_payload = fake_httpx.instances[-1].kwargs["json"]
+    assert "temperature" not in captured_payload
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "claude-sonnet-4",
+        "gpt-5",
+    ],
+)
+async def test_notion2api_omits_temperature_for_fixed_upstream_models(fake_httpx, notion_env, model_id):
+    _script_success(fake_httpx)
+    provider = Notion2APIProvider()
+
+    await provider.query(
+        f"notion2api:{model_id}",
+        [{"role": "user", "content": "hi"}],
+        temperature=0.4,
+    )
+
+    captured_payload = fake_httpx.instances[-1].kwargs["json"]
+    assert "temperature" not in captured_payload
+
+
+@pytest.mark.asyncio
+async def test_notion2api_keeps_temperature_for_standard_models(fake_httpx, notion_env):
+    _script_success(fake_httpx)
+    provider = Notion2APIProvider()
+
+    await provider.query(
+        "notion2api:claude-opus4.7",
+        [{"role": "user", "content": "hi"}],
+        temperature=0.25,
+    )
+
+    captured_payload = fake_httpx.instances[-1].kwargs["json"]
+    assert captured_payload["temperature"] == 0.25

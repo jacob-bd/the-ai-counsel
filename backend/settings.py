@@ -37,9 +37,27 @@ logger = logging.getLogger(__name__)
 # Settings file path
 SETTINGS_FILE = Path(__file__).parent.parent / "data" / "settings.json"
 
-# Default models (matches original llm-council defaults)
-DEFAULT_COUNCIL_MODELS = ["", ""]
+# Default models — empty list means "not configured"
+DEFAULT_COUNCIL_MODELS: List[str] = []
 DEFAULT_CHAIRMAN_MODEL = ""
+
+
+def normalize_model_ids(values: Optional[List[str]]) -> List[str]:
+    """Return deduplicated, non-empty model IDs in stable order."""
+    if not values:
+        return []
+
+    normalized: List[str] = []
+    seen: set[str] = set()
+
+    for value in values:
+        model_id = str(value or "").strip()
+        if not model_id or model_id in seen:
+            continue
+        normalized.append(model_id)
+        seen.add(model_id)
+
+    return normalized
 
 # Default enabled providers
 DEFAULT_ENABLED_PROVIDERS = {
@@ -160,7 +178,7 @@ class Settings(BaseModel):
     direct_provider_toggles: Dict[str, bool] = DEFAULT_DIRECT_PROVIDER_TOGGLES.copy()
 
     # Council Configuration (unified across all providers)
-    council_models: List[str] = DEFAULT_COUNCIL_MODELS.copy()
+    council_models: List[str] = Field(default_factory=list)
     chairman_model: str = DEFAULT_CHAIRMAN_MODEL
 
     # Temperature Settings
@@ -412,6 +430,8 @@ def _normalize_prompt_defaults(data: dict) -> dict:
 
     normalized["advisor_presets"] = _normalize_advisor_presets(normalized.get("advisor_presets"))
     normalized["council_presets"] = _normalize_council_presets(normalized.get("council_presets"))
+    normalized["council_models"] = normalize_model_ids(normalized.get("council_models"))
+    normalized["chairman_model"] = str(normalized.get("chairman_model") or "").strip()
     return normalized
 
 

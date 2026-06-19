@@ -29,16 +29,16 @@ def get_ollama_base_url() -> str:
 
 def get_council_models() -> list:
     """Get council models from settings."""
-    from .settings import get_settings, DEFAULT_COUNCIL_MODELS
+    from .settings import get_settings, normalize_model_ids
     settings = get_settings()
-    return settings.council_models or DEFAULT_COUNCIL_MODELS
+    return normalize_model_ids(settings.council_models)
 
 
 def get_chairman_model() -> str:
     """Get chairman model from settings."""
-    from .settings import get_settings, DEFAULT_CHAIRMAN_MODEL
+    from .settings import get_settings
     settings = get_settings()
-    return settings.chairman_model or DEFAULT_CHAIRMAN_MODEL
+    return str(settings.chairman_model or "").strip()
 
 
 # Legacy constants for backwards compatibility

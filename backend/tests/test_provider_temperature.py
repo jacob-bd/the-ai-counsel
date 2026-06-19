@@ -178,6 +178,26 @@ async def test_anthropic_keeps_temperature_for_older_claude_models(fake_httpx, m
     assert body["temperature"] == 0.3
 
 
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "notion2api:claude-fable-5",
+        "notion2api:claude-sonnet-4-6",
+        "notion2api:openai/gpt-5.1",
+    ],
+)
+def test_notion2api_should_omit_temperature_helper(model_id):
+    from backend.providers.temperature import should_omit_temperature
+
+    assert should_omit_temperature(model_id, "notion2api") is True
+
+
+def test_notion2api_should_keep_temperature_for_standard_model():
+    from backend.providers.temperature import should_omit_temperature
+
+    assert should_omit_temperature("notion2api:claude-opus4.7", "notion2api") is False
+
+
 @pytest.mark.asyncio
 async def test_openrouter_omits_temperature_for_upstream_fixed_models(fake_httpx, monkeypatch):
     import backend.openrouter as openrouter_module

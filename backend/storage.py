@@ -1,12 +1,15 @@
 """JSON-based storage for conversations."""
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from .config import DATA_DIR
 from .metadata_utils import metadata_used_search
+
+logger = logging.getLogger(__name__)
 
 
 INDEX_FILE_NAME = "conversations_index.json"
@@ -376,8 +379,16 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
     if not os.path.exists(path):
         return None
 
-    with open(path, 'r') as f:
-        conversation = json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            conversation = json.load(handle)
+    except json.JSONDecodeError:
+        logger.exception("Conversation JSON is corrupt: %s", path)
+        return None
+    except OSError:
+        logger.exception("Unable to read conversation file: %s", path)
+        return None
+
     if maybe_repair_conversation_title(conversation):
         # Save to persist the repaired title
         save_conversation(conversation)

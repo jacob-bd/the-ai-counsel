@@ -30,7 +30,8 @@ from .config import get_chairman_model, get_council_models
 from .costs import build_advisor_cost_report, build_council_cost_report, build_iterative_debate_cost_report
 from .model_preflight import build_preflight_error_message, preflight_models
 from .search import perform_web_search, SearchProvider
-from .settings import get_settings, save_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, PROMPT_DEFAULTS
+from .settings import get_settings, save_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, PROMPT_DEFAULTS, normalize_model_ids
+from .model_validation import requires_chairman, validate_council_lineup
 from .prompts import VALID_RESPONSE_LANGUAGES, RESPONSE_LANGUAGE_DEFAULT
 from .personas import get_all_personas, save_persona_override, delete_persona_override, get_persona
 from .advisors import run_debate
@@ -519,12 +520,43 @@ def _build_chat_history(conversation: Dict[str, Any]) -> List[Dict[str, str]]:
     return history
 
 
-def _build_council_preflight_models(body: SendMessageRequest) -> List[str]:
+def _validate_council_request(
+    body: SendMessageRequest,
+    *,
+    critique_mode: str = "freeform",
+) -> None:
+    """Reject invalid council lineups before any provider dispatch."""
+    try:
+        validate_council_lineup(
+            body.council_models,
+            body.chairman_model,
+            execution_mode=body.execution_mode,
+            critique_mode=critique_mode,
+            fallback_council=get_council_models(),
+            fallback_chairman=get_chairman_model(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _build_council_preflight_models(
+    body: SendMessageRequest,
+    *,
+    critique_mode: str = "freeform",
+) -> List[str]:
     """Return the models that must be available before a council run starts."""
-    models = list(body.council_models or get_council_models())
-    if body.execution_mode == "full":
-        models.append(body.chairman_model or get_chairman_model())
-    return models
+    models, chairman = validate_council_lineup(
+        body.council_models,
+        body.chairman_model,
+        execution_mode=body.execution_mode,
+        critique_mode=critique_mode,
+        fallback_council=get_council_models(),
+        fallback_chairman=get_chairman_model(),
+    )
+    preflight = list(models)
+    if requires_chairman(body.execution_mode, critique_mode=critique_mode):
+        preflight.append(chairman)
+    return preflight
 
 
 async def _run_model_preflight(models: List[str]) -> str:
@@ -569,6 +601,7 @@ async def _run_council_pipeline(
             council_models=models_override,
             chairman_model=chairman_override,
         )
+        _validate_council_request(body)
         preflight_error = await _run_model_preflight(_build_council_preflight_models(body))
         if preflight_error:
             raise HTTPException(status_code=400, detail=preflight_error)
@@ -784,6 +817,7 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             effective_content, attachments = _prepare_document_context(body.content, body.documents)
             storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
+            _validate_council_request(body)
             preflight_error = await _run_model_preflight(_build_council_preflight_models(body))
             if preflight_error:
                 storage.add_error_message(conversation_id, preflight_error)
@@ -1070,7 +1104,10 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
             effective_content, attachments = _prepare_document_context(body.content, body.documents)
             storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
-            preflight_error = await _run_model_preflight(_build_council_preflight_models(body))
+            _validate_council_request(body, critique_mode=effective_critique_mode)
+            preflight_error = await _run_model_preflight(
+                _build_council_preflight_models(body, critique_mode=effective_critique_mode)
+            )
             if preflight_error:
                 storage.add_error_message(conversation_id, preflight_error)
                 yield f"data: {json.dumps({'type': 'error', 'message': preflight_error})}\n\n"
@@ -1526,6 +1563,7 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
 
     history = _build_chat_history(conversation)
 
+    _validate_council_request(body)
     preflight_error = await _run_model_preflight(_build_council_preflight_models(body))
     if preflight_error:
         raise HTTPException(status_code=400, detail=preflight_error)
@@ -1584,10 +1622,8 @@ async def send_message_sync(conversation_id: str, body: SendMessageRequest):
 async def ask_oneshot(body: AskRequest):
     """Run a one-shot query, persist it as a conversation, and return JSON."""
     settings = get_settings()
-    models = body.models if body.models else settings.council_models
-
-    if not models:
-        raise HTTPException(status_code=400, detail="At least one model is required")
+    effective_critique_mode = body.critique_mode or settings.critique_mode or "freeform"
+    models = normalize_model_ids(body.models if body.models else settings.council_models)
 
     preflight_body = SendMessageRequest(
         content=body.content,
@@ -1595,7 +1631,10 @@ async def ask_oneshot(body: AskRequest):
         council_models=models,
         chairman_model=body.chairman_model,
     )
-    preflight_error = await _run_model_preflight(_build_council_preflight_models(preflight_body))
+    _validate_council_request(preflight_body, critique_mode=effective_critique_mode)
+    preflight_error = await _run_model_preflight(
+        _build_council_preflight_models(preflight_body, critique_mode=effective_critique_mode)
+    )
     if preflight_error:
         raise HTTPException(status_code=400, detail=preflight_error)
 
@@ -1609,7 +1648,6 @@ async def ask_oneshot(body: AskRequest):
     except DocumentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    effective_critique_mode = body.critique_mode or settings.critique_mode or "freeform"
     effective_audit_profile = body.audit_profile or settings.audit_profile or "general"
 
     if effective_critique_mode == "audit":
@@ -2071,7 +2109,7 @@ async def reset_settings():
     return {"status": "reset", "message": "Settings reset to defaults"}
 
 
-@app.put("/api/settings")
+@app.put("/api/settings", dependencies=[Depends(_require_admin)])
 async def update_app_settings(request: UpdateSettingsRequest):
     """Update application settings."""
     updates = {}
@@ -2215,10 +2253,10 @@ async def update_app_settings(request: UpdateSettingsRequest):
                 status_code=400,
                 detail="Maximum of 8 council models allowed"
             )
-        updates["council_models"] = request.council_models
+        updates["council_models"] = normalize_model_ids(request.council_models)
 
     if request.chairman_model is not None:
-        updates["chairman_model"] = request.chairman_model
+        updates["chairman_model"] = str(request.chairman_model or "").strip()
 
     # Remote/Local filters
     if request.council_member_filters is not None:
@@ -2415,7 +2453,7 @@ async def get_direct_models():
     return all_models
 
 
-@app.post("/api/settings/test-tavily")
+@app.post("/api/settings/test-tavily", dependencies=[Depends(_require_admin)])
 async def test_tavily_api(request: TestTavilyRequest):
     """Test Tavily API key with a simple search."""
     import httpx
@@ -2451,7 +2489,7 @@ class TestBraveRequest(BaseModel):
     api_key: str | None = None
 
 
-@app.post("/api/settings/test-brave")
+@app.post("/api/settings/test-brave", dependencies=[Depends(_require_admin)])
 async def test_brave_api(request: TestBraveRequest):
     """Test Brave API key with a simple search."""
     import httpx
@@ -2487,7 +2525,7 @@ class TestSerperRequest(BaseModel):
     api_key: str | None = None
 
 
-@app.post("/api/settings/test-serper")
+@app.post("/api/settings/test-serper", dependencies=[Depends(_require_admin)])
 async def test_serper_api(request: TestSerperRequest):
     """Test Serper API key with a simple search."""
     import httpx
@@ -2522,7 +2560,7 @@ class TestTinyfishRequest(BaseModel):
     api_key: str | None = None
 
 
-@app.post("/api/settings/test-tinyfish")
+@app.post("/api/settings/test-tinyfish", dependencies=[Depends(_require_admin)])
 async def test_tinyfish_api(request: TestTinyfishRequest):
     """Test TinyFish API key with a simple search."""
     import httpx
@@ -2560,7 +2598,7 @@ class TestProviderRequest(BaseModel):
     api_key: str
 
 
-@app.post("/api/settings/test-provider")
+@app.post("/api/settings/test-provider", dependencies=[Depends(_require_admin)])
 async def test_provider_api(request: TestProviderRequest):
     """Test an API key for a specific provider."""
     from .council import PROVIDERS
@@ -2597,7 +2635,7 @@ class TestOpenCodeRequest(BaseModel):
     product: Optional[str] = None  # "zen" | "go" | None (= test both)
 
 
-@app.post("/api/settings/test-opencode")
+@app.post("/api/settings/test-opencode", dependencies=[Depends(_require_admin)])
 async def test_opencode_key(request: TestOpenCodeRequest):
     """Test the OpenCode API key by listing models on Zen and/or Go."""
     from .providers.opencode import OpenCodeProvider
@@ -2668,7 +2706,7 @@ async def get_ollama_tags(base_url: Optional[str] = None):
         return {"models": [], "error": str(e)}
 
 
-@app.post("/api/settings/test-ollama")
+@app.post("/api/settings/test-ollama", dependencies=[Depends(_require_admin)])
 async def test_ollama_connection(request: TestOllamaRequest):
     """Test connection to Ollama instance."""
     import httpx
@@ -2699,7 +2737,7 @@ class TestCustomEndpointRequest(BaseModel):
     api_key: Optional[str] = None
 
 
-@app.post("/api/settings/test-custom-endpoint")
+@app.post("/api/settings/test-custom-endpoint", dependencies=[Depends(_require_admin)])
 async def test_custom_endpoint(request: TestCustomEndpointRequest):
     """Test connection to a custom OpenAI-compatible endpoint."""
     from .providers.custom_openai import CustomOpenAIProvider
@@ -2723,7 +2761,7 @@ async def get_custom_endpoint_models():
     return {"models": models}
 
 
-@app.post("/api/settings/test-notion2api")
+@app.post("/api/settings/test-notion2api", dependencies=[Depends(_require_admin)])
 async def test_notion2api_connection(request: TestNotion2APIRequest):
     """Test a dedicated Notion2API provider connection."""
     from .providers.notion2api import Notion2APIProvider
@@ -2860,7 +2898,7 @@ async def get_openrouter_models():
         return {"models": [], "error": str(e)}
 
 
-@app.post("/api/settings/test-openrouter")
+@app.post("/api/settings/test-openrouter", dependencies=[Depends(_require_admin)])
 async def test_openrouter_api(request: TestOpenRouterRequest):
     """Test OpenRouter API key with a simple request."""
     import httpx

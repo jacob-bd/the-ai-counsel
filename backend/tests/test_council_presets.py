@@ -71,7 +71,7 @@ def client():
         mock_get.return_value = Settings()
         mock_update.side_effect = lambda **kwargs: Settings(**{**Settings().model_dump(), **kwargs})
         from backend.main import app
-        with TestClient(app) as c:
+        with TestClient(app, client=("127.0.0.1", 50000)) as c:
             c._mock_update = mock_update
             yield c
 

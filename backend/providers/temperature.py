@@ -12,6 +12,7 @@ INTERNAL_PROVIDER_PREFIXES = {
     "google",
     "groq",
     "mistral",
+    "notion2api",
     "nvidia",
     "ollama",
     "openai",
@@ -64,7 +65,7 @@ def should_omit_temperature(model_id: str, provider: str) -> bool:
         return is_openai_fixed_temperature_model(model_id)
     if provider == "anthropic":
         return is_anthropic_temperature_deprecated_model(model_id)
-    if provider in {"custom", "openrouter"}:
+    if provider in {"custom", "openrouter", "notion2api"}:
         return (
             is_openai_fixed_temperature_model(model_id)
             or is_anthropic_temperature_deprecated_model(model_id)
