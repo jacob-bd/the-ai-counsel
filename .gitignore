@@ -52,3 +52,11 @@ logs/security/
 
 # Antigravity CLI config
 .antigravitycli/
+
+
+# Local analysis and generated maintenance artifacts
+/.notion2council-requirements.sha256
+/FIXES_APPLIED.md
+/_ANALYSIS_MANIFEST.txt
+/_WORKTREE_CHANGES.patch
+/notion2api-random-delay-production-fix.patch

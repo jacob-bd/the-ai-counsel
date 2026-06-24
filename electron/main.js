@@ -421,6 +421,7 @@ function createWindow() {
     show: false,
     icon: appIconPath(),
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -868,6 +869,12 @@ ipcMain.handle('diagnostics:start', () => {
   return { ok: true };
 });
 
+ipcMain.handle('diagnostics:retryStartup', async () => {
+  stopStack();
+  await startStackAndLoadUi();
+  return { ok: true };
+});
+
 ipcMain.handle('diagnostics:stop', () => {
   stopStack();
   return { ok: true };
@@ -888,6 +895,30 @@ ipcMain.handle('diagnostics:openLogs', () => {
   return { ok: true };
 });
 
+async function loadStartupErrorPage(error) {
+  const errorMessage = error?.message || String(error || 'Unknown startup error');
+  const errorPage = path.join(__dirname, 'error.html');
+  if (fs.existsSync(errorPage)) {
+    await mainWindow.loadFile(errorPage, { query: { error: errorMessage } });
+    return;
+  }
+  await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <h1>The AI Counsel desktop launcher could not start the UI.</h1>
+    <p>${errorMessage}</p>
+    <p>Check logs at: ${LOG_DIR}</p>
+    <p>Backend: ${HEALTH_URL}</p>
+    <p>Frontend: ${FRONTEND_URL}</p>
+  `)}`);
+}
+
+async function startStackAndLoadUi() {
+  startStack();
+  await waitForUrl(HEALTH_URL, 90000);
+  await ensureProviderAutoLaunch();
+  await waitForUrl(FRONTEND_URL, 90000);
+  await mainWindow.loadURL(FRONTEND_URL);
+}
+
 async function startDesktopApp() {
   log(`${APP_NAME} desktop starting`);
   updateApplicationMenu();
@@ -896,20 +927,10 @@ async function startDesktopApp() {
   registerHotkeys();
 
   try {
-    startStack();
-    await waitForUrl(HEALTH_URL, 90000);
-    await ensureProviderAutoLaunch();
-    await waitForUrl(FRONTEND_URL, 90000);
-    await mainWindow.loadURL(FRONTEND_URL);
+    await startStackAndLoadUi();
   } catch (error) {
     log(`Failed to load UI: ${error.stack || error.message}`);
-    await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
-      <h1>The AI Counsel desktop launcher could not start the UI.</h1>
-      <p>${error.message}</p>
-      <p>Check logs at: ${LOG_DIR}</p>
-      <p>Backend: ${HEALTH_URL}</p>
-      <p>Frontend: ${FRONTEND_URL}</p>
-    `)}`);
+    await loadStartupErrorPage(error);
   }
 }
 

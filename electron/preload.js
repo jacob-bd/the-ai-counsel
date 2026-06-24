@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('notion2CouncilHotkeys', {
 contextBridge.exposeInMainWorld('notion2CouncilDiagnostics', {
   status: () => ipcRenderer.invoke('diagnostics:status'),
   start: () => ipcRenderer.invoke('diagnostics:start'),
+  retryStartup: () => ipcRenderer.invoke('diagnostics:retryStartup'),
   stop: () => ipcRenderer.invoke('diagnostics:stop'),
   openCouncil: () => ipcRenderer.invoke('diagnostics:openCouncil'),
   openDocs: () => ipcRenderer.invoke('diagnostics:openDocs'),
