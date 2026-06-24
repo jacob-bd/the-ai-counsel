@@ -61,7 +61,38 @@ export default function DocumentUpload({
     setBusy(true);
     try {
       const result = await api.extractDocuments(files);
-      updatePayload(result.documents || [], result.attachments || [], result.warnings || []);
+      const fileDataPromises = files.map(async (file) => {
+        try {
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const parts = reader.result.split(',');
+              resolve(parts.length > 1 ? parts[1] : '');
+            };
+            reader.onerror = (error) => reject(error);
+            reader.readAsDataURL(file);
+          });
+          return { name: file.name, base64 };
+        } catch (e) {
+          console.error("Failed to read file as base64", file.name, e);
+          return { name: file.name, base64: null };
+        }
+      });
+      const fileDataList = await Promise.all(fileDataPromises);
+      const fileDataMap = {};
+      fileDataList.forEach(fd => {
+        fileDataMap[fd.name] = fd.base64;
+      });
+
+      const nextDocs = (result.documents || []).map(doc => {
+        const base64 = fileDataMap[doc.name];
+        if (base64) {
+          return { ...doc, data_base64: base64 };
+        }
+        return doc;
+      });
+
+      updatePayload(nextDocs, result.attachments || [], result.warnings || []);
     } catch (error) {
       updatePayload([], [], [error.message || 'Failed to extract document text.']);
     } finally {

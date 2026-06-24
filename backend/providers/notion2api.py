@@ -311,6 +311,8 @@ class Notion2APIProvider(LLMProvider):
             self.provider_prefix,
             temperature,
         )
+        if attachments:
+            payload["attachments"] = attachments
         if max_output_tokens is not None:
             payload["max_tokens"] = max_output_tokens
 

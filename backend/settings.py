@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field
 from .search import SearchProvider
 
@@ -215,6 +215,9 @@ class Settings(BaseModel):
     attachment_retry_delay_seconds: float = 35.0
     attachment_poll_interval_seconds: float = 2.0
     attachment_poll_timeout_seconds: float = 60.0
+    custom_endpoint_supports_attachments: bool = False
+    custom_endpoint_is_stateful: bool = False
+    attachment_replay_policy: Literal["first_round", "every_round", "stateless_only"] = "stateless_only"
     model_timeout_seconds: int = 300
     preflight_timeout_seconds: float = 10.0
     claim_extraction_timeout_seconds: float = 600.0  # Notion2API can take up to 600 s for large claim sets

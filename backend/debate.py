@@ -541,6 +541,7 @@ async def run_iterative_debate(
     debate_rounds: Optional[int] = None,
     conversation_id: Optional[str] = None,
     critique_mode: Optional[str] = None,
+    documents: Optional[List[Dict[str, Any]]] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Orchestrate multi-round debate. Yields SSE-ready event dicts.
@@ -553,6 +554,8 @@ async def run_iterative_debate(
     - Storage (using the debate_complete event's rounds data)
     - Yielding the final 'complete' event
     """
+    from .documents import build_effective_query
+    effective_query = build_effective_query(user_query, documents)
     settings = get_settings()
     num_rounds = min(
         debate_rounds if debate_rounds is not None else settings.debate_rounds,
@@ -620,7 +623,7 @@ async def run_iterative_debate(
 
                     prompt = STAGE1_ROUND_N_CLAIM_PROMPT.format(
                         round_number=round_num,
-                        user_query=user_query,
+                        user_query=effective_query,
                         search_context_block=search_block,
                         own_claims_with_critiques=own_critiques,
                         top_claims_from_others=top_text,
@@ -645,7 +648,7 @@ async def run_iterative_debate(
                     )
                     prompt = STAGE1_ROUND_N_PARAGRAPH_PROMPT.format(
                         round_number=round_num,
-                        user_query=user_query,
+                        user_query=effective_query,
                         search_context_block=search_block,
                         own_paragraphs_with_critiques=own_paras,
                         top_paragraphs_from_others=top_paras,
@@ -659,7 +662,7 @@ async def run_iterative_debate(
                 # Freeform mode (or fallback)
                 round_prompt = STAGE1_ROUND_N_FREEFORM_PROMPT.format(
                     round_number=round_num,
-                    user_query=user_query,
+                    user_query=effective_query,
                     search_context_block=search_block,
                     previous_synthesis=truncate_text(previous_synthesis, MAX_SYNTHESIS_CHARS),
                     previous_rankings_summary=_build_rankings_summary(previous_rankings or []),
@@ -672,7 +675,7 @@ async def run_iterative_debate(
                 # chat_ranking mode: feedback from rankings only
                 round_prompt = STAGE1_ROUND_N_CHAT_RANKING_PROMPT.format(
                     round_number=round_num,
-                    user_query=user_query,
+                    user_query=effective_query,
                     search_context_block=search_block,
                     previous_rankings_summary=_build_rankings_summary(previous_rankings or []),
                     your_rank="{model_rank}",
@@ -700,6 +703,8 @@ async def run_iterative_debate(
             messages_override=messages_override,
             per_model_messages=per_model_messages,
             conversation_id=conversation_id,
+            documents=documents,
+            round_num=round_num,
         ):
             if isinstance(item, int):
                 total_models = item
@@ -827,7 +832,7 @@ async def run_iterative_debate(
 
                     from .prompts import STAGE2_CLAIM_PROMPT
                     stage2_prompt_override = STAGE2_CLAIM_PROMPT.format(
-                        user_query=user_query,
+                        user_query=effective_query,
                         search_context_block=search_context_block,
                         responses_text=responses_text,
                         canonical_claims_text=claims_text,
@@ -837,7 +842,7 @@ async def run_iterative_debate(
             await asyncio.sleep(0.05)
 
             async for item in stage2_collect_rankings(
-                user_query, stage1_results, search_context, request,
+                effective_query, stage1_results, search_context, request,
                 prompt_override=stage2_prompt_override,
                 conversation_id=conversation_id,
             ):
@@ -951,7 +956,7 @@ async def run_iterative_debate(
                     )
                     prompt_override = STAGE3_FINAL_CLAIM_PROMPT.format(
                         total_rounds=round_num,
-                        user_query=user_query,
+                        user_query=effective_query,
                         search_context_block=search_block,
                         actual_claim_count=authoritative_claim_count,
                         claim_evolution_summary=claim_evolution,
@@ -963,7 +968,7 @@ async def run_iterative_debate(
 
                     prompt_override = STAGE3_FINAL_FREEFORM_PROMPT.format(
                         total_rounds=round_num,
-                        user_query=user_query,
+                        user_query=effective_query,
                         search_context_block=search_block,
                         previous_synthesis=truncate_text(previous_synthesis, MAX_SYNTHESIS_CHARS),
                         stage1_text=stage1_text,
@@ -971,7 +976,7 @@ async def run_iterative_debate(
                     )
 
             stage3_result = await stage3_synthesize_final(
-                user_query, stage1_results, stage2_results, search_context,
+                effective_query, stage1_results, stage2_results, search_context,
                 chairman_override=chairman_override,
                 prompt_override=prompt_override,
                 conversation_id=conversation_id,
@@ -1035,7 +1040,7 @@ async def run_iterative_debate(
             default_template=STAGE4_CORRECTED_DRAFT_PROMPT,
             custom_template=custom_stage4_prompt if isinstance(custom_stage4_prompt, str) else "",
             total_rounds=len(all_rounds_data),
-            original_text=user_query,
+            original_text=effective_query,
             verdict_text=previous_synthesis,
             corrections_text=corrections_text,
             chairman_override=chairman_override,

@@ -111,6 +111,7 @@ def validate_documents_for_request(
                 "name": name,
                 "mime_type": mime_type,
                 "text": text,
+                "data_base64": b64,
                 "metadata": _coerce_metadata(extracted, text, warnings, truncated),
             })
             continue
@@ -129,10 +130,12 @@ def validate_documents_for_request(
         total_remaining -= len(text)
 
         warnings = ["Document text was truncated."] if truncated else []
+        b64 = raw.get("data_base64")
         validated.append({
             "name": name,
             "mime_type": mime_type,
             "text": text,
+            **({"data_base64": b64} if b64 else {}),
             "metadata": _coerce_metadata(raw, text, warnings, truncated),
         })
     return validated
@@ -345,3 +348,81 @@ def extract_pdf_bytes(
         },
     }
     return validate_documents_for_request([doc], limits)[0]
+
+
+@dataclass(frozen=True)
+class AttachmentCapabilities:
+    enabled: bool
+    supported_mime_types: set[str]
+    stateful: bool
+
+
+@dataclass
+class PreparedDocuments:
+    native_candidates: list[dict[str, Any]]
+    fallback_documents: list[dict[str, Any]]
+    storage_metadata: list[dict[str, Any]]
+
+
+def prepare_documents(
+    documents: list[dict[str, Any]] | None,
+    capabilities: AttachmentCapabilities,
+) -> PreparedDocuments:
+    """Prepare request documents into native attachments, prompt fallbacks, and storage metadata."""
+    native_candidates = []
+    fallback_documents = []
+    storage_metadata = []
+
+    if not documents:
+        return PreparedDocuments(
+            native_candidates=[],
+            fallback_documents=[],
+            storage_metadata=[],
+        )
+
+    for doc in documents:
+        if not isinstance(doc, dict):
+            continue
+
+        name = sanitize_filename(str(doc.get("name") or "attachment"))
+        mime_type = str(doc.get("mime_type") or doc.get("content_type") or "text/plain").strip()
+        text = str(doc.get("text") or "")
+        data_base64 = doc.get("data_base64")
+
+        # Strip prefixes from base64 if it's a data URL
+        if isinstance(data_base64, str) and "," in data_base64:
+            data_base64 = data_base64.split(",", 1)[1]
+
+        # Check if native attachment is possible for this document:
+        # It must have original bytes, and the provider must support its mime type
+        if capabilities.enabled and data_base64 and mime_type.lower() in capabilities.supported_mime_types:
+            native_candidates.append({
+                "name": name,
+                "content_type": mime_type,
+                "file_data": data_base64,
+            })
+        else:
+            # Otherwise use text prompt fallback
+            fallback_documents.append({
+                "name": name,
+                "mime_type": mime_type,
+                "text": text,
+            })
+
+        # Storage metadata (no file bytes!)
+        item_meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        storage_metadata.append({
+            "name": name,
+            "mime_type": mime_type,
+            "char_count": int(item_meta.get("char_count") or len(text)),
+            "truncated": bool(item_meta.get("truncated", False)),
+            "ocr_used": bool(item_meta.get("ocr_used", False)),
+            "page_count": item_meta.get("page_count"),
+            "warnings": list(item_meta.get("warnings") or []),
+        })
+
+    return PreparedDocuments(
+        native_candidates=native_candidates,
+        fallback_documents=fallback_documents,
+        storage_metadata=storage_metadata,
+    )

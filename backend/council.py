@@ -203,7 +203,8 @@ async def _query_model_raw(
     provider = get_provider_for_model(model)
     try:
         from .providers.notion2api import Notion2APIProvider
-        if isinstance(provider, Notion2APIProvider):
+        from .providers.custom_openai import CustomOpenAIProvider
+        if isinstance(provider, (Notion2APIProvider, CustomOpenAIProvider)):
             response = await provider.query(
                 model_id=model,
                 messages=messages,
@@ -338,6 +339,8 @@ async def stage1_collect_responses(
     per_model_messages: "Dict[str, List[Dict[str, str]]] | None" = None,
     conversation_id: "str | None" = None,
     attachments: List[Dict[str, Any]] | None = None,
+    documents: List[Dict[str, Any]] | None = None,
+    round_num: int = 1,
 ) -> Any:
     """
     Stage 1: Collect individual responses from all council models.
@@ -350,42 +353,11 @@ async def stage1_collect_responses(
         history: Prior conversation turns as [{role, content}, ...] for multi-turn
         messages_override: Optional messages override to bypass default prompt
         per_model_messages: Optional messages per model
-        attachments: Optional file attachments for Notion2API uploads
-
-    Yields:
-        - First yield: total_models (int)
-        - Subsequent yields: Individual model results (dict)
+        attachments: Obsolete, kept for legacy signature compatibility
+        documents: File attachments with base64 data for native ingestion
+        round_num: The current debate round number (used for replay policy)
     """
     settings = get_settings()
-
-    # Build search context block if search results provided
-    search_context_block = ""
-    if search_context:
-        from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
-        search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
-
-    # Use customizable Stage 1 prompt
-    try:
-        prompt_template = settings.stage1_prompt
-        if not prompt_template:
-            from .prompts import STAGE1_PROMPT_DEFAULT
-            prompt_template = STAGE1_PROMPT_DEFAULT
-
-        prompt = prompt_template.format(
-            user_query=user_query,
-            search_context_block=search_context_block
-        )
-    except (KeyError, AttributeError, TypeError) as e:
-        logger.warning(f"Error formatting Stage 1 prompt: {e}. Using fallback.")
-        prompt = f"{search_context_block}Question: {user_query}" if search_context_block else user_query
-
-    if messages_override is None and per_model_messages is None:
-        prompt = apply_response_language(prompt, settings.response_language)
-
-    if messages_override is not None:
-        messages = messages_override
-    else:
-        messages = (history or []) + [{"role": "user", "content": prompt}]
 
     models = (
         normalize_model_ids(models_override)
@@ -398,16 +370,110 @@ async def stage1_collect_responses(
 
     council_temp = settings.council_temperature
 
+    from .documents import prepare_documents, AttachmentCapabilities
+    from .providers.notion2api import Notion2APIProvider
+    from .providers.custom_openai import CustomOpenAIProvider
+
+    def _get_capabilities_for_model(m: str) -> AttachmentCapabilities:
+        provider = get_provider_for_model(m)
+        replay_policy = getattr(settings, "attachment_replay_policy", "stateless_only")
+
+        # Initial capabilities based on model type
+        if isinstance(provider, Notion2APIProvider):
+            initial_enabled = True
+            is_stateful = True
+            supported_mimes = {
+                "application/pdf", "text/csv", "image/png", "image/jpeg",
+                "image/gif", "image/webp", "image/heic", "text/plain", "text/markdown", "application/json"
+            }
+        elif isinstance(provider, CustomOpenAIProvider):
+            initial_enabled = getattr(settings, "custom_endpoint_supports_attachments", False)
+            is_stateful = getattr(settings, "custom_endpoint_is_stateful", False)
+            supported_mimes = {
+                "application/pdf", "text/csv", "image/png", "image/jpeg",
+                "image/gif", "image/webp", "image/heic", "text/plain", "text/markdown", "application/json"
+            }
+        else:
+            initial_enabled = False
+            is_stateful = False
+            supported_mimes = set()
+
+        # Adjust capability based on round_num and replay policy
+        effective_enabled = initial_enabled
+        if initial_enabled and round_num > 1:
+            if replay_policy == "first_round":
+                effective_enabled = False
+            elif replay_policy == "stateless_only":
+                if is_stateful:
+                    effective_enabled = False
+
+        return AttachmentCapabilities(
+            enabled=effective_enabled,
+            supported_mime_types=supported_mimes,
+            stateful=is_stateful,
+        )
+
     async def _query_safe(m: str):
         try:
-            model_msgs = per_model_messages.get(m, messages) if per_model_messages else messages
+            # Determine capabilities of this specific model's provider
+            caps = _get_capabilities_for_model(m)
+
+            # Prepare documents according to provider capability
+            prepared = prepare_documents(documents, caps)
+
+            # Build the search context block if search results provided
+            search_context_block = ""
+            if search_context:
+                from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
+                search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
+
+            # Use customizable Stage 1 prompt template
+            try:
+                prompt_template = settings.stage1_prompt
+                if not prompt_template:
+                    from .prompts import STAGE1_PROMPT_DEFAULT
+                    prompt_template = STAGE1_PROMPT_DEFAULT
+
+                # Build the fallback document prompt text block
+                from .documents import format_documents_for_prompt
+                fallback_block = format_documents_for_prompt(prepared.fallback_documents)
+
+                model_query = user_query
+                if fallback_block:
+                    model_query = f"{user_query}\n\n{fallback_block}"
+
+                model_prompt = prompt_template.format(
+                    user_query=model_query,
+                    search_context_block=search_context_block
+                )
+            except Exception as e:
+                logger.warning(f"Error formatting Stage 1 prompt for {m}: {e}. Using fallback.")
+                from .documents import format_documents_for_prompt
+                fallback_block = format_documents_for_prompt(prepared.fallback_documents)
+                model_query = f"{user_query}\n\n{fallback_block}" if fallback_block else user_query
+                model_prompt = f"{search_context_block}Question: {model_query}" if search_context_block else model_query
+
+            if messages_override is None and per_model_messages is None:
+                model_prompt = apply_response_language(model_prompt, settings.response_language)
+
+            if messages_override is not None:
+                model_msgs = messages_override
+            elif per_model_messages and m in per_model_messages:
+                model_msgs = per_model_messages[m]
+            else:
+                model_msgs = (history or []) + [{"role": "user", "content": model_prompt}]
+
             model_timeout = getattr(settings, "model_timeout_seconds", 300)
+
+            # Native attachments to pass to provider
+            model_attachments = prepared.native_candidates if prepared.native_candidates else None
+
             return m, await query_model(
                 m,
                 model_msgs,
                 timeout=model_timeout,
                 temperature=council_temp,
-                attachments=attachments,
+                attachments=model_attachments,
                 conversation_id=conversation_id,
             )
         except Exception as e:

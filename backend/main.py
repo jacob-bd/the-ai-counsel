@@ -590,8 +590,10 @@ async def _run_council_pipeline(
     history: Optional[List[Dict[str, str]]] = None,
     conversation_id: Optional[str] = None,
     preflight: bool = True,
+    documents: Optional[List[Dict[str, Any]]] = None,
 ) -> PipelineResult:
     """Shared orchestration for stage1 â†’ stage2 â†’ stage3 (non-streaming)."""
+    effective_query = build_effective_query(content, documents)
     result = PipelineResult()
 
     if preflight:
@@ -613,6 +615,7 @@ async def _run_council_pipeline(
         models_override=models_override,
         history=history,
         conversation_id=conversation_id,
+        documents=documents,
     ):
         if isinstance(item, int):
             continue
@@ -628,7 +631,7 @@ async def _run_council_pipeline(
 
     if execution_mode in ("chat_ranking", "full"):
         async for item in stage2_collect_rankings(
-            content,
+            effective_query,
             result.stage1,
             search_context,
             request=request,
@@ -646,7 +649,7 @@ async def _run_council_pipeline(
 
     if execution_mode == "full":
         result.stage3 = await stage3_synthesize_final(
-            content, result.stage1, result.stage2, search_context,
+            effective_query, result.stage1, result.stage2, search_context,
             chairman_override=chairman_override,
             conversation_id=conversation_id,
         )
@@ -822,7 +825,9 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
         cost_report = None
         _register_run(conversation_id, body.execution_mode)
         try:
-            effective_content, attachments = _prepare_document_context(body.content, body.documents)
+            validated_docs = validate_documents_for_request(body.documents)
+            effective_content = build_effective_query(body.content, validated_docs)
+            attachments = to_attachment_metadata(validated_docs)
             storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
             _validate_council_request(body)
@@ -885,12 +890,13 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
             total_models = 0
 
             async for item in stage1_collect_responses(
-                effective_content,
+                body.content,
                 search_context,
                 request,
                 models_override=body.council_models,
                 history=history,
                 conversation_id=conversation_id,
+                documents=validated_docs,
             ):
                 if isinstance(item, int):
                     total_models = item
@@ -1117,7 +1123,9 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
         debate_converged = False
         _register_run(conversation_id, body.execution_mode, critique_mode=effective_critique_mode, audit_profile=effective_audit_profile)
         try:
-            effective_content, attachments = _prepare_document_context(body.content, body.documents)
+            validated_docs = validate_documents_for_request(body.documents)
+            effective_content = build_effective_query(body.content, validated_docs)
+            attachments = to_attachment_metadata(validated_docs)
             storage.add_user_message(conversation_id, body.content, conversation=conversation, attachments=attachments)
 
             _validate_council_request(body, critique_mode=effective_critique_mode)
@@ -1187,13 +1195,14 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
             else:
                 from .debate import run_iterative_debate
                 generator = run_iterative_debate(
-                    effective_content, search_context, request, body.execution_mode,
+                    body.content, search_context, request, body.execution_mode,
                     models_override=body.council_models,
                     chairman_override=body.chairman_model,
                     history=history,
                     debate_rounds=effective_rounds,
                     conversation_id=conversation_id,
                     critique_mode=effective_critique_mode,
+                    documents=validated_docs,
                 )
 
             async for event in generator:
@@ -1671,7 +1680,9 @@ async def ask_oneshot(body: AskRequest):
         search_context, search_query, _ = await _fetch_search_context(body.content, settings)
 
     try:
-        effective_content, attachments = _prepare_document_context(body.content, body.documents)
+        validated_docs = validate_documents_for_request(body.documents)
+        effective_content = build_effective_query(body.content, validated_docs)
+        attachments = to_attachment_metadata(validated_docs)
     except DocumentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1808,9 +1819,10 @@ async def ask_oneshot(body: AskRequest):
             }
 
     result = await _run_council_pipeline(
-        effective_content, body.execution_mode, search_context,
+        body.content, body.execution_mode, search_context,
         models_override=models, chairman_override=body.chairman_model,
         preflight=False,
+        documents=validated_docs,
     )
 
     conversation_id = str(uuid.uuid4())
@@ -1955,6 +1967,9 @@ class UpdateSettingsRequest(BaseModel):
     model_timeout_seconds: Optional[int] = None
     preflight_timeout_seconds: Optional[float] = None
     claim_extraction_timeout_seconds: Optional[float] = None
+    custom_endpoint_supports_attachments: Optional[bool] = None
+    custom_endpoint_is_stateful: Optional[bool] = None
+    attachment_replay_policy: Optional[Literal["first_round", "every_round", "stateless_only"]] = None
 
 
     # System Prompts
@@ -2086,6 +2101,9 @@ async def get_app_settings():
         "debate_rounds": settings.debate_rounds,
         "auto_converge": settings.auto_converge,
         "convergence_threshold": settings.convergence_threshold,
+        "custom_endpoint_supports_attachments": settings.custom_endpoint_supports_attachments,
+        "custom_endpoint_is_stateful": settings.custom_endpoint_is_stateful,
+        "attachment_replay_policy": settings.attachment_replay_policy,
     }
 
 
@@ -2349,6 +2367,14 @@ async def update_app_settings(request: UpdateSettingsRequest):
             raise HTTPException(status_code=400, detail="convergence_threshold must be 1-5")
         updates["convergence_threshold"] = request.convergence_threshold
 
+    if request.custom_endpoint_supports_attachments is not None:
+        updates["custom_endpoint_supports_attachments"] = request.custom_endpoint_supports_attachments
+    if request.custom_endpoint_is_stateful is not None:
+        updates["custom_endpoint_is_stateful"] = request.custom_endpoint_is_stateful
+    if request.attachment_replay_policy is not None:
+        updates["attachment_replay_policy"] = request.attachment_replay_policy
+
+
     if request.advisor_default_model is not None:
         updates["advisor_default_model"] = request.advisor_default_model
     if request.advisor_tiebreaker_model is not None:
@@ -2456,6 +2482,9 @@ async def update_app_settings(request: UpdateSettingsRequest):
         "debate_rounds": settings.debate_rounds,
         "auto_converge": settings.auto_converge,
         "convergence_threshold": settings.convergence_threshold,
+        "custom_endpoint_supports_attachments": settings.custom_endpoint_supports_attachments,
+        "custom_endpoint_is_stateful": settings.custom_endpoint_is_stateful,
+        "attachment_replay_policy": settings.attachment_replay_policy,
     }
 
 
