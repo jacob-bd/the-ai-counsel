@@ -10,6 +10,11 @@ import nvidiaLogo from '../assets/icons/nvidia.svg';
 import customLogo from '../assets/icons/openai-compatible.svg';
 import opencodeLogo from '../assets/icons/opencode.svg';
 import notion2apiLogo from '../assets/icons/notion2api.svg';
+import xaiLogo from '../assets/icons/xai.svg';
+import {
+  getModelPickerDisplayName,
+  getNotion2APIModelMetadata,
+} from './modelHelpers';
 
 export const PROVIDER_CONFIG = {
   openai: { color: '#10a37f', label: 'OpenAI', logo: openaiLogo },
@@ -25,6 +30,9 @@ export const PROVIDER_CONFIG = {
   'opencode-zen': { color: '#211E1E', label: 'OpenCode Zen', logo: opencodeLogo },
   'opencode-go': { color: '#211E1E', label: 'OpenCode Go', logo: opencodeLogo },
   notion2api: { color: '#0ea5e9', label: 'Notion2API', logo: notion2apiLogo },
+  xai: { color: '#f8fafc', label: 'xAI', logo: xaiLogo },
+  kimi: { color: '#cbd5e1', label: 'Kimi', logo: null, icon: 'K' },
+  minimax: { color: '#a78bfa', label: 'MiniMax', logo: null, icon: 'M' },
   default: { color: '#888888', label: 'Model', logo: null, icon: '🤖' },
 };
 
@@ -48,6 +56,7 @@ export function getProviderInfo(modelId) {
   const id = modelId.toLowerCase();
 
   if (id.startsWith('openrouter:') || id.includes('openrouter')) return PROVIDER_CONFIG.openrouter;
+  if (id.startsWith('xai:') || id.includes('grok')) return PROVIDER_CONFIG.xai;
 
   for (const [prefix, key] of PROVIDER_PREFIXES) {
     if (id.startsWith(prefix)) return PROVIDER_CONFIG[key];
@@ -65,9 +74,58 @@ export function getProviderInfo(modelId) {
   return PROVIDER_CONFIG.default;
 }
 
+const MODEL_FAMILY_PROVIDER_KEYS = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  gemini: 'google',
+  google: 'google',
+  mistral: 'mistral',
+  deepseek: 'deepseek',
+  xai: 'xai',
+  kimi: 'kimi',
+  minimax: 'minimax',
+};
+
+function inferModelBrandKey(modelId) {
+  const id = String(modelId || '').trim().toLowerCase();
+  if (!id) return null;
+
+  const metadata = getNotion2APIModelMetadata(id);
+  const metadataKey = metadata ? MODEL_FAMILY_PROVIDER_KEYS[metadata.family] : null;
+  if (metadataKey) return metadataKey;
+
+  const displayName = getModelPickerDisplayName({ id: modelId }).toLowerCase();
+  const identity = `${id} ${displayName}`;
+
+  if (/\b(grok|xai)\b/.test(identity)) return 'xai';
+  if (/\b(gpt|openai)\b/.test(identity)) return 'openai';
+  if (/\b(claude|sonnet|opus|haiku|anthropic)\b/.test(identity)) return 'anthropic';
+  if (/\b(gemini|google)\b/.test(identity)) return 'google';
+  if (/\bdeepseek\b/.test(identity)) return 'deepseek';
+  if (/\b(mistral|mixtral)\b/.test(identity)) return 'mistral';
+
+  return null;
+}
+
+/**
+ * Returns the visual brand for the underlying model while preserving the
+ * transport provider separately (for example, Notion2API remains the label).
+ */
+export function getModelBrandInfo(modelId) {
+  const providerInfo = getProviderInfo(modelId);
+  const id = String(modelId || '').trim().toLowerCase();
+  if (!id.startsWith('notion2api:')) return providerInfo;
+
+  const brandKey = inferModelBrandKey(modelId);
+  return brandKey ? PROVIDER_CONFIG[brandKey] : providerInfo;
+}
+
 export function getModelDisplayName(modelId) {
   if (!modelId) return 'Choose model';
   if (modelId.startsWith('placeholder')) return 'Council Member';
+  if (modelId.toLowerCase().startsWith('notion2api:')) {
+    return getModelPickerDisplayName({ id: modelId });
+  }
 
   let name = modelId;
   name = name.replace(/:free$/, '');

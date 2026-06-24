@@ -5,6 +5,7 @@ import './App.css';
 import './components/StageCopyButtons.css';
 import './ModeToggle.css';
 import { auditEventReducer } from './state/auditEventReducer';
+import { markTerminalResult, reconcileTerminalResults } from './utils/requestStatus';
 
 const ChatInterface = lazy(() => import('./components/ChatInterface'));
 const Settings = lazy(() => import('./components/Settings'));
@@ -15,6 +16,7 @@ function finalizeTimers(timers = {}) {
   const now = Date.now();
   const next = { ...timers };
   if (next.stage1Start && !next.stage1End) next.stage1End = now;
+  if (next.claimDecompositionStart && !next.claimDecompositionEnd) next.claimDecompositionEnd = now;
   if (next.stage2Start && !next.stage2End) next.stage2End = now;
   if (next.stage2aStart && !next.stage2aEnd) next.stage2aEnd = now;
   if (next.stage2bStart && !next.stage2bEnd) next.stage2bEnd = now;
@@ -44,6 +46,7 @@ const deriveConversationTitle = (content) => {
 const IDLE_LOADING = {
   search: false,
   stage1: false,
+  claimDecomposition: false,
   stage2: false,
   stage3: false,
   stage4: false,
@@ -1175,7 +1178,7 @@ function App() {
               setCurrentConversation((prev) => {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
-                const initialStage1 = (councilModels || []).map(m => ({ model: m, pending: true }));
+                const initialStage1 = (councilModels || []).map((model) => ({ model, status: 'queued' }));
 
                 const updatedLastMsg = {
                   ...lastMsg,
@@ -1200,11 +1203,12 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
 
+                const terminalResult = markTerminalResult(event.data);
                 const updatedStage1 = lastMsg.stage1
-                  ? lastMsg.stage1.some(r => r.model === event.data.model)
-                    ? lastMsg.stage1.map(r => r.model === event.data.model ? event.data : r)
-                    : [...lastMsg.stage1, event.data]
-                  : [event.data];
+                  ? lastMsg.stage1.some((result) => result.model === terminalResult.model)
+                    ? lastMsg.stage1.map((result) => result.model === terminalResult.model ? terminalResult : result)
+                    : [...lastMsg.stage1, terminalResult]
+                  : [terminalResult];
                 const updatedLastMsg = {
                   ...lastMsg,
                   progress: {
@@ -1212,7 +1216,7 @@ function App() {
                     stage1: {
                       count: event.count,
                       total: event.total,
-                      currentModel: event.data.model
+                      currentModel: terminalResult.model
                     }
                   },
                   stage1: updatedStage1
@@ -1229,10 +1233,15 @@ function App() {
                 const messages = [...prev.messages];
                 const lastMsg = messages[messages.length - 1];
 
-                // Immutable update to prevent React rendering issues
+                const expectedModels = (lastMsg.stage1 || []).map((result) => result.model).filter(Boolean);
+                const reconciledStage1 = reconcileTerminalResults(
+                  lastMsg.stage1 || [],
+                  event.data || [],
+                  expectedModels.length > 0 ? expectedModels : (councilModels || [])
+                );
                 const updatedLastMsg = {
                   ...lastMsg,
-                  stage1: event.data,
+                  stage1: reconciledStage1,
                   loading: {
                     ...lastMsg.loading,
                     stage1: false
@@ -1244,6 +1253,60 @@ function App() {
                 };
 
                 messages[messages.length - 1] = updatedLastMsg;
+                return { ...prev, messages };
+              });
+              break;
+
+            case 'claim_decomposition_start':
+              setCurrentConversation((prev) => {
+                const messages = [...prev.messages];
+                const lastMsg = messages[messages.length - 1];
+                messages[messages.length - 1] = {
+                  ...lastMsg,
+                  loading: {
+                    ...lastMsg.loading,
+                    claimDecomposition: true,
+                  },
+                  timers: {
+                    ...lastMsg.timers,
+                    claimDecompositionStart: Date.now(),
+                  },
+                  metadata: {
+                    ...lastMsg.metadata,
+                    claim_decomposition: {
+                      status: 'running',
+                      ...(event.data || {}),
+                    },
+                  },
+                };
+                return { ...prev, messages };
+              });
+              break;
+
+            case 'claim_decomposition_complete':
+              setCurrentConversation((prev) => {
+                const messages = [...prev.messages];
+                const lastMsg = messages[messages.length - 1];
+                const decomposition = event.data || {};
+                messages[messages.length - 1] = {
+                  ...lastMsg,
+                  loading: {
+                    ...lastMsg.loading,
+                    claimDecomposition: false,
+                  },
+                  timers: {
+                    ...lastMsg.timers,
+                    claimDecompositionEnd: Date.now(),
+                  },
+                  metadata: {
+                    ...lastMsg.metadata,
+                    ...(decomposition.canonical_claims ? { canonical_claims: decomposition.canonical_claims } : {}),
+                    claim_decomposition: {
+                      status: decomposition.success ? 'completed' : 'fallback',
+                      ...decomposition,
+                    },
+                  },
+                };
                 return { ...prev, messages };
               });
               break;
@@ -1526,14 +1589,36 @@ function App() {
               loadConversations();
               break;
 
-            case 'run_paused':
+            case 'run_paused': {
+              const active = event.data.active_providers || [];
+              const held = event.data.pending_providers || [];
+              const targetStage = event.data.stage === 'stage2' ? 'stage2' : 'stage1';
               setRunPaused(true);
               setPausedModel(event.data.failed_model);
               setPausedStage(event.data.stage);
               setPendingCount(event.data.pending_count);
-              setActiveProviders(event.data.active_providers || []);
-              setPendingProviders(event.data.pending_providers || []);
+              setActiveProviders(active);
+              setPendingProviders(held);
+              setCurrentConversation((prev) => {
+                if (!prev?.messages?.length) return prev;
+                const messages = [...prev.messages];
+                const lastMsg = { ...messages[messages.length - 1] };
+                if (Array.isArray(lastMsg[targetStage])) {
+                  lastMsg[targetStage] = lastMsg[targetStage].map((item) => {
+                    if (active.includes(item.model)) {
+                      return { ...item, status: 'running', pending: false, running: true };
+                    }
+                    if (held.includes(item.model)) {
+                      return { ...item, status: 'paused', pending: false, paused: true };
+                    }
+                    return item;
+                  });
+                }
+                messages[messages.length - 1] = lastMsg;
+                return { ...prev, messages };
+              });
               break;
+            }
 
             case 'run_resumed':
               setRunPaused(false);
@@ -1542,6 +1627,54 @@ function App() {
               setPendingCount(0);
               setActiveProviders([]);
               setPendingProviders([]);
+              setCurrentConversation((prev) => {
+                if (!prev?.messages?.length) return prev;
+                const messages = [...prev.messages];
+                const lastMsg = { ...messages[messages.length - 1] };
+                ['stage1', 'stage2'].forEach((stage) => {
+                  if (Array.isArray(lastMsg[stage])) {
+                    lastMsg[stage] = lastMsg[stage].map((item) =>
+                      item.status === 'paused'
+                        ? { ...item, status: 'queued', paused: false }
+                        : item
+                    );
+                  }
+                });
+                messages[messages.length - 1] = lastMsg;
+                return { ...prev, messages };
+              });
+              break;
+
+            case 'provider_status':
+              setCurrentConversation((prev) => {
+                if (!prev?.messages?.length) return prev;
+                const data = event.data || {};
+                const targetStages = data.stage === 'stage2a'
+                  ? ['stage2', 'stage2a']
+                  : data.stage === 'stage2b'
+                    ? ['stage2b']
+                    : data.stage === 'stage2'
+                      ? ['stage2']
+                      : ['stage1'];
+                const messages = [...prev.messages];
+                const lastMsg = { ...messages[messages.length - 1] };
+                const statusRow = {
+                  model: data.model,
+                  status: data.status || 'running',
+                  pending: false,
+                  paused: false,
+                  running: data.status === 'running',
+                  firing: data.status === 'running',
+                };
+                targetStages.forEach((targetStage) => {
+                  const rows = Array.isArray(lastMsg[targetStage]) ? lastMsg[targetStage] : [];
+                  lastMsg[targetStage] = rows.some((item) => item.model === data.model)
+                    ? rows.map((item) => item.model === data.model ? { ...item, ...statusRow } : item)
+                    : [...rows, statusRow];
+                });
+                messages[messages.length - 1] = lastMsg;
+                return { ...prev, messages };
+              });
               break;
 
             case 'provider_retrying':
@@ -1554,7 +1687,7 @@ function App() {
                 if (Array.isArray(lastMsg[targetStage])) {
                   lastMsg[targetStage] = lastMsg[targetStage].map(item =>
                     item.model === event.data.model
-                      ? { ...item, retrying: true, error: false, error_message: null }
+                      ? { ...item, status: 'running', retrying: true, pending: false, error: false, error_message: null }
                       : item
                   );
                 }
@@ -1573,8 +1706,9 @@ function App() {
                 if (Array.isArray(lastMsg[targetStage])) {
                   lastMsg[targetStage] = lastMsg[targetStage].map(item => {
                     if (item.model === event.data.model) {
-                      const updated = { ...item, retrying: false };
+                      const updated = { ...item, retrying: false, running: false, firing: false };
                       if (event.data.success) {
+                        updated.status = 'completed';
                         updated.error = false;
                         updated.error_message = null;
                         if (event.data.stage === 'stage1') {
@@ -1584,6 +1718,7 @@ function App() {
                           updated.parsed_ranking = event.data.parsed_ranking;
                         }
                       } else {
+                        updated.status = 'failed';
                         updated.error = true;
                         updated.error_message = event.data.error_message || 'Retry failed';
                       }
@@ -1607,7 +1742,7 @@ function App() {
                 if (Array.isArray(lastMsg[targetStage])) {
                   lastMsg[targetStage] = lastMsg[targetStage].map(item =>
                     item.model === event.data.model
-                      ? { ...item, pending: false, firing: true }
+                      ? { ...item, status: 'running', pending: false, paused: false, firing: true, running: true }
                       : item
                   );
                 }

@@ -16,6 +16,7 @@ import CostReport from './CostReport';
 import PauseBanner from './PauseBanner';
 import DocumentUpload from './DocumentUpload';
 import './ChatInterface.css';
+import { getShortModelName } from '../utils/modelHelpers';
 
 function hasStage1Results(msg) {
     return Array.isArray(msg.stage1) && msg.stage1.length > 0;
@@ -38,6 +39,7 @@ function getDeliberationScrollPhase(msg) {
     if (!msg || msg.role !== 'assistant') return 'idle';
     if (msg.loading?.stage3 || msg.stage3) return 'stage3';
     if (hasStage2Started(msg)) return 'stage2';
+    if (msg.loading?.claimDecomposition) return 'stage1';
     if (msg.loading?.stage1 || hasStage1Results(msg)) return 'stage1';
     if (msg.loading?.search) return 'search';
     return 'idle';
@@ -47,7 +49,7 @@ function getDeliberationScrollPhase(msg) {
 
 function isCouncilTurnPending(msg, isActiveTurn, isLoading) {
     if (!isActiveTurn || !isLoading || msg.error || msg.aborted) return false;
-    if (msg.loading?.search || msg.loading?.stage1 || msg.loading?.stage2 || msg.loading?.stage3 || msg.loading?.stage4) {
+    if (msg.loading?.search || msg.loading?.stage1 || msg.loading?.claimDecomposition || msg.loading?.stage2 || msg.loading?.stage3 || msg.loading?.stage4) {
         return false;
     }
     if (hasStage1Results(msg) || hasStage2Results(msg) || msg.stage3) return false;
@@ -606,6 +608,32 @@ function CouncilMessageRenderer({
                         onFireProvider={onFireProvider}
                     />
                 )
+            )}
+
+            {/* Claim decomposition between Stage 1 and Stage 2 */}
+            {msg.loading?.claimDecomposition && (
+                <div className="stage-loading claim-decomposition-status" role="status" aria-live="polite">
+                    <div className="spinner"></div>
+                    <div className="claim-decomposition-status__copy">
+                        <strong>Decomposing Stage 1 responses into canonical claims…</strong>
+                        <span>
+                            {displayMetadata.claim_decomposition?.model
+                                ? `${getShortModelName(displayMetadata.claim_decomposition.model)} is preparing the peer-review claim set.`
+                                : 'The chairman is preparing the peer-review claim set.'}
+                        </span>
+                    </div>
+                    <StageTimer
+                        startTime={msg.timers?.claimDecompositionStart}
+                        endTime={msg.timers?.claimDecompositionEnd}
+                        label="Elapsed"
+                    />
+                </div>
+            )}
+
+            {displayMetadata.claim_decomposition?.status === 'fallback' && (
+                <div className="claim-decomposition-fallback" role="status">
+                    Claim decomposition did not produce a usable schema. This round continued in freeform review mode.
+                </div>
             )}
 
             {/* Stage 2 */}

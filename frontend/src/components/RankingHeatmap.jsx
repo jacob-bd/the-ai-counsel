@@ -1,4 +1,6 @@
 import { getShortModelName, getModelVisuals } from '../utils/modelHelpers';
+import { getRequestStatus, getRequestStatusLabel } from '../utils/requestStatus';
+import ModelVisualIcon from './ModelVisualIcon';
 import './RankingHeatmap.css';
 
 function ordinal(n) {
@@ -8,50 +10,62 @@ function ordinal(n) {
   return `${n}th`;
 }
 
+function getMatrixStatus(ranking) {
+  const requestStatus = getRequestStatus(ranking);
+  if (requestStatus === 'completed' && !(ranking?.parsed_ranking?.length > 0)) {
+    return 'unparsed';
+  }
+  return requestStatus;
+}
+
+function getMatrixStatusLabel(status) {
+  if (status === 'unparsed') return 'Unparsed';
+  return getRequestStatusLabel(status);
+}
+
 /**
- * Renders a premium, color-coded N×N heatmap showing how each council model
- * ranked every other model in Stage 2. Fully optimized for Midnight Glass dark theme.
- *
- * Props:
- *   rankings      – Stage 2 rankings array: [{model, parsed_ranking, error, ...}]
- *   labelToModel  – Map of "Response A" -> full model id
+ * Renders an N×N matrix showing every expected Stage 2 request. Rows without a
+ * usable parsed ranking remain visible with their actual lifecycle state.
  */
 export default function RankingHeatmap({ rankings, labelToModel }) {
   if (!rankings || !labelToModel || rankings.length === 0) return null;
 
-  // Filter out any models that failed to rank (failed peer review runs)
-  const validRankings = rankings.filter((r) => !r.error && r.parsed_ranking && r.parsed_ranking.length > 0);
-  if (validRankings.length === 0) return null;
+  const rankingByModel = new Map();
+  rankings.forEach((ranking) => {
+    if (ranking?.model) rankingByModel.set(ranking.model, ranking);
+  });
+  const allRankings = [...rankingByModel.values()];
+  const validRankings = allRankings.filter(
+    (ranking) => !ranking.error && ranking.parsed_ranking?.length > 0
+  );
 
-  // Rankees in label order (A, B, C …)
   const rankeeModels = Object.entries(labelToModel)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([, model]) => model);
+  if (rankeeModels.length === 0) return null;
 
-  const rankerModels = validRankings.map((r) => r.model);
+  const rankerModels = allRankings.map((ranking) => ranking.model);
+  const validRankerModels = validRankings.map((ranking) => ranking.model);
 
-  // Build position matrix: positions[rankerModel][rankeeModel] = 1-based rank
   const positions = {};
   for (const ranking of validRankings) {
     positions[ranking.model] = {};
-    const parsed = ranking.parsed_ranking || [];
-    parsed.forEach((label, idx) => {
+    ranking.parsed_ranking.forEach((label, index) => {
       const model = labelToModel[label];
-      if (model) positions[ranking.model][model] = idx + 1;
+      if (model) positions[ranking.model][model] = index + 1;
     });
   }
 
-  // Average rank per rankee (matching backend leaderboard logic where self-vote defaults to a perfect 1.00)
   const avgRanks = {};
   for (const rankee of rankeeModels) {
-    const vals = rankerModels
-      .map((r) => {
-        if (r === rankee) return 1; // Self-review defaults to a perfect 1st place in aggregate calculations
-        return positions[r]?.[rankee];
+    const values = validRankerModels
+      .map((ranker) => {
+        if (ranker === rankee) return 1;
+        return positions[ranker]?.[rankee];
       })
-      .filter((v) => v !== undefined);
-    if (vals.length > 0) {
-      avgRanks[rankee] = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+      .filter((value) => value !== undefined);
+    if (values.length > 0) {
+      avgRanks[rankee] = (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2);
     }
   }
 
@@ -60,9 +74,16 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
       <div className="heatmap-header">
         <h4 className="heatmap-title">📊 Peer Deliberation Matrix</h4>
         <p className="heatmap-description">
-          Detailed matrix of anonymous peer reviews. Raters are on the left; rated responses are on top.
-          Self-review cells (—) are excluded from the grid but counted as a perfect <strong>1st place (1.00)</strong> in aggregate score calculations to match the leaderboard averages.
+          Every Stage 2 request remains visible. Raters are on the left; rated responses are on top.
+          Running, queued, failed, and unparsed reviews are identified explicitly and excluded from averages.
+          Valid self-review cells (—) count as a perfect <strong>1st place (1.00)</strong> to match the leaderboard.
         </p>
+      </div>
+
+      <div className="heatmap-accounting" role="status">
+        <span>{allRankings.length} requests accounted for</span>
+        <span>{validRankings.length} usable rankings</span>
+        <span>{allRankings.length - validRankings.length} unavailable or incomplete</span>
       </div>
 
       <div className="heatmap-table-wrapper">
@@ -77,7 +98,7 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
                   <th key={model} className="heatmap-col-header" style={{ '--model-color': visuals.color }}>
                     <div className="header-cell-content">
                       <span className="mini-avatar" style={{ backgroundColor: visuals.color }}>
-                        {visuals.icon}
+                        <ModelVisualIcon visuals={visuals} scale={0.68} />
                       </span>
                       <span className="col-name-text" title={short}>{short}</span>
                     </div>
@@ -88,40 +109,42 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
           </thead>
           <tbody>
             {rankerModels.map((ranker) => {
+              const ranking = rankingByModel.get(ranker) || { model: ranker };
+              const rowStatus = getMatrixStatus(ranking);
+              const rowUsable = rowStatus === 'completed' && ranking.parsed_ranking?.length > 0;
               const rankerVisuals = getModelVisuals(ranker);
               const rankerShort = getShortModelName(ranker);
               return (
-                <tr key={ranker} className="heatmap-row">
+                <tr key={ranker} className={`heatmap-row heatmap-row--${rowStatus}`}>
                   <td className="heatmap-row-header" style={{ '--model-color': rankerVisuals.color }}>
                     <div className="row-cell-content">
                       <span className="mini-avatar" style={{ backgroundColor: rankerVisuals.color }}>
-                        {rankerVisuals.icon}
+                        <ModelVisualIcon visuals={rankerVisuals} scale={0.68} />
                       </span>
                       <span className="row-name-text" title={rankerShort}>{rankerShort}</span>
+                      <span className={`heatmap-status-badge heatmap-status-badge--${rowStatus}`}>
+                        {getMatrixStatusLabel(rowStatus)}
+                      </span>
                     </div>
                   </td>
                   {rankeeModels.map((rankee) => {
-                    if (ranker === rankee) {
+                    if (!rowUsable) {
                       return (
-                        <td key={rankee} className="heatmap-cell heatmap-self">
-                          —
+                        <td key={rankee} className={`heatmap-cell heatmap-state heatmap-state--${rowStatus}`}>
+                          {getMatrixStatusLabel(rowStatus)}
                         </td>
                       );
                     }
-                    const pos = positions[ranker]?.[rankee];
-                    if (pos === undefined) {
-                      return (
-                        <td key={rankee} className="heatmap-cell heatmap-unknown">
-                          ?
-                        </td>
-                      );
+                    if (ranker === rankee) {
+                      return <td key={rankee} className="heatmap-cell heatmap-self">—</td>;
+                    }
+                    const position = positions[ranker]?.[rankee];
+                    if (position === undefined) {
+                      return <td key={rankee} className="heatmap-cell heatmap-unknown">Not ranked</td>;
                     }
                     return (
-                      <td
-                        key={rankee}
-                        className={`heatmap-cell heatmap-pos-${pos}`}
-                      >
-                        <span className="rank-badge">{ordinal(pos)}</span>
+                      <td key={rankee} className={`heatmap-cell heatmap-pos-${position}`}>
+                        <span className="rank-badge">{ordinal(position)}</span>
                       </td>
                     );
                   })}

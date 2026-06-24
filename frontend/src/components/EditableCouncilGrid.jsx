@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import SearchableModelSelect from './SearchableModelSelect';
 import {
   getProviderInfo,
+  getModelBrandInfo,
   getModelDisplayName,
   getAddSlot,
   getDraftSlot,
@@ -62,7 +63,8 @@ function EditableCouncilCard({
 }) {
   const isChairman = role === 'chairman';
   const hasModel = Boolean(modelId);
-  const info = hasModel ? getProviderInfo(modelId) : PROVIDER_CONFIG.default;
+  const providerInfo = hasModel ? getProviderInfo(modelId) : PROVIDER_CONFIG.default;
+  const brandInfo = hasModel ? getModelBrandInfo(modelId) : PROVIDER_CONFIG.default;
   const memberLabel = displayNumber ?? (typeof memberIndex === 'number' ? memberIndex + 1 : 1);
   const emptyColor = isChairman ? '#94a3b8' : '#64748b';
 
@@ -84,7 +86,7 @@ function EditableCouncilCard({
     <div
       className={cardClass}
       style={{
-        '--provider-color': hasModel ? info.color : emptyColor,
+        '--provider-color': hasModel ? brandInfo.color : emptyColor,
         ...(gridSlot != null ? slotToGridStyle(gridSlot, gridMinCol) : {}),
       }}
     >
@@ -107,10 +109,10 @@ function EditableCouncilCard({
       )}
 
       <div className="council-avatar">
-        {hasModel && info.logo ? (
-          <img src={info.logo} alt={info.label} className="provider-logo" />
+        {hasModel && brandInfo.logo ? (
+          <img src={brandInfo.logo} alt={brandInfo.label} className="provider-logo" />
         ) : (
-          <span className="avatar-icon">{isChairman ? '⚖️' : info.icon}</span>
+          <span className="avatar-icon">{isChairman ? '⚖️' : brandInfo.icon}</span>
         )}
       </div>
 
@@ -119,7 +121,7 @@ function EditableCouncilCard({
           {hasModel ? getModelDisplayName(modelId) : 'Choose model'}
         </span>
         <span className="provider-label">
-          {isChairman ? 'Final Verdict' : (hasModel ? info.label : 'Pick a model')}
+          {isChairman ? 'Final Verdict' : (hasModel ? providerInfo.label : 'Pick a model')}
         </span>
       </div>
 

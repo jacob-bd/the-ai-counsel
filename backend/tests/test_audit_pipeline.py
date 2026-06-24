@@ -550,8 +550,14 @@ async def test_client_disconnection_cancellation(mock_settings):
         except asyncio.CancelledError:
             pass
 
-        # Verify that execution was aborted
-        assert len(events) <= 2  # yields stage2a_init, then cancels when tasks are collected or as completed
+        # The manifest and dispatch evidence may be emitted before cancellation,
+        # but no model result should complete after an immediate disconnect.
+        assert events[0]["type"] == "stage2a_init"
+        assert [event["type"] for event in events[1:]] == [
+            "provider_status",
+            "provider_status",
+        ]
+        assert not any(event["type"] == "stage2a_progress" for event in events)
 
 
 # ==========================================

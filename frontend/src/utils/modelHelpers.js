@@ -1,13 +1,77 @@
+import openaiLogo from '../assets/icons/openai.svg';
+import anthropicLogo from '../assets/icons/anthropic.svg';
+import googleLogo from '../assets/icons/google.svg';
+import deepseekLogo from '../assets/icons/deepseek.svg';
+import xaiLogo from '../assets/icons/xai.svg';
+
 // Helper to get visual properties for models
+export const VERIFIED_NOTION2API_MODELS = Object.freeze({
+  'oatmeal-cookie': { displayName: 'GPT-5.2', family: 'openai', group: 'fast' },
+  'oval-kumquat-medium': { displayName: 'GPT-5.4', family: 'openai', group: 'fast' },
+  'opal-quince-medium': { displayName: 'GPT-5.5', family: 'openai', group: 'intelligent' },
+  'vertex-gemini-2.5-flash': { displayName: 'Gemini 2.5 Flash', family: 'gemini', group: 'fast' },
+  'vertex-gemini-3.5-flash': { displayName: 'Gemini 3.5 Flash', family: 'gemini', group: 'fast' },
+  'almond-croissant-low': { displayName: 'Sonnet 4.6', family: 'anthropic', group: 'fast' },
+  'avocado-froyo-medium': { displayName: 'Opus 4.6', family: 'anthropic', group: 'intelligent' },
+  'apricot-sorbet-high': { displayName: 'Opus 4.7', family: 'anthropic', group: 'intelligent' },
+  'ambrosia-tart-high': { displayName: 'Opus 4.8', family: 'anthropic', group: 'intelligent' },
+  'oregon-grape-medium': { displayName: 'GPT-5.4 Mini', family: 'openai', group: 'fast' },
+  'otaheite-apple-medium': { displayName: 'GPT-5.4 Nano', family: 'openai', group: 'fast' },
+  'fireworks-minimax-m2.5': { displayName: 'MiniMax M2.5', family: 'minimax', group: 'intelligent' },
+  'fireworks-kimi-k2.6': { displayName: 'Kimi K2.6', family: 'kimi', group: 'intelligent' },
+  'baseten-deepseek-v4-pro': { displayName: 'DeepSeek V4 Pro', family: 'deepseek', group: 'intelligent' },
+  'xigua-mochi-medium': { displayName: 'Grok 4.3', family: 'xai', group: 'intelligent' },
+  'xinomavro-cake': { displayName: 'Grok Build 0.1', family: 'xai', group: 'intelligent' },
+  'galette-medium-thinking': { displayName: 'Gemini 3.1 Pro', family: 'gemini', group: 'intelligent' },
+  'anthropic-haiku-4.5': { displayName: 'Haiku 4.5', family: 'anthropic', group: 'fast' },
+  gingerbread: { displayName: 'Gemini 3 Flash', family: 'gemini', group: 'fast' },
+});
+
+export function getModelRawId(model) {
+  const modelId = String(model?.id || model?.name || '').trim();
+  return modelId.replace(/^notion2api:/i, '');
+}
+
+export function getNotion2APIModelMetadata(modelId) {
+  const rawId = String(modelId || '').trim().replace(/^notion2api:/i, '').toLowerCase();
+  return VERIFIED_NOTION2API_MODELS[rawId] || null;
+}
+
+export function getNotion2APIModelFamily(modelId) {
+  const metadata = getNotion2APIModelMetadata(modelId);
+  if (metadata?.family) return metadata.family;
+
+  const rawId = String(modelId || '').trim().replace(/^notion2api:/i, '').toLowerCase();
+  if (/\b(gpt|openai)\b/.test(rawId)) return 'openai';
+  if (/\b(claude|sonnet|opus|haiku|anthropic)\b/.test(rawId)) return 'anthropic';
+  if (/\b(gemini|google)\b/.test(rawId)) return 'gemini';
+  if (/\b(grok|xai)\b/.test(rawId)) return 'xai';
+  if (/\bdeepseek\b/.test(rawId)) return 'deepseek';
+  if (/\b(kimi|moonshot)\b/.test(rawId)) return 'kimi';
+  if (/\bminimax\b/.test(rawId)) return 'minimax';
+  return null;
+}
 
 export const getModelVisuals = (modelId) => {
   if (!modelId) return { name: 'Unknown', color: '#94a3b8', short: '?' };
 
   const id = modelId.toLowerCase();
 
-  // Notion2API
+  // Notion2API is the transport; render the underlying model brand.
   if (id.startsWith('notion2api:')) {
-    return { name: 'Notion2API', color: '#64748b', short: 'Notion', icon: 'N2' };
+    const family = getNotion2APIModelFamily(modelId);
+    const familyVisuals = {
+      openai: { name: 'OpenAI via Notion2API', color: '#10a37f', short: 'GPT', icon: 'GPT', logo: openaiLogo },
+      anthropic: { name: 'Anthropic via Notion2API', color: '#d97757', short: 'Claude', icon: 'A', logo: anthropicLogo },
+      gemini: { name: 'Google via Notion2API', color: '#4285f4', short: 'Gemini', icon: 'G', logo: googleLogo },
+      xai: { name: 'xAI via Notion2API', color: '#f8fafc', short: 'Grok', icon: 'X', logo: xaiLogo },
+      deepseek: { name: 'DeepSeek via Notion2API', color: '#4e80ee', short: 'DeepSeek', icon: 'DS', logo: deepseekLogo },
+      kimi: { name: 'Kimi via Notion2API', color: '#cbd5e1', short: 'Kimi', icon: 'K' },
+      minimax: { name: 'MiniMax via Notion2API', color: '#a78bfa', short: 'MiniMax', icon: 'M' },
+    };
+
+    return familyVisuals[family]
+      || { name: 'Notion2API', color: '#64748b', short: 'Notion', icon: 'N2' };
   }
 
   // Ollama - CHECK FIRST because "ollama" contains "llama" substring
@@ -67,6 +131,12 @@ export const getModelVisuals = (modelId) => {
 
 export const getShortModelName = (modelId) => {
   if (!modelId) return 'Unknown';
+
+  const normalizedModelId = String(modelId).trim();
+  if (normalizedModelId.toLowerCase().startsWith('notion2api:')) {
+    const verified = getNotion2APIModelMetadata(normalizedModelId);
+    if (verified) return verified.displayName;
+  }
 
   const formatVersionSuffix = (value) => {
     return value
@@ -133,6 +203,44 @@ export const getShortModelName = (modelId) => {
 
   return titleCaseWords(formatVersionSuffix(rawName.replace(/[-_]+/g, ' ')));
 };
+
+export function getModelPickerDisplayName(model) {
+  const modelId = String(model?.id || model?.name || '').trim();
+  if (!modelId) return 'Unknown model';
+
+  const isNotion2API = modelId.toLowerCase().startsWith('notion2api:')
+    || model?.source === 'notion2api'
+    || model?.provider?.toLowerCase() === 'notion2api';
+  const verified = isNotion2API ? getNotion2APIModelMetadata(modelId) : null;
+  if (verified) return verified.displayName;
+
+  const shortName = getShortModelName(modelId);
+  const rawName = getModelRawId(model);
+  const leafName = rawName.includes('/') ? rawName.split('/').pop() : rawName;
+
+  if (/^claude-/i.test(leafName) && !/^claude\b/i.test(shortName)) {
+    return `Claude ${shortName}`;
+  }
+
+  return shortName || model.name || modelId;
+}
+
+export function normalizeModelSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+export function modelSearchMatches(searchText, inputValue) {
+  const query = normalizeModelSearchText(inputValue);
+  if (!query) return true;
+
+  const haystack = normalizeModelSearchText(searchText);
+  const compactQuery = query.replace(/\s+/g, '');
+  const compactHaystack = haystack.replace(/\s+/g, '');
+  return haystack.includes(query) || compactHaystack.includes(compactQuery);
+}
 
 export function deduplicateModels(modelsList) {
   if (!Array.isArray(modelsList)) return [];

@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import Skeleton from './common/Skeleton';
 import MarkdownContent from './MarkdownContent';
 import { getModelVisuals, getShortModelName } from '../utils/modelHelpers';
+import { getRequestStatus, getRequestStatusLabel } from '../utils/requestStatus';
 import RankingHeatmap from './RankingHeatmap';
 import { ClaimCardWithVerdicts } from './ClaimCards';
 import './Stage2.css';
 import './ClaimCards.css';
 import StageTimer from './StageTimer';
+import ModelVisualIcon from './ModelVisualIcon';
 import { copyToClipboard } from '../utils/clipboard';
 
 function deAnonymizeText(text, labelToModel) {
@@ -57,7 +59,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
     // Ensure activeTab is within bounds
     const safeActiveTab = Math.min(activeTab, rankings.length - 1);
     const currentRanking = rankings[safeActiveTab] || {};
-    const hasError = currentRanking?.error || false;
+    const currentStatus = getRequestStatus(currentRanking);
+    const hasError = currentStatus === 'failed' || currentStatus === 'unaccounted';
 
     // Get visuals for current tab
     const currentVisuals = getModelVisuals(currentRanking?.model);
@@ -213,7 +216,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                                                 <div className="rank-content">
                                                     <div className="rank-model-info">
                                                         <span className="mini-avatar" style={{ backgroundColor: visuals.color }}>
-                                                            {visuals.icon}
+                                                            <ModelVisualIcon visuals={visuals} scale={0.68} />
                                                         </span>
                                                         <span className="rank-model-name">{shortName}</span>
                                                     </div>
@@ -323,6 +326,8 @@ function RawEvaluationTabs({
     onRetryProvider,
     onFireProvider
 }) {
+    const currentStatus = getRequestStatus(currentRanking);
+
     return (
         <>
             {/* Avatar Tabs */}
@@ -330,22 +335,25 @@ function RawEvaluationTabs({
                 {rankings.map((rank, index) => {
                     const visuals = getModelVisuals(rank?.model);
                     const shortName = getShortModelName(rank?.model);
+                    const status = getRequestStatus(rank);
+                    const statusError = status === 'failed' || status === 'unaccounted';
 
                     return (
                         <button
-                            key={index}
-                            className={`tab ${safeActiveTab === index ? 'active' : ''} ${rank?.error ? 'tab-error' : ''}`}
+                            key={rank?.model || index}
+                            className={`tab ${safeActiveTab === index ? 'active' : ''} ${statusError ? 'tab-error' : ''}`}
                             onClick={() => setActiveTab(index)}
                             style={safeActiveTab === index ? { borderColor: visuals.color, color: visuals.color } : {}}
-                            title={rank?.model}
+                            title={`${rank?.model || 'Unknown model'} — ${getRequestStatusLabel(status)}`}
                         >
                             <span className="tab-icon" style={{ backgroundColor: safeActiveTab === index ? 'transparent' : 'rgba(255,255,255,0.1)' }}>
-                                {visuals.icon}
+                                <ModelVisualIcon visuals={visuals} scale={0.7} />
                             </span>
                             <span className="tab-name">{shortName}</span>
-                            {rank?.error && <span className="error-badge" style={{ backgroundColor: '#ef4444' }}>!</span>}
-                            {rank?.retrying && <span className="error-badge" style={{ backgroundColor: '#3b82f6' }}>↺</span>}
-                            {rank?.pending && <span className="error-badge" style={{ backgroundColor: '#6b7280' }}>…</span>}
+                            {statusError && <span className="error-badge" style={{ backgroundColor: '#ef4444' }}>!</span>}
+                            {status === 'running' && <span className="error-badge" style={{ backgroundColor: '#3b82f6' }}>↻</span>}
+                            {status === 'queued' && <span className="error-badge" style={{ backgroundColor: '#6b7280' }}>…</span>}
+                            {status === 'paused' && <span className="error-badge" style={{ backgroundColor: '#d97706' }}>Ⅱ</span>}
                         </button>
                     );
                 })}
@@ -355,10 +363,12 @@ function RawEvaluationTabs({
                 <div className="model-header">
                     <div className="model-identity">
                         <span className="model-avatar" style={{ backgroundColor: hasError ? '#ef4444' : currentVisuals.color }}>
-                            {currentVisuals.icon}
+                            <ModelVisualIcon visuals={currentVisuals} scale={0.72} />
                         </span>
                         <div className="model-info">
-                            <span className="model-name-large">{currentRanking.model || 'Unknown Model'}</span>
+                            <span className="model-name-large" title={currentRanking.model || ''}>
+                                {getShortModelName(currentRanking.model)}
+                            </span>
                             <span className="model-provider-badge" style={{ borderColor: currentVisuals.color, color: currentVisuals.color }}>
                                 {currentVisuals.name}
                             </span>
@@ -366,7 +376,7 @@ function RawEvaluationTabs({
                     </div>
 
                     <div className="header-actions">
-                        {!hasError && (
+                        {currentStatus === 'completed' && (
                             <button
                                 className={`copy-button ${isCopied ? 'copied' : ''}`}
                                 onClick={handleCopy}
@@ -386,71 +396,53 @@ function RawEvaluationTabs({
                             </button>
                         )}
 
-                        {currentRanking.pending ? (
-                            <span className="model-status pending" style={{ borderColor: '#6b7280', color: '#94a3b8' }}>Pending</span>
-                        ) : currentRanking.firing ? (
-                            <span className="model-status firing" style={{ borderColor: '#3b82f6', color: '#60a5fa' }}>Executing...</span>
-                        ) : hasError ? (
-                            <span className="model-status error">Failed</span>
-                        ) : (
-                            <span className="model-status success">Completed</span>
-                        )}
+                        <span className={`model-status ${currentStatus}`}>
+                            {getRequestStatusLabel(currentStatus)}
+                        </span>
                     </div>
                 </div>
 
-                {currentRanking.pending ? (
+                {currentStatus === 'queued' ? (
+                    <Stage2RequestState
+                        icon="⏳"
+                        title="Queued"
+                        message="Waiting for an execution slot. This ranking request has not been dispatched yet."
+                    />
+                ) : currentStatus === 'running' ? (
+                    <Stage2RequestState
+                        icon="↻"
+                        title="Request Running"
+                        message="The request was dispatched and the model is actively evaluating the peer responses."
+                        accent="#60a5fa"
+                    />
+                ) : currentStatus === 'paused' ? (
                     <div className="response-pending" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
-                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                            <div className="pending-icon" style={{ fontSize: '24px' }}>⏳</div>
-                            <div className="pending-details">
-                                <div className="pending-title" style={{ fontSize: '15px', fontWeight: '600', color: '#e5e7eb' }}>Request Paused (Pending)</div>
-                                <div className="pending-message" style={{ fontSize: '13px', color: '#94a3b8' }}>This model is held. You can resume the automated run or trigger it individually.</div>
-                            </div>
-                        </div>
+                        <Stage2RequestState
+                            icon="⏸"
+                            title="Request Paused"
+                            message="The run is paused before this ranking request starts. Resume the run or trigger it individually."
+                            accent="#fbbf24"
+                        />
                         {onFireProvider && (
                             <button
                                 className="fire-provider-button"
                                 onClick={() => onFireProvider(currentRanking.model, 'stage2')}
-                                style={{
-                                    alignSelf: 'flex-start',
-                                    background: 'rgba(16,185,129,0.1)',
-                                    border: '1px solid rgba(16,185,129,0.4)',
-                                    color: '#10b981',
-                                    padding: '6px 14px',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    transition: 'all 0.15s ease'
-                                }}
+                                style={stage2FireButtonStyle}
                             >
-                                ▶ Fire Manually
+                                ▶ Run This Request
                             </button>
                         )}
-                    </div>
-                ) : currentRanking.firing ? (
-                    <div className="response-firing" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
-                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                            <div className="firing-icon" style={{ fontSize: '24px', color: '#60a5fa' }}>↻</div>
-                            <div className="firing-details">
-                                <div className="firing-title" style={{ fontSize: '15px', fontWeight: '600', color: '#60a5fa' }}>Actively Firing</div>
-                                <div className="firing-message" style={{ fontSize: '13px', color: '#94a3b8' }}>Waiting for the model to generate a ranking...</div>
-                            </div>
-                        </div>
                     </div>
                 ) : hasError ? (
                     <div className="response-error" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                             <div className="error-icon">⚠️</div>
                             <div className="error-details">
-                                <div className="error-title">Model Failed to Respond</div>
+                                <div className="error-title">{currentStatus === 'unaccounted' ? 'Request Result Missing' : 'Model Failed to Respond'}</div>
                                 <div className="error-message">{currentRanking?.error_message || 'Unknown error'}</div>
                             </div>
                         </div>
-                        {onRetryProvider && !currentRanking.retrying && (
+                        {onRetryProvider && !currentRanking.retrying && currentStatus !== 'unaccounted' && (
                             <button
                                 className="retry-provider-button"
                                 onClick={() => onRetryProvider(currentRanking.model, 'stage2')}
@@ -517,3 +509,32 @@ function RawEvaluationTabs({
         </>
     );
 }
+
+
+function Stage2RequestState({ icon, title, message, accent = '#e5e7eb' }) {
+    return (
+        <div style={{ display: 'flex', gap: '14px', alignItems: 'center', padding: '20px 0' }} role="status">
+            <div style={{ fontSize: '24px', color: accent }}>{icon}</div>
+            <div>
+                <div style={{ fontSize: '15px', fontWeight: '600', color: accent }}>{title}</div>
+                <div style={{ fontSize: '13px', color: '#94a3b8' }}>{message}</div>
+            </div>
+        </div>
+    );
+}
+
+const stage2FireButtonStyle = {
+    alignSelf: 'flex-start',
+    background: 'rgba(16,185,129,0.1)',
+    border: '1px solid rgba(16,185,129,0.4)',
+    color: '#10b981',
+    padding: '6px 14px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '500',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'all 0.15s ease'
+};

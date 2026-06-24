@@ -3,6 +3,7 @@ import Skeleton from './common/Skeleton';
 import { getModelVisuals, getShortModelName } from '../utils/modelHelpers';
 import ThinkBlockRenderer from './ThinkBlockRenderer';
 import StageTimer from './StageTimer';
+import ModelVisualIcon from './ModelVisualIcon';
 import { copyToClipboard } from '../utils/clipboard';
 import './Stage4.css';
 
@@ -59,7 +60,7 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                 <div className="corrected-draft-header">
                     <div className="corrected-draft-identity">
                         <span className="corrected-draft-avatar" style={{ backgroundColor: visuals.color }}>
-                            {visuals.icon}
+                            <ModelVisualIcon visuals={visuals} scale={0.72} />
                         </span>
                         <div className="corrected-draft-info">
                             <span className="corrected-draft-role">

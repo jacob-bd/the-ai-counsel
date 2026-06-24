@@ -67,7 +67,13 @@ async def stage2a_collect_evaluations(
     label_to_model = {chr(65 + i): r['model'] for i, r in enumerate(successful_results)}
     model_to_label = {v: k for k, v in label_to_model.items()}
 
-    yield {"type": "stage2a_init", "total": len(models), "round": 1}
+    yield {
+        "type": "stage2a_init",
+        "total": len(models),
+        "models": models,
+        "label_to_model": label_to_model,
+        "round": 1,
+    }
 
     search_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
 
@@ -180,6 +186,12 @@ async def stage2a_collect_evaluations(
         }
 
     tasks = [asyncio.create_task(_evaluate_model(m)) for m in models]
+    for model in models:
+        yield {
+            "type": "provider_status",
+            "data": {"stage": "stage2a", "model": model, "status": "running"},
+            "round": 1,
+        }
 
     # We yield progress as tasks complete
     count = 0
@@ -486,7 +498,13 @@ async def stage2b_collect_audits(
     label_to_model = {chr(65 + i): r['model'] for i, r in enumerate(successful_results)}
     model_to_label = {v: k for k, v in label_to_model.items()}
 
-    yield {"type": "stage2b_init", "total": len(models), "round": 1}
+    yield {
+        "type": "stage2b_init",
+        "total": len(models),
+        "models": models,
+        "label_to_model": label_to_model,
+        "round": 1,
+    }
 
     search_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
     responses_text = "\n\n".join([
@@ -587,6 +605,12 @@ async def stage2b_collect_audits(
         }
 
     tasks = [asyncio.create_task(_audit_model(m)) for m in models]
+    for model in models:
+        yield {
+            "type": "provider_status",
+            "data": {"stage": "stage2b", "model": model, "status": "running"},
+            "round": 1,
+        }
 
     count = 0
     results = []
@@ -978,6 +1002,9 @@ async def run_audit_pipeline(
             total_models = item
             yield {"type": "stage1_init", "total": total_models, "round": 1}
             continue
+        if isinstance(item, dict) and item.get("type") == "provider_status":
+            yield {**item, "round": 1}
+            continue
         if isinstance(item, dict) and item.get("paused"):
             yield {"type": "stage1_pause", "data": item, "round": 1}
             continue
@@ -1028,6 +1055,8 @@ async def run_audit_pipeline(
         audit_profile=audit_profile, disconnect_check=disconnect_check
     ):
         if item["type"] == "stage2a_init":
+            yield item
+        elif item["type"] == "provider_status":
             yield item
         elif item["type"] == "stage2a_progress":
             stage2a_results.append(item["data"])
@@ -1097,6 +1126,8 @@ async def run_audit_pipeline(
         audit_profile=audit_profile, disconnect_check=disconnect_check
     ):
         if item["type"] == "stage2b_init":
+            yield item
+        elif item["type"] == "provider_status":
             yield item
         elif item["type"] == "stage2b_progress":
             stage2b_results.append(item["data"])

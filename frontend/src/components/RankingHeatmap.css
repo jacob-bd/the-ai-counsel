@@ -297,3 +297,77 @@
     padding: 3px 8px;
   }
 }
+
+
+/* Request accounting and non-terminal row states */
+.heatmap-accounting {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 16px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.heatmap-accounting span {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.heatmap-status-badge {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.heatmap-status-badge--completed {
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.heatmap-status-badge--running,
+.heatmap-state--running {
+  color: #60a5fa;
+}
+
+.heatmap-status-badge--queued,
+.heatmap-status-badge--paused,
+.heatmap-state--queued,
+.heatmap-state--paused {
+  color: #cbd5e1;
+}
+
+.heatmap-status-badge--failed,
+.heatmap-status-badge--unaccounted,
+.heatmap-status-badge--unparsed,
+.heatmap-state--failed,
+.heatmap-state--unaccounted,
+.heatmap-state--unparsed {
+  color: #fda4af;
+}
+
+.heatmap-state {
+  background: rgba(15, 23, 42, 0.42) !important;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.heatmap-row--running .heatmap-row-header {
+  box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.7);
+}
+
+.heatmap-row--failed .heatmap-row-header,
+.heatmap-row--unaccounted .heatmap-row-header,
+.heatmap-row--unparsed .heatmap-row-header {
+  box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.55);
+}

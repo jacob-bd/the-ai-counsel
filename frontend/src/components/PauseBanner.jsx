@@ -44,8 +44,8 @@ export default function PauseBanner({
           <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
             {hasProviderDetail
               ? `${activeProviders.length} in-flight · ${pendingProviders.length} not yet started`
-              : `${pendingCount} provider(s) still pending`}
-            . Choose a continuation mode and click Resume, or manually fire pending models.
+              : `${pendingCount} request(s) not yet complete`}
+            . Choose a continuation mode and click Resume, or manually run requests that have not started.
           </p>
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function PauseBanner({
         paddingTop: '12px'
       }}>
         <label style={{ fontSize: '12px', fontWeight: '500', color: '#94a3b8' }}>
-          Continuation Mode for Remaining Providers:
+          Continuation Mode for Remaining Requests:
         </label>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {[

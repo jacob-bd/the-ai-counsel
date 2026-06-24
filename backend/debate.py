@@ -705,6 +705,9 @@ async def run_iterative_debate(
                 total_models = item
                 yield {"type": "stage1_init", "total": total_models, "round": round_num}
                 continue
+            if isinstance(item, dict) and item.get("type") == "provider_status":
+                yield {**item, "round": round_num}
+                continue
             # Skip pause-event sentinels — they must not pollute stage1_results
             # (they have no 'error' key, so they would survive Stage 2's
             # successful_results filter and produce a duplicate model entry).
@@ -742,7 +745,7 @@ async def run_iterative_debate(
             # Build label_to_model for mode-specific prompt building
             successful_results = [r for r in stage1_results if not r.get("error")]
             labels = [chr(65 + i) for i in range(len(successful_results))]
-            {
+            label_to_model = {
                 f"Response {label}": result["model"]
                 for label, result in zip(labels, successful_results)
             }
@@ -774,9 +777,33 @@ async def run_iterative_debate(
                     for label, result in zip(labels, successful_results)
                 ])
 
+                extractor_model = chairman_override or get_chairman_model()
+                yield {
+                    "type": "claim_decomposition_start",
+                    "round": round_num,
+                    "data": {
+                        "model": extractor_model,
+                        "response_count": len(successful_results),
+                    },
+                }
                 canonical_claims = await extract_canonical_claims(
                     responses_text_for_extraction, chairman_override
                 )
+                claim_count = sum(
+                    len(claims) for claims in (canonical_claims or {}).values()
+                    if isinstance(claims, list)
+                )
+                yield {
+                    "type": "claim_decomposition_complete",
+                    "round": round_num,
+                    "data": {
+                        "model": extractor_model,
+                        "success": canonical_claims is not None,
+                        "fallback": canonical_claims is None,
+                        "claim_count": claim_count,
+                        "canonical_claims": canonical_claims,
+                    },
+                }
 
                 if canonical_claims is None:
                     logger.warning("Claim extraction failed, falling back to freeform for this round")
@@ -814,9 +841,18 @@ async def run_iterative_debate(
                 prompt_override=stage2_prompt_override,
                 conversation_id=conversation_id,
             ):
+                if isinstance(item, dict) and item.get("type") == "provider_status":
+                    yield {**item, "round": round_num}
+                    continue
                 if isinstance(item, dict) and not item.get("model"):
                     label_to_model = item
-                    yield {"type": "stage2_init", "total": len(label_to_model), "round": round_num}
+                    yield {
+                        "type": "stage2_init",
+                        "total": len(label_to_model),
+                        "models": list(label_to_model.values()),
+                        "label_to_model": label_to_model,
+                        "round": round_num,
+                    }
                     continue
                 # Skip pause-event sentinels — same reason as Stage 1 above.
                 if isinstance(item, dict) and item.get("paused"):

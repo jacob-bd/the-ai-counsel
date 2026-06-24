@@ -466,6 +466,14 @@ async def stage1_collect_responses(
                         run_info["pending_providers"] = list(pending_models)
                         run_info["active_providers"].append(m)
                     active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    yield {
+                        "type": "provider_status",
+                        "data": {
+                            "stage": "stage1",
+                            "model": m,
+                            "status": "running",
+                        },
+                    }
                 else:
                     # Notion2API model: check concurrency and stagger
                     current_mode = run_info.get("continuation_mode", "normal") if run_info else "normal"
@@ -503,6 +511,14 @@ async def stage1_collect_responses(
                         run_info["pending_providers"] = list(pending_models)
                         run_info["active_providers"].append(m)
                     active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    yield {
+                        "type": "provider_status",
+                        "data": {
+                            "stage": "stage1",
+                            "model": m,
+                            "status": "running",
+                        },
+                    }
                     last_notion_fire_time = now
 
             # Wait for any active tasks to complete
@@ -737,6 +753,14 @@ async def stage2_collect_rankings(
                         run_info["pending_providers"] = list(pending_models)
                         run_info["active_providers"].append(m)
                     active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    yield {
+                        "type": "provider_status",
+                        "data": {
+                            "stage": "stage2",
+                            "model": m,
+                            "status": "running",
+                        },
+                    }
                 else:
                     # Notion2API model: check concurrency and stagger
                     current_mode = run_info.get("continuation_mode", "normal") if run_info else "normal"
@@ -774,6 +798,14 @@ async def stage2_collect_rankings(
                         run_info["pending_providers"] = list(pending_models)
                         run_info["active_providers"].append(m)
                     active_tasks[m] = asyncio.create_task(_query_safe(m))
+                    yield {
+                        "type": "provider_status",
+                        "data": {
+                            "stage": "stage2",
+                            "model": m,
+                            "status": "running",
+                        },
+                    }
                     last_notion_fire_time = now
 
             # Wait for any active tasks to complete

@@ -616,6 +616,10 @@ async def _run_council_pipeline(
     ):
         if isinstance(item, int):
             continue
+        if isinstance(item, dict) and item.get("type") == "provider_status":
+            continue
+        if isinstance(item, dict) and item.get("paused"):
+            continue
         result.stage1.append(item)
 
     if not any(r for r in result.stage1 if not r.get('error')):
@@ -630,6 +634,10 @@ async def _run_council_pipeline(
             request=request,
             conversation_id=conversation_id,
         ):
+            if isinstance(item, dict) and item.get("type") == "provider_status":
+                continue
+            if isinstance(item, dict) and item.get("paused"):
+                continue
             if isinstance(item, dict) and not item.get('model'):
                 result.label_to_model = item
                 continue
@@ -890,6 +898,10 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     yield f"data: {json.dumps({'type': 'stage1_init', 'total': total_models})}\n\n"
                     continue
 
+                if isinstance(item, dict) and item.get("type") == "provider_status":
+                    yield f"data: {json.dumps(item)}\n\n"
+                    continue
+
                 if isinstance(item, dict) and item.get("paused"):
                     _run = _active_runs.get(conversation_id, {})
                     yield f"data: {json.dumps({'type': 'run_paused', 'data': {'failed_model': item['model'], 'pending_count': item['pending_count'], 'stage': 'stage1', 'active_providers': list(_run.get('active_providers', [])), 'pending_providers': list(_run.get('pending_providers', [])) }})}\n\n"
@@ -934,12 +946,16 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     request,
                     conversation_id=conversation_id,
                 ):
+                    if isinstance(item, dict) and item.get("type") == "provider_status":
+                        yield f"data: {json.dumps(item)}\n\n"
+                        continue
+
                     # First item is the label mapping
                     if isinstance(item, dict) and not item.get('model'):
                         label_to_model = item
                         _active_runs[conversation_id]["progress"]["stage2"]["total"] = len(label_to_model)
-                        # Send init event with total count
-                        yield f"data: {json.dumps({'type': 'stage2_init', 'total': len(label_to_model)})}\n\n"
+                        # Send init event with the authoritative Stage 2 request manifest.
+                        yield f"data: {json.dumps({'type': 'stage2_init', 'total': len(label_to_model), 'models': list(label_to_model.values()), 'label_to_model': label_to_model})}\n\n"
                         continue
 
                     if isinstance(item, dict) and item.get("paused"):
@@ -1204,6 +1220,17 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                         if model_id not in seen:
                             seen.add(model_id)
                             responses.append(stage1_data)
+                elif event_type == "claim_decomposition_start":
+                    run_info["stage"] = "claim_decomposition"
+                    run_info["claim_decomposition"] = {
+                        "status": "running",
+                        **(event.get("data") or {}),
+                    }
+                elif event_type == "claim_decomposition_complete":
+                    run_info["claim_decomposition"] = {
+                        "status": "complete",
+                        **(event.get("data") or {}),
+                    }
                 elif event_type == "stage2_start" or event_type == "stage2a_start":
                     run_info["stage"] = "stage2" if event_type == "stage2_start" else "stage2a"
                     run_info["progress"]["stage2"] = {"total": 0, "count": 0}

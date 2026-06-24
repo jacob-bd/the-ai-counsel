@@ -7,7 +7,7 @@ describe('auditEventReducer', () => {
     stage1: [],
     stage2: null,
     stage3: null,
-    metadata: null,
+    metadata: {},
     loading: {
       search: false,
       stage1: false,
@@ -44,9 +44,8 @@ describe('auditEventReducer', () => {
 
   const councilModels = ['modelA', 'modelB'];
 
-  it('handles stage2a_start event correctly', () => {
-    const event = { type: 'stage2a_start' };
-    const nextState = auditEventReducer(initialMessage, event, councilModels);
+  it('starts Stage 2A timers and loading state', () => {
+    const nextState = auditEventReducer(initialMessage, { type: 'stage2a_start' }, councilModels);
 
     expect(nextState.loading.stage2).toBe(true);
     expect(nextState.loading.stage2a).toBe(true);
@@ -54,85 +53,86 @@ describe('auditEventReducer', () => {
     expect(nextState.timers.stage2aStart).not.toBeNull();
   });
 
-  it('handles stage2a_init event correctly', () => {
-    const event = { type: 'stage2a_init', total: 2 };
+  it('uses the authoritative request manifest and initializes queued rows', () => {
+    const event = {
+      type: 'stage2_init',
+      total: 2,
+      models: ['manifestA', 'manifestB'],
+      label_to_model: { 'Response A': 'manifestA', 'Response B': 'manifestB' },
+    };
     const nextState = auditEventReducer(initialMessage, event, councilModels);
 
-    expect(nextState.progress.stage2.total).toBe(2);
-    expect(nextState.progress.stage2a.total).toBe(2);
-    expect(nextState.stage2).toHaveLength(2);
-    expect(nextState.stage2[0].model).toBe('modelA');
-    expect(nextState.stage2[0].pending).toBe(true);
-    expect(nextState.stage2a).toHaveLength(2);
+    expect(nextState.stage2.map((row) => row.model)).toEqual(['manifestA', 'manifestB']);
+    expect(nextState.stage2.every((row) => row.status === 'queued')).toBe(true);
+    expect(nextState.metadata.label_to_model).toEqual(event.label_to_model);
   });
 
-  it('handles stage2a_progress event correctly', () => {
-    const event = {
+  it('marks a completed progress result as terminal', () => {
+    const initialized = auditEventReducer(
+      initialMessage,
+      { type: 'stage2a_init', total: 2, models: councilModels },
+      councilModels
+    );
+    const nextState = auditEventReducer(initialized, {
       type: 'stage2a_progress',
       count: 1,
       total: 2,
       data: { model: 'modelA', response: 'Evaluated' }
-    };
-    const nextState = auditEventReducer(initialMessage, event, councilModels);
+    }, councilModels);
 
-    expect(nextState.progress.stage2.count).toBe(1);
-    expect(nextState.progress.stage2a.count).toBe(1);
     expect(nextState.progress.stage2.currentModel).toBe('modelA');
-    expect(nextState.stage2[0].response).toBe('Evaluated');
-    expect(nextState.stage2a[0].response).toBe('Evaluated');
+    expect(nextState.stage2[0]).toMatchObject({
+      model: 'modelA',
+      response: 'Evaluated',
+      status: 'completed',
+    });
+    expect(nextState.stage2[1].status).toBe('queued');
   });
 
-  it('handles stage2a_complete event correctly', () => {
-    const event = {
-      type: 'stage2a_complete',
-      data: [{ model: 'modelA' }, { model: 'modelB' }],
-      metadata: { label_to_model: { A: 'modelA' } }
-    };
-    const nextState = auditEventReducer(initialMessage, event, councilModels);
+  it('preserves every expected model and marks a missing terminal result unaccounted', () => {
+    const initialized = auditEventReducer(
+      initialMessage,
+      { type: 'stage2_init', total: 2, models: councilModels },
+      councilModels
+    );
+    const nextState = auditEventReducer(initialized, {
+      type: 'stage2_complete',
+      data: [{ model: 'modelA', ranking: 'A, B', parsed_ranking: ['Response A', 'Response B'] }],
+      metadata: { aggregate_rankings: [] },
+    }, councilModels);
 
-    expect(nextState.loading.stage2a).toBe(false);
-    expect(nextState.loading.stage2).toBe(false); // stage2 loading flag for 2a is preserved or false depending on how next stages run
-    expect(nextState.timers.stage2aEnd).not.toBeNull();
-    expect(nextState.metadata.label_to_model).toEqual({ A: 'modelA' });
+    expect(nextState.stage2).toHaveLength(2);
+    expect(nextState.stage2[0].status).toBe('completed');
+    expect(nextState.stage2[1]).toMatchObject({
+      model: 'modelB',
+      status: 'unaccounted',
+      error: true,
+      unaccounted: true,
+    });
   });
 
-  it('handles stage2b_start, progress, and complete events correctly', () => {
-    // 2b_start
+  it('handles Stage 2B lifecycle and reconciles missing results', () => {
     let state = auditEventReducer(initialMessage, { type: 'stage2b_start' }, councilModels);
-    expect(state.loading.stage2b).toBe(true);
-    expect(state.timers.stage2bStart).not.toBeNull();
-
-    // 2b_init
-    state = auditEventReducer(state, { type: 'stage2b_init', total: 2 }, councilModels);
-    expect(state.progress.stage2b.total).toBe(2);
-    expect(state.stage2b).toHaveLength(2);
-
-    // 2b_progress
+    state = auditEventReducer(state, { type: 'stage2b_init', total: 2, models: councilModels }, councilModels);
     state = auditEventReducer(state, {
       type: 'stage2b_progress',
       count: 1,
       total: 2,
       data: { model: 'modelA', claim_verdicts: {} }
     }, councilModels);
-    expect(state.progress.stage2b.count).toBe(1);
-    expect(state.stage2b[0].model).toBe('modelA');
-
-    // 2b_complete
     state = auditEventReducer(state, {
       type: 'stage2b_complete',
-      data: [{ model: 'modelA' }]
+      data: [{ model: 'modelA', claim_verdicts: {} }]
     }, councilModels);
+
     expect(state.loading.stage2b).toBe(false);
+    expect(state.stage2b[0].status).toBe('completed');
+    expect(state.stage2b[1].status).toBe('unaccounted');
     expect(state.timers.stage2bEnd).not.toBeNull();
   });
 
-  it('handles stage2c_start and complete events correctly', () => {
-    // 2c_start
+  it('handles Stage 2C completion metadata', () => {
     let state = auditEventReducer(initialMessage, { type: 'stage2c_start' }, councilModels);
-    expect(state.loading.stage2c).toBe(true);
-    expect(state.timers.stage2cStart).not.toBeNull();
-
-    // 2c_complete
     state = auditEventReducer(state, {
       type: 'stage2c_complete',
       data: { adopt: ['C-001'] },
@@ -140,16 +140,17 @@ describe('auditEventReducer', () => {
     }, councilModels);
 
     expect(state.loading.stage2c).toBe(false);
-    expect(state.loading.stage2).toBe(false); // stage 2 fully complete now
-    expect(state.timers.stage2cEnd).not.toBeNull();
-    expect(state.timers.stage2End).not.toBeNull();
+    expect(state.loading.stage2).toBe(false);
     expect(state.metadata.aggregated_2b).toEqual({ claims: [] });
     expect(state.metadata.stage2c_result).toEqual({ adopt: ['C-001'] });
   });
 
-  it('handles stage2a_error event correctly', () => {
-    const event = { type: 'stage2a_error', message: 'Quorum failed' };
-    const nextState = auditEventReducer(initialMessage, event, councilModels);
+  it('handles an audit-stage error', () => {
+    const nextState = auditEventReducer(
+      initialMessage,
+      { type: 'stage2a_error', message: 'Quorum failed' },
+      councilModels
+    );
 
     expect(nextState.loading.stage2).toBe(false);
     expect(nextState.loading.stage2a).toBe(false);

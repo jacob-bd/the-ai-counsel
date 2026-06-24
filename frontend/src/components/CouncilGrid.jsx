@@ -1,6 +1,12 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { getProviderInfo, getModelDisplayName, getCouncilLayoutClass, PROVIDER_CONFIG } from '../utils/councilGridUtils';
+import {
+    getProviderInfo,
+    getModelBrandInfo,
+    getModelDisplayName,
+    getCouncilLayoutClass,
+    PROVIDER_CONFIG,
+} from '../utils/councilGridUtils';
 import './CouncilGrid.css';
 
 export default function CouncilGrid({
@@ -42,7 +48,7 @@ export default function CouncilGrid({
         setTooltip(prev => ({ ...prev, visible: false }));
     };
 
-    const chairmanInfo = chairman ? getProviderInfo(chairman) : null;
+    const chairmanInfo = chairman ? getModelBrandInfo(chairman) : null;
     const layoutClass = getCouncilLayoutClass(displayModels.length, showChairman);
     const gridClass = layoutClass ? `council-grid ${layoutClass}` : 'council-grid';
 
@@ -62,7 +68,8 @@ export default function CouncilGrid({
             {/* Regular Council Members */}
             {displayModels.map((modelId, index) => {
                 const isPlaceholder = modelId.startsWith('placeholder');
-                const info = isPlaceholder ? PROVIDER_CONFIG.default : getProviderInfo(modelId);
+                const providerInfo = isPlaceholder ? PROVIDER_CONFIG.default : getProviderInfo(modelId);
+                const brandInfo = isPlaceholder ? PROVIDER_CONFIG.default : getModelBrandInfo(modelId);
                 const displayName = getModelDisplayName(modelId);
 
                 // Determine state
@@ -85,17 +92,17 @@ export default function CouncilGrid({
                     <div
                         key={index}
                         className={`council-card ${cardState}`}
-                        style={{ '--provider-color': info.color }}
+                        style={{ '--provider-color': brandInfo.color }}
                         onMouseEnter={(e) => handleMouseEnter(e, modelId)}
                         onMouseMove={handleMouseMove}
                         onMouseLeave={handleMouseLeave}
                     >
                         <div className="role-badge member">Member #{index + 1}</div>
                         <div className="council-avatar">
-                            {info.logo ? (
-                                <img src={info.logo} alt={info.label} className="provider-logo" />
+                            {brandInfo.logo ? (
+                                <img src={brandInfo.logo} alt={brandInfo.label} className="provider-logo" />
                             ) : (
-                                <span className="avatar-icon">{info.icon}</span>
+                                <span className="avatar-icon">{brandInfo.icon}</span>
                             )}
                             {cardState === 'active' && <div className="thinking-ring"></div>}
                             {cardState === 'done' ? (
@@ -110,7 +117,7 @@ export default function CouncilGrid({
                             <span className="model-name">
                                 {displayName}
                             </span>
-                            <span className="provider-label">{info.label}</span>
+                            <span className="provider-label">{providerInfo.label}</span>
                         </div>
                     </div>
                 );
@@ -120,7 +127,7 @@ export default function CouncilGrid({
             {showChairman && (
                 <div
                     className={`council-card chairman ${status === 'thinking' ? 'waiting' : 'ready'} ${chairmanDisabled ? 'chairman-disabled' : ''}`}
-                    style={{ '--provider-color': (chairman && !chairmanDisabled) ? getProviderInfo(chairman).color : '#94a3b8' }}
+                    style={{ '--provider-color': (chairman && !chairmanDisabled) ? getModelBrandInfo(chairman).color : '#94a3b8' }}
                     onMouseEnter={(e) => status !== 'thinking' && !chairmanDisabled && handleMouseEnter(e, chairman || 'Chairman')}
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}

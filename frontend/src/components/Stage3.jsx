@@ -3,6 +3,7 @@ import Skeleton from './common/Skeleton';
 import { getModelVisuals, getShortModelName } from '../utils/modelHelpers';
 import ThinkBlockRenderer from './ThinkBlockRenderer';
 import StageTimer from './StageTimer';
+import ModelVisualIcon from './ModelVisualIcon';
 import { copyToClipboard } from '../utils/clipboard';
 import './Stage3.css';
 
@@ -64,7 +65,7 @@ export default function Stage3({ finalResponse, labelToModel, startTime, endTime
                 <div className="chairman-header">
                     <div className="chairman-identity">
                         <span className="chairman-avatar" style={{ backgroundColor: visuals.color }}>
-                            {visuals.icon}
+                            <ModelVisualIcon visuals={visuals} scale={0.72} />
                         </span>
                         <div className="chairman-info">
                             <span className="chairman-role">
