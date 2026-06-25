@@ -370,6 +370,7 @@ class Notion2APIProvider(LLMProvider):
         for attempt in range(1, NOTION2API_QUERY_ATTEMPTS + 1):
             content_parts: List[str] = []
             usage: Any = None
+            finish_reason: Optional[str] = None
 
             try:
                 # --- Firing mode gate ---
@@ -435,6 +436,19 @@ class Notion2APIProvider(LLMProvider):
                             if isinstance(event, dict) and event.get("usage") is not None:
                                 usage = event.get("usage")
 
+                            if isinstance(event, dict):
+                                direct_reason = event.get("finish_reason") or event.get("stop_reason")
+                                if direct_reason:
+                                    finish_reason = str(direct_reason)
+                                choices = event.get("choices")
+                                if isinstance(choices, list):
+                                    for choice in choices:
+                                        if not isinstance(choice, dict):
+                                            continue
+                                        choice_reason = choice.get("finish_reason") or choice.get("stop_reason")
+                                        if choice_reason:
+                                            finish_reason = str(choice_reason)
+
                             piece = self._extract_stream_content(event)
                             if piece:
                                 content_parts.append(piece)
@@ -444,7 +458,10 @@ class Notion2APIProvider(LLMProvider):
 
                 content = "".join(content_parts)
                 if str(content or "").strip():
-                    return {"content": content, "usage": usage, "error": False}
+                    result = {"content": content, "usage": usage, "error": False}
+                    if finish_reason:
+                        result["finish_reason"] = finish_reason
+                    return result
 
                 if not last_response_text:
                     last_response_text = "stream completed without assistant content"
@@ -459,7 +476,13 @@ class Notion2APIProvider(LLMProvider):
             except (httpx.ReadError, httpx.RemoteProtocolError, httpx.StreamError) as exc:
                 content = "".join(content_parts)
                 if str(content or "").strip():
-                    return {"content": content, "usage": usage, "error": False}
+                    return {
+                        "content": content,
+                        "usage": usage,
+                        "finish_reason": finish_reason,
+                        "stream_interrupted": True,
+                        "error": False,
+                    }
                 last_response_text = str(exc) or repr(exc)
                 last_status_code = 0
                 if attempt < NOTION2API_QUERY_ATTEMPTS:
@@ -469,14 +492,26 @@ class Notion2APIProvider(LLMProvider):
             except httpx.TimeoutException:
                 content = "".join(content_parts)
                 if str(content or "").strip():
-                    return {"content": content, "usage": usage, "error": False}
+                    return {
+                        "content": content,
+                        "usage": usage,
+                        "finish_reason": finish_reason,
+                        "stream_interrupted": True,
+                        "error": False,
+                    }
                 return {"error": True, "error_message": f"Notion2API request timed out after {int(effective_timeout)}s"}
             except httpx.ConnectError:
                 return {"error": True, "error_message": f"Could not connect to Notion2API at {base_url}"}
             except Exception as exc:
                 content = "".join(content_parts)
                 if str(content or "").strip():
-                    return {"content": content, "usage": usage, "error": False}
+                    return {
+                        "content": content,
+                        "usage": usage,
+                        "finish_reason": finish_reason,
+                        "stream_interrupted": True,
+                        "error": False,
+                    }
                 return {"error": True, "error_message": str(exc) or repr(exc)}
 
         return {
@@ -496,24 +531,42 @@ class Notion2APIProvider(LLMProvider):
             if response.status_code != 200:
                 return []
 
-            models: List[Dict[str, Any]] = []
+            models_by_id: Dict[str, Dict[str, Any]] = {}
             for model in response.json().get("data", []):
                 model_id = str(model.get("id") or "").strip()
-                if not model_id:
+                canonical_id = str(model.get("canonical_id") or model_id).strip()
+                if not model_id or not canonical_id:
                     continue
 
-                lowered = model_id.lower()
+                lowered = canonical_id.lower()
                 if any(term in lowered for term in ["embed", "whisper", "tts", "dall-e", "audio", "transcribe"]):
                     continue
 
-                models.append({
-                    "id": f"{self.provider_prefix}:{model_id}",
-                    "name": f"{model_id} [Notion2API]",
+                display_name = str(
+                    model.get("display_name") or model.get("name") or canonical_id
+                ).strip()
+                raw_aliases = model.get("aliases")
+                aliases = [
+                    str(alias).strip()
+                    for alias in raw_aliases
+                    if str(alias).strip()
+                ] if isinstance(raw_aliases, list) else []
+                models_by_id[canonical_id] = {
+                    "id": f"{self.provider_prefix}:{canonical_id}",
+                    "name": f"{display_name} [Notion2API]",
+                    "display_name": display_name,
                     "provider": self.provider_name,
                     "source": self.provider_prefix,
-                })
+                    "model_family": str(model.get("model_family") or model.get("owned_by") or "").strip(),
+                    "upstream_host": str(model.get("upstream_host") or "").strip(),
+                    "public_name": str(model.get("public_name") or "").strip(),
+                    "aliases": aliases,
+                }
 
-            return sorted(models, key=lambda item: item["name"])
+            return sorted(
+                models_by_id.values(),
+                key=lambda item: (item["display_name"].lower(), item["id"]),
+            )
 
         except Exception:
             return []

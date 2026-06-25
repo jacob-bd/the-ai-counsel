@@ -13,9 +13,47 @@ from .prompts import apply_response_language
 
 logger = logging.getLogger(__name__)
 
+STAGE2_MAX_OUTPUT_TOKENS_DEFAULT = 32768
+STAGE2_FORMAT_RETRY_ATTEMPTS = 2
+_STAGE2_TRUNCATION_REASONS = {
+    "length",
+    "max_tokens",
+    "max_output_tokens",
+    "token_limit",
+    "output_limit",
+}
+
+
 class EvaluationError(Exception):
     """Raised when an evaluator produces invalid, unparseable, or degenerate output."""
     pass
+
+
+def is_evaluator_refusal(text: str) -> bool:
+    """Return True when Stage 2 output is a refusal rather than a malformed ranking."""
+    normalized = re.sub(r"\s+", " ", str(text or "")).strip().lower()
+    if not normalized:
+        return False
+
+    strong_markers = (
+        "i cannot perform this task",
+        "i can't perform this task",
+        "the request you pasted requires capabilities and a role i do not have",
+        "i do not have tools or the ability to",
+        "my capabilities are strictly limited to notion workspace operations",
+    )
+    if any(marker in normalized for marker in strong_markers):
+        return True
+
+    refusal_terms = (
+        "cannot compare",
+        "cannot rank",
+        "cannot evaluate",
+        "do not have the ability to rank",
+        "do not have the ability to evaluate",
+    )
+    return any(term in normalized for term in refusal_terms) and "response" in normalized
+
 
 _NOTION_COUNCIL_LOCK: asyncio.Lock | None = None
 _NOTION_STAGGER_SECONDS = 3.0
@@ -303,6 +341,153 @@ def strip_thinking_blocks(text: Any) -> str:
     cleaned = THINK_BLOCK_RE.sub("", cleaned)
     cleaned = UNCLOSED_THINK_RE.sub("", cleaned)
     return cleaned.strip()
+
+
+def get_response_finish_reason(response: Dict[str, Any] | None) -> str | None:
+    """Extract a provider stop/finish reason from common response shapes."""
+    if not isinstance(response, dict):
+        return None
+
+    for key in ("finish_reason", "stop_reason"):
+        value = response.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+
+    metadata = response.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("finish_reason", "stop_reason"):
+            value = metadata.get(key)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+
+    choices = response.get("choices")
+    if isinstance(choices, list):
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            value = choice.get("finish_reason") or choice.get("stop_reason")
+            if value is not None and str(value).strip():
+                return str(value).strip()
+    return None
+
+
+def response_was_truncated(response: Dict[str, Any] | None) -> bool:
+    """Return True when provider metadata indicates an incomplete output."""
+    if not isinstance(response, dict):
+        return False
+    if response.get("truncated") is True or response.get("stream_interrupted") is True:
+        return True
+    finish_reason = (get_response_finish_reason(response) or "").strip().lower()
+    return finish_reason in _STAGE2_TRUNCATION_REASONS
+
+
+def build_stage2_recovery_prompt(
+    original_prompt: str,
+    valid_labels: List[str],
+    parse_error: str,
+) -> str:
+    """Build a compact retry prompt that cannot exhaust output before the ranking."""
+    numbered_slots = "\n".join(
+        f"{index}. <one unused allowed Response label>"
+        for index in range(1, len(valid_labels) + 1)
+    )
+    return (
+        f"{original_prompt}\n\n"
+        "RECOVERY RETRY: The previous answer was received but its ranking could not be "
+        f"parsed ({parse_error}). Do not repeat the paragraph audit or any explanation. "
+        "Return ONLY the complete ranking block below, with every allowed label exactly once.\n"
+        "FINAL RANKING:\n"
+        f"{numbered_slots}"
+    )
+
+
+def build_stage2_result(
+    model: str,
+    response: Dict[str, Any] | None,
+    valid_labels: List[str],
+    expected_count: int,
+    attempts: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Classify a Stage 2 provider result without conflating parse failure with no response."""
+    response = response if isinstance(response, dict) else {
+        "error": True,
+        "error_message": "Provider returned no response object.",
+    }
+    attempt_ledger = list(attempts or [])
+    finish_reason = get_response_finish_reason(response)
+    truncated = response_was_truncated(response)
+
+    if response.get("error"):
+        result = {
+            "model": model,
+            "ranking": response.get("content"),
+            "parsed_ranking": [],
+            "error": True,
+            "status": "provider_error",
+            "error_message": response.get("error_message", "Provider request failed."),
+            "usage": response.get("usage"),
+            "cost": response.get("cost"),
+            "finish_reason": finish_reason,
+            "truncated": truncated,
+        }
+    else:
+        full_text = strip_thinking_blocks(response.get("content", ""))
+        try:
+            parsed = parse_ranking_from_text(
+                full_text,
+                expected_count=expected_count,
+                valid_labels=valid_labels,
+            )
+            result = {
+                "model": model,
+                "ranking": full_text,
+                "parsed_ranking": parsed,
+                "error": None,
+                "status": "completed",
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+                "finish_reason": finish_reason,
+                "truncated": truncated,
+            }
+        except EvaluationError as exc:
+            evaluator_refused = is_evaluator_refusal(full_text)
+            status = (
+                "evaluator_refused"
+                if evaluator_refused
+                else "truncated_evaluator_output"
+                if truncated
+                else "invalid_evaluator_output"
+            )
+            if evaluator_refused:
+                message = "Evaluator refused the ranking task and returned no usable ranking."
+            elif truncated:
+                message = (
+                    "Evaluator output ended before a complete ranking could be parsed. "
+                    f"Provider finish reason: {finish_reason or 'stream interruption'}."
+                )
+            else:
+                message = str(exc)
+            result = {
+                "model": model,
+                "ranking": full_text,
+                "parsed_ranking": [],
+                "error": True,
+                "status": status,
+                "error_message": message,
+                "parse_error": str(exc),
+                "usage": response.get("usage"),
+                "cost": response.get("cost"),
+                "finish_reason": finish_reason,
+                "truncated": truncated,
+            }
+
+    if attempt_ledger:
+        result["attempts"] = attempt_ledger
+        result["recovered_after_retry"] = bool(
+            result.get("error") is None
+            and any(attempt.get("status") != "completed" for attempt in attempt_ledger[:-1])
+        )
+    return result
 
 
 def clean_generated_short_text(text: str, fallback: str = "Untitled Conversation", max_length: int = 50) -> str:
@@ -708,6 +893,7 @@ async def stage2_collect_rankings(
         for label, result in zip(labels, successful_results)
     ])
 
+    valid_label_list = ", ".join(label_to_model.keys())
     if prompt_override:
         ranking_prompt = prompt_override
     else:
@@ -727,19 +913,27 @@ async def stage2_collect_rankings(
                 responses_text=responses_text,
                 search_context_block=search_context_block
             )
-            valid_label_list = ", ".join(label_to_model.keys())
-            ranking_prompt += (
-                f"\n\nCRITICAL: Your FINAL RANKING must include ONLY these labels, "
-                f"each exactly once: {valid_label_list}. "
-                f"Do not invent or reference any other response labels."
-            )
         except (KeyError, AttributeError, TypeError) as e:
             logger.warning(f"Error formatting Stage 2 prompt: {e}. Using fallback.")
-            valid_label_list = ", ".join(label_to_model.keys())
             ranking_prompt = (
                 f"Question: {user_query}\n\n{responses_text}\n\n"
-                f"Rank these responses. FINAL RANKING must include ONLY: {valid_label_list}."
+                f"Rank these responses."
             )
+
+    # Apply the anonymity and parseability contract to every Stage 2 prompt,
+    # including paragraph/claim prompt overrides.
+    ranking_prompt += (
+        f"\n\nCRITICAL OUTPUT CONTRACT: Use ONLY these anonymized labels, "
+        f"each exactly once: {valid_label_list}. "
+        f"Do not identify, infer, mention, or rank model/provider names. "
+        f"Do not invent or reference any other response labels. "
+        f"BEGIN your response with a complete ranking block using this exact syntax:\n"
+        f"FINAL RANKING:\n"
+        f"1. <one allowed Response label>\n"
+        f"Continue the numbered list through {len(label_to_model)} ranked items. "
+        f"Place this ranking before any audit or explanation so it survives output truncation. "
+        f"Do not repeat or revise the ranking later in the response."
+    )
 
     ranking_prompt = apply_response_language(ranking_prompt, settings.response_language)
 
@@ -751,19 +945,91 @@ async def stage2_collect_rankings(
 
     # Use dedicated Stage 2 temperature (lower for consistent ranking output)
     stage2_temp = settings.stage2_temperature
+    try:
+        stage2_max_output_tokens = int(
+            getattr(settings, "stage2_max_output_tokens", STAGE2_MAX_OUTPUT_TOKENS_DEFAULT)
+            or STAGE2_MAX_OUTPUT_TOKENS_DEFAULT
+        )
+    except (TypeError, ValueError):
+        stage2_max_output_tokens = STAGE2_MAX_OUTPUT_TOKENS_DEFAULT
+    stage2_max_output_tokens = max(4096, min(stage2_max_output_tokens, 32768))
+
+    valid_labels = list(label_to_model.keys())
+    expected_count = len(successful_results)
 
     async def _query_safe(m: str):
-        try:
-            model_timeout = getattr(settings, "model_timeout_seconds", 300)
-            return m, await query_model(
-                m,
-                messages,
-                timeout=model_timeout,
-                temperature=stage2_temp,
-                conversation_id=conversation_id,
+        attempt_messages = messages
+        attempts_ledger: List[Dict[str, Any]] = []
+        model_timeout = getattr(settings, "model_timeout_seconds", 300)
+
+        for attempt in range(1, STAGE2_FORMAT_RETRY_ATTEMPTS + 1):
+            safe_model = re.sub(r"[^A-Za-z0-9_.-]+", "-", m).strip("-") or "model"
+            attempt_conversation_id = (
+                f"{conversation_id}-stage2-{safe_model}-{attempt}"
+                if conversation_id
+                else None
             )
-        except Exception as e:
-            return m, {"error": True, "error_message": str(e)}
+            try:
+                response = await query_model(
+                    m,
+                    attempt_messages,
+                    timeout=model_timeout,
+                    temperature=stage2_temp,
+                    conversation_id=attempt_conversation_id,
+                    max_output_tokens=stage2_max_output_tokens,
+                )
+            except Exception as exc:
+                response = {"error": True, "error_message": str(exc)}
+
+            result = build_stage2_result(
+                m,
+                response,
+                valid_labels=valid_labels,
+                expected_count=expected_count,
+            )
+            attempt_record = {
+                "attempt": attempt,
+                "status": result.get("status", "completed"),
+                "error_message": result.get("error_message"),
+                "finish_reason": result.get("finish_reason"),
+                "truncated": bool(result.get("truncated")),
+                "usage": result.get("usage"),
+                "cost": result.get("cost"),
+            }
+
+            retryable_format_failure = result.get("status") in {
+                "invalid_evaluator_output",
+                "truncated_evaluator_output",
+            }
+            if retryable_format_failure:
+                attempt_record["raw_response"] = result.get("ranking", "")
+            attempts_ledger.append(attempt_record)
+
+            if retryable_format_failure and attempt < STAGE2_FORMAT_RETRY_ATTEMPTS:
+                attempt_messages = [{
+                    "role": "user",
+                    "content": build_stage2_recovery_prompt(
+                        ranking_prompt,
+                        valid_labels,
+                        result.get("parse_error") or result.get("error_message") or "missing ranking",
+                    ),
+                }]
+                continue
+
+            result["attempts"] = attempts_ledger
+            result["recovered_after_retry"] = bool(
+                result.get("error") is None and attempt > 1
+            )
+            result["max_output_tokens"] = stage2_max_output_tokens
+            return m, result
+
+        return m, build_stage2_result(
+            m,
+            {"error": True, "error_message": "Stage 2 retry loop ended without a terminal result."},
+            valid_labels=valid_labels,
+            expected_count=expected_count,
+            attempts=attempts_ledger,
+        )
 
     from .main import _active_runs
     run_info = _active_runs.get(conversation_id) if conversation_id else None
@@ -896,54 +1162,25 @@ async def stage2_collect_rankings(
                                 run_info["active_providers"].remove(completed_model)
 
                         try:
-                            model, response = await task
-                            result = None
-                            if response is not None:
-                                if response.get('error'):
-                                    result = {
-                                        "model": model,
-                                        "ranking": None,
-                                        "parsed_ranking": [],
-                                        "error": response.get('error'),
-                                        "error_message": response.get('error_message', 'Unknown error'),
-                                        "usage": response.get('usage'),
-                                        "cost": response.get('cost'),
-                                    }
-                                else:
-                                    full_text = response.get('content', '')
-                                    if not isinstance(full_text, str):
-                                        full_text = str(full_text) if full_text is not None else ''
-                                    full_text = strip_thinking_blocks(full_text)
-
-                                    expected_count = len(successful_results)
-                                    valid_labels = list(label_to_model.keys())
-                                    parsed = parse_ranking_from_text(
-                                        full_text,
-                                        expected_count=expected_count,
-                                        valid_labels=valid_labels,
-                                    )
-
-                                    result = {
-                                        "model": model,
-                                        "ranking": full_text,
-                                        "parsed_ranking": parsed,
-                                        "error": None,
-                                        "usage": response.get('usage'),
-                                        "cost": response.get('cost'),
-                                    }
+                            model, result = await task
 
                             if result:
                                 yield result
 
-                            # Check for failure pause!
-                            if response and response.get('error') and pause_on_failure:
+                            # Pause only for an actual provider invocation failure. A model
+                            # response that cannot be parsed has already received a compact
+                            # automatic format retry and should not be mislabeled as downtime.
+                            if (
+                                result
+                                and result.get("status") == "provider_error"
+                                and pause_on_failure
+                            ):
                                 if run_info:
                                     run_info["paused"] = True
                                     run_info["pause_event"] = asyncio.Event()
                                     if completed_model not in run_info["failed_providers"]:
                                         run_info["failed_providers"].append(completed_model)
 
-                                # Yield pause event
                                 yield {
                                     "model": completed_model,
                                     "paused": True,
@@ -976,7 +1213,7 @@ def build_stage_texts(
     stage2_text = "\n\n".join([
         f"Model: {result['model']}\nRanking: {result.get('ranking', 'No ranking')}"
         for result in stage2_results
-        if result.get('ranking') is not None
+        if not result.get("error") and result.get('ranking') is not None
     ])
     return stage1_text, stage2_text
 
@@ -989,6 +1226,8 @@ async def stage3_synthesize_final(
     chairman_override: "str | None" = None,
     prompt_override: "str | None" = None,
     conversation_id: "str | None" = None,
+    system_prompt_override: "str | None" = None,
+    max_output_tokens: "int | None" = None,
 ) -> Dict[str, Any]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -1039,7 +1278,12 @@ async def stage3_synthesize_final(
     # Check if we are using the default prompt (or if it's empty/None, which falls back to default)
     is_default_prompt = (not settings.stage3_prompt) or (settings.stage3_prompt.strip() == STAGE3_PROMPT_DEFAULT.strip())
 
-    if is_default_prompt:
+    if system_prompt_override:
+        messages = [
+            {"role": "system", "content": system_prompt_override},
+            {"role": "user", "content": chairman_prompt},
+        ]
+    elif is_default_prompt:
         messages = [
             {"role": "system", "content": "You are the Chairman of an LLM Council. Your task is to synthesize the provided model responses into a single, comprehensive answer."},
             {"role": "user", "content": chairman_prompt}
@@ -1060,6 +1304,7 @@ async def stage3_synthesize_final(
             timeout=model_timeout,
             temperature=chairman_temp,
             conversation_id=conversation_id,
+            max_output_tokens=max_output_tokens,
         )
 
         # Check for error in response
@@ -1111,49 +1356,109 @@ def parse_ranking_from_text(
     expected_count: int = None,
     valid_labels: List[str] = None,
 ) -> List[str]:
-    """
-    Parse a numbered FINAL RANKING section.
+    """Parse a Stage 2 ranking without treating harmless formatting drift as failure.
 
-    The legacy parser tolerates duplicate and unknown response labels by
-    discarding them, but requires the resulting ranking to contain exactly
-    the expected number of valid unique labels.
+    The preferred contract is a ``FINAL RANKING:`` heading followed by a numbered
+    list.  The recovery paths below accept common markdown, heading, inline-order,
+    and ranking-only-tail variants, but only when they produce an unambiguous set
+    of the expected anonymized labels.
     """
     import re
 
     if not isinstance(ranking_text, str):
-        ranking_text = str(ranking_text) if ranking_text is not None else ''
+        ranking_text = str(ranking_text) if ranking_text is not None else ""
 
+    valid_labels = list(valid_labels or [])
     valid_set = set(valid_labels) if valid_labels else None
+    canonical_labels = {label.casefold(): label for label in valid_labels}
 
-    if "FINAL RANKING:" not in ranking_text:
-        raise EvaluationError("Missing FINAL RANKING: section")
+    def canonicalize(label: str) -> str:
+        normalized = re.sub(r"\s+", " ", label.strip()).casefold()
+        return canonical_labels.get(normalized, re.sub(r"\s+", " ", label.strip()).title())
 
-    parts = ranking_text.split("FINAL RANKING:")
-    ranking_section = parts[-1]
+    def validate(matches: List[str]) -> List[str]:
+        seen = set()
+        filtered = []
+        for raw_label in matches:
+            label = canonicalize(raw_label)
+            if valid_set and label not in valid_set:
+                continue
+            if label in seen:
+                continue
+            seen.add(label)
+            filtered.append(label)
 
-    # Look for numbered list: "1. Response A"
-    numbered_matches = re.findall(r'(\d+)\.\s*(Response [A-Z])', ranking_section)
-    if not numbered_matches:
-        if valid_set and any(label in ranking_section for label in valid_set):
-            raise EvaluationError("Ranking is unnumbered. Output must be a numbered list (1. Response X).")
-        raise EvaluationError("No valid numbered ranking found (e.g., '1. Response A').")
+        if expected_count and len(filtered) != expected_count:
+            raise EvaluationError(f"Expected {expected_count} ranked items, got {len(filtered)}.")
+        if valid_set and set(filtered) != valid_set:
+            missing = sorted(valid_set - set(filtered))
+            raise EvaluationError(f"Ranking omitted required labels: {', '.join(missing)}.")
+        if not filtered:
+            raise EvaluationError("No valid response labels found in the ranking.")
+        return filtered
 
-    matches = [m[1] for m in numbered_matches]
+    label_pattern = r"Response\s+[A-Z]"
+    line_pattern = re.compile(
+        rf"^\s*(?:\d+\s*[.):-]|[-*•])\s*(?:\*\*|__)?({label_pattern})(?:\*\*|__)?\b",
+        re.IGNORECASE,
+    )
+    heading_pattern = re.compile(
+        r"(?im)^\s*(?:#{1,6}\s*)?(?:\*\*|__)?(?:final\s+|overall\s+)?ranking"
+        r"(?:\s*\(best\s+to\s+worst\))?(?:\*\*|__)?\s*:?[ \t]*$"
+    )
 
-    seen = set()
-    filtered = []
-    for label in matches:
-        if valid_set and label not in valid_set:
-            continue
-        if label in seen:
-            continue
-        seen.add(label)
-        filtered.append(label)
+    # Preferred and markdown-heading forms.
+    heading_matches = list(heading_pattern.finditer(ranking_text))
+    if heading_matches:
+        ranking_section = ranking_text[heading_matches[-1].end():]
+        matches = [
+            match.group(1)
+            for line in ranking_section.splitlines()
+            if (match := line_pattern.match(line))
+        ]
+        if matches:
+            return validate(matches)
 
-    if expected_count and len(filtered) != expected_count:
-        raise EvaluationError(f"Expected {expected_count} ranked items, got {len(filtered)}.")
+    # Common single-line form: "Final ranking: Response B > Response A".
+    inline_pattern = re.compile(
+        r"(?im)^\s*(?:#{1,6}\s*)?(?:\*\*|__)?(?:final\s+|overall\s+)?ranking"
+        r"(?:\s*\(best\s+to\s+worst\))?(?:\*\*|__)?\s*:\s*(.+)$"
+    )
+    for inline_match in reversed(list(inline_pattern.finditer(ranking_text))):
+        inline_text = inline_match.group(1)
+        inline_labels = re.findall(label_pattern, inline_text, flags=re.IGNORECASE)
+        if inline_labels and (
+            len(inline_labels) == 1
+            or re.search(r"(?:>|→|⇒|,|;|\bthen\b)", inline_text, flags=re.IGNORECASE)
+        ):
+            return validate(inline_labels)
 
-    return filtered
+    # Structured-output variant: {"ranking": ["Response B", "Response A"]}.
+    json_match = re.search(
+        r"(?is)[\"']ranking[\"']\s*:\s*\[(.*?)\]",
+        ranking_text,
+    )
+    if json_match:
+        json_labels = re.findall(label_pattern, json_match.group(1), flags=re.IGNORECASE)
+        if json_labels:
+            return validate(json_labels)
+
+    # Last-resort recovery for a ranking-only tail with no heading.  Limiting the
+    # scan to consecutive trailing ranking lines avoids mistaking the evaluator's
+    # earlier per-response discussion for rank order.
+    trailing_matches = []
+    for line in reversed([line for line in ranking_text.splitlines() if line.strip()]):
+        match = line_pattern.match(line)
+        if not match:
+            break
+        trailing_matches.append(match.group(1))
+    if trailing_matches:
+        return validate(list(reversed(trailing_matches)))
+
+    raise EvaluationError(
+        "No unambiguous ranking found. End the response with FINAL RANKING: "
+        "followed by a numbered list such as '1. Response A'."
+    )
 
 
 def parse_stage2a_output(

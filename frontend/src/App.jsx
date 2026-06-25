@@ -1045,7 +1045,13 @@ function App() {
         stage2b: null,
         stage2c: null,
         stage3: null,
-        metadata: null,
+        metadata: {
+          execution_mode: effectiveMode,
+          critique_mode: critiqueMode,
+          debate_rounds_configured: debateRounds,
+          auto_converge: autoConverge,
+          convergence_threshold: convergenceThreshold,
+        },
         loading: {
           search: false,
           stage1: false,
@@ -1716,11 +1722,19 @@ function App() {
                         } else {
                           updated.ranking = event.data.response;
                           updated.parsed_ranking = event.data.parsed_ranking;
+                          updated.finish_reason = event.data.finish_reason;
+                          updated.truncated = Boolean(event.data.truncated);
                         }
                       } else {
-                        updated.status = 'failed';
+                        updated.status = event.data.status || 'provider_error';
                         updated.error = true;
                         updated.error_message = event.data.error_message || 'Retry failed';
+                        if (event.data.stage === 'stage2') {
+                          updated.ranking = event.data.response;
+                          updated.parsed_ranking = event.data.parsed_ranking || [];
+                          updated.finish_reason = event.data.finish_reason;
+                          updated.truncated = Boolean(event.data.truncated);
+                        }
                       }
                       return updated;
                     }

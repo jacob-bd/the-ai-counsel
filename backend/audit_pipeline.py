@@ -1072,15 +1072,29 @@ async def run_audit_pipeline(
             yield item
         elif item["type"] == "stage2a_error":
             yield item
+            partial_round = {
+                "stage1": stage1_results,
+                "stage2": stage2a_results,
+                "stage2a": stage2a_results,
+                "metadata": {
+                    "label_to_model": label_to_model,
+                    "stage2a_results": stage2a_results,
+                },
+            }
             yield {
                 "type": "debate_complete",
-                "rounds": [],
+                "rounds": [partial_round],
                 "critique_mode": "audit",
                 "debate_rounds_configured": 1,
                 "debate_rounds_executed": 1,
-                "convergence_status": "not_applicable",
+                "convergence_status": "failed",
                 "converged": False,
-                "cost_report": None,
+                "error": {
+                    "stage": "stage2a",
+                    "status": item.get("status") or "stage2a_failed",
+                    "message": item.get("message") or "Stage 2A evaluation failed.",
+                },
+                "cost_report": build_iterative_debate_cost_report([partial_round], None),
             }
             return
 
@@ -1100,20 +1114,37 @@ async def run_audit_pipeline(
 
     if not canonical_claims:
         logger.warning("No canonical claims extracted; aborting.")
+        error_message = "No canonical claims extracted from responses."
         yield {
             "type": "stage2b_error",
             "status": "no_canonical_claims",
-            "message": "No canonical claims extracted from responses."
+            "message": error_message,
+        }
+        partial_round = {
+            "stage1": stage1_results,
+            "stage2": stage2a_results,
+            "stage2a": stage2a_results,
+            "metadata": {
+                "label_to_model": label_to_model,
+                "aggregate_rankings": aggregate_rankings,
+                "canonical_claims": [],
+                "stage2a_results": stage2a_results,
+            },
         }
         yield {
             "type": "debate_complete",
-            "rounds": [],
+            "rounds": [partial_round],
             "critique_mode": "audit",
             "debate_rounds_configured": 1,
             "debate_rounds_executed": 1,
-            "convergence_status": "not_applicable",
+            "convergence_status": "failed",
             "converged": False,
-            "cost_report": None,
+            "error": {
+                "stage": "claim_decomposition",
+                "status": "no_canonical_claims",
+                "message": error_message,
+            },
+            "cost_report": build_iterative_debate_cost_report([partial_round], None),
         }
         return
 
@@ -1136,15 +1167,33 @@ async def run_audit_pipeline(
             yield item
         elif item["type"] == "stage2b_error":
             yield item
+            partial_round = {
+                "stage1": stage1_results,
+                "stage2": stage2a_results,
+                "stage2a": stage2a_results,
+                "stage2b": stage2b_results,
+                "metadata": {
+                    "label_to_model": label_to_model,
+                    "aggregate_rankings": aggregate_rankings,
+                    "canonical_claims": canonical_claims,
+                    "stage2a_results": stage2a_results,
+                    "stage2b_results": stage2b_results,
+                },
+            }
             yield {
                 "type": "debate_complete",
-                "rounds": [],
+                "rounds": [partial_round],
                 "critique_mode": "audit",
                 "debate_rounds_configured": 1,
                 "debate_rounds_executed": 1,
-                "convergence_status": "not_applicable",
+                "convergence_status": "failed",
                 "converged": False,
-                "cost_report": None,
+                "error": {
+                    "stage": "stage2b",
+                    "status": item.get("status") or "stage2b_failed",
+                    "message": item.get("message") or "Stage 2B audit failed.",
+                },
+                "cost_report": build_iterative_debate_cost_report([partial_round], None),
             }
             return
 
@@ -1159,20 +1208,43 @@ async def run_audit_pipeline(
         chairman_override=chairman_override,
     )
     if stage2c_result.get("error"):
+        error_message = stage2c_result.get("error_message") or "Stage 2C adjudication failed"
         yield {
             "type": "stage2c_error",
             "status": "failed_adjudication",
-            "message": stage2c_result.get("error_message") or "Stage 2C adjudication failed"
+            "message": error_message,
+        }
+        partial_round = {
+            "stage1": stage1_results,
+            "stage2": stage2a_results,
+            "stage2a": stage2a_results,
+            "stage2b": stage2b_results,
+            "stage2c": stage2c_result,
+            "metadata": {
+                "label_to_model": label_to_model,
+                "aggregate_rankings": aggregate_rankings,
+                "canonical_claims": canonical_claims,
+                "aggregated_2b": aggregated_2b,
+                "aggregate_claim_verdicts": aggregated_2b,
+                "stage2a_results": stage2a_results,
+                "stage2b_results": stage2b_results,
+                "stage2c_result": stage2c_result,
+            },
         }
         yield {
             "type": "debate_complete",
-            "rounds": [],
+            "rounds": [partial_round],
             "critique_mode": "audit",
             "debate_rounds_configured": 1,
             "debate_rounds_executed": 1,
-            "convergence_status": "not_applicable",
+            "convergence_status": "failed",
             "converged": False,
-            "cost_report": None,
+            "error": {
+                "stage": "stage2c",
+                "status": "failed_adjudication",
+                "message": error_message,
+            },
+            "cost_report": build_iterative_debate_cost_report([partial_round], None),
         }
         return
     yield {"type": "stage2c_complete", "data": stage2c_result, "aggregated": aggregated_2b, "round": 1}
@@ -1255,7 +1327,7 @@ async def run_audit_pipeline(
             chairman_override=chairman_override,
             conversation_id=conversation_id,
             max_attempts=2,
-            minimum_word_ratio=0.70,
+            minimum_word_ratio=0.85,
         )
         yield {"type": "stage4_complete", "data": stage4_result}
 

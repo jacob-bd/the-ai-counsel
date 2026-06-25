@@ -229,6 +229,44 @@ async def test_run_audit_pipeline_chat_ranking(mock_settings):
         assert "debate_complete" in event_types
 
 
+@pytest.mark.asyncio
+async def test_audit_failure_preserves_partial_results(mock_settings):
+    stage1_items = [
+        2,
+        {"model": "model_a", "response": "Answer A", "error": None},
+        {"model": "model_b", "response": "Answer B", "error": None},
+    ]
+    stage2a_items = [
+        {"type": "stage2a_init", "total": 2, "round": 1},
+        {"type": "stage2a_progress", "data": {"model": "model_a", "parsed": {"ranking": ["Response A", "Response B"]}}, "count": 1, "total": 2, "round": 1},
+        {"type": "stage2a_complete", "data": [{"model": "model_a"}], "label_to_model": {"A": "model_a", "B": "model_b"}, "round": 1},
+    ]
+
+    with patch("backend.audit_pipeline.get_settings", return_value=mock_settings), \
+         patch("backend.audit_pipeline.stage1_collect_responses", side_effect=make_async_gen(stage1_items)), \
+         patch("backend.audit_pipeline.stage2a_collect_evaluations", side_effect=make_async_gen(stage2a_items)), \
+         patch("backend.audit_pipeline.extract_material_claims", return_value={"claims": {}, "model": "extractor"}):
+        events = []
+        async for event in run_audit_pipeline(
+            "Query?",
+            execution_mode="full",
+            models_override=["model_a", "model_b"],
+            conversation_id="test-conv",
+        ):
+            events.append(event)
+
+    complete_event = next(event for event in events if event["type"] == "debate_complete")
+    assert len(complete_event["rounds"]) == 1
+    assert len(complete_event["rounds"][0]["stage1"]) == 2
+    assert len(complete_event["rounds"][0]["stage2a"]) == 1
+    assert complete_event["error"] == {
+        "stage": "claim_decomposition",
+        "status": "no_canonical_claims",
+        "message": "No canonical claims extracted from responses.",
+    }
+    assert complete_event["convergence_status"] == "failed"
+
+
 def test_format_aggregate_verdicts_for_prompt_includes_authoritative_count_and_claims():
     aggregated = {
         "audit_status": "complete",

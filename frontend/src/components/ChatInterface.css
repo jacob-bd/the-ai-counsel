@@ -172,6 +172,11 @@
   /* Fix flex shrinking */
   min-height: 0;
   position: relative;
+  transition: padding-bottom 0.2s ease;
+}
+
+.chat-interface.is-running .messages-area {
+  padding-bottom: 260px;
 }
 
 .stage-scroll-anchor {
@@ -755,6 +760,10 @@
   /* Reduce padding in messages area */
   .messages-area {
     padding: 16px 12px 100px 12px;
+  }
+
+  .chat-interface.is-running .messages-area {
+    padding-bottom: 300px;
   }
 
   /* Full width messages */

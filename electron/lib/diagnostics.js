@@ -65,7 +65,7 @@ async function testService(name, url, options = {}) {
   };
 }
 
-async function getDiagnosticsStatus(rootDir, backendUrl, frontendUrl) {
+async function getDiagnosticsStatus(rootDir, backendUrl, frontendUrl, resolvedNotion2ApiKey = '') {
   const LOG_DIR = path.join(app.getPath('userData'), 'logs');
   
   // Read settings
@@ -85,7 +85,7 @@ async function getDiagnosticsStatus(rootDir, backendUrl, frontendUrl) {
   const notion2apiHealthUrl = `${notion2apiBaseUrl}/health`;
   const notion2apiModelsUrl = `${notion2apiBaseUrl}/v1/models`;
 
-  const notion2apiApiKey = process.env.NOTION2API_API_KEY || settings.notion2api_api_key || '';
+  const notion2apiApiKey = resolvedNotion2ApiKey || process.env.NOTION2API_API_KEY || settings.notion2api_api_key || '';
   
   // Test services
   const services = await Promise.all([

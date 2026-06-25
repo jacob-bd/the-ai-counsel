@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { api, buildAvailableSearchProviders } from '../api';
 import SearchableModelSelect from './SearchableModelSelect';
 import { getShortModelName, deduplicateModels } from '../utils/modelHelpers';
+import { shouldLoadCustomEndpointModels } from '../utils/providerSources';
 import DocumentUpload from './DocumentUpload';
 import './AdvisorSetup.css';
 
@@ -118,7 +119,7 @@ function getAdvisorModelSources(settings) {
     openrouter: !!settings.openrouter_api_key_set && (ep.openrouter !== false),
     ollama: !!settings.ollama_base_url && (ep.ollama !== false),
     direct: hasAnyDirectProviderKey(settings) && ((ep.direct !== false) || (settings.notion2api_api_key_set && ep.notion2api !== false)),
-    custom: !!settings.custom_endpoint_url && (ep.custom !== false),
+    custom: shouldLoadCustomEndpointModels(settings),
   };
 }
 

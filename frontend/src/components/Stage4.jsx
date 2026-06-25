@@ -23,6 +23,8 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
 
     const visuals = getModelVisuals(correctedDraft?.model);
     const shortName = getShortModelName(correctedDraft?.model);
+    const fallbackUsed = Boolean(correctedDraft?.fallback_used);
+    const documentLabel = fallbackUsed ? 'Original Document Fallback' : 'Corrected Draft';
 
     const handleCopy = async () => {
         const textToCopy = typeof correctedDraft?.response === 'string'
@@ -46,14 +48,14 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                 <StageTimer startTime={startTime} endTime={endTime} label="Duration" />
             </div>
             <p className="stage-4-description">
-                The chairman has rewritten the original document incorporating all corrections,
-                fixing flawed claims, and applying recommendations from the deliberation while fully
-                preserving the original structure and content.
+                {fallbackUsed
+                    ? 'The generated revision failed preservation validation. The rejected candidate was not used; the unchanged original document is shown below.'
+                    : 'The chairman has rewritten the original document incorporating all corrections, fixing flawed claims, and applying recommendations from the deliberation while fully preserving the original structure and content.'}
             </p>
             {correctedDraft?.error && (
                 <div className="stage-4-validation-error">
                     <strong>⚠️ Preservation Validation Failed</strong>
-                    <p>{correctedDraft.error_message || "The draft failed structural or length validation. Showing the fallback draft below."}</p>
+                    <p>{correctedDraft.error_message || "The generated revision failed structural or length validation. The rejected candidate was not used; the unchanged original document is shown below."}</p>
                 </div>
             )}
             <div className="corrected-draft-response">
@@ -64,7 +66,7 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                         </span>
                         <div className="corrected-draft-info">
                             <span className="corrected-draft-role">
-                                <span>📝</span> Corrected Draft
+                                <span>📝</span> {documentLabel}
                             </span>
                             <span className="corrected-draft-model">{shortName}</span>
                             <span className="corrected-draft-provider-badge">{visuals.name}</span>
@@ -73,7 +75,7 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                     <button
                         className={`copy-button ${isCopied ? 'copied' : ''}`}
                         onClick={handleCopy}
-                        title="Copy corrected draft to clipboard"
+                        title={`Copy ${documentLabel.toLowerCase()} to clipboard`}
                     >
                         {isCopied ? (
                             <><span className="icon">✓</span><span className="label">Copied</span></>

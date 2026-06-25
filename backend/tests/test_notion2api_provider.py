@@ -129,6 +129,48 @@ async def test_notion2api_get_models_prefixes_and_filters(fake_httpx, notion_env
 
 
 @pytest.mark.asyncio
+async def test_notion2api_get_models_uses_canonical_metadata_and_deduplicates(fake_httpx, notion_env):
+    fake_httpx.responses.append((
+        200,
+        {"data": [
+            {
+                "id": "glm-5.2",
+                "canonical_id": "baseten-glm-5.2",
+                "display_name": "GLM 5.2",
+                "model_family": "glm",
+                "upstream_host": "baseten",
+                "public_name": "glm-5.2",
+                "aliases": ["glm-5.2"],
+            },
+            {
+                "id": "baseten-glm-5.2",
+                "canonical_id": "baseten-glm-5.2",
+                "display_name": "GLM 5.2",
+                "model_family": "glm",
+                "upstream_host": "baseten",
+                "public_name": "glm-5.2",
+                "aliases": ["glm-5.2"],
+            },
+        ]},
+        "",
+    ))
+
+    models = await Notion2APIProvider().get_models()
+
+    assert models == [{
+        "id": "notion2api:baseten-glm-5.2",
+        "name": "GLM 5.2 [Notion2API]",
+        "display_name": "GLM 5.2",
+        "provider": "Notion2API",
+        "source": "notion2api",
+        "model_family": "glm",
+        "upstream_host": "baseten",
+        "public_name": "glm-5.2",
+        "aliases": ["glm-5.2"],
+    }]
+
+
+@pytest.mark.asyncio
 async def test_notion2api_validate_connection_accepts_explicit_url_and_token(fake_httpx, monkeypatch):
     monkeypatch.delenv("NOTION2API_API_KEY", raising=False)
     fake_httpx.responses.append((200, {"data": [{"id": "model-a"}]}, ""))
@@ -317,3 +359,29 @@ async def test_notion2api_keeps_temperature_for_standard_models(fake_httpx, noti
 
     captured_payload = fake_httpx.instances[-1].kwargs["json"]
     assert captured_payload["temperature"] == 0.25
+
+
+@pytest.mark.asyncio
+async def test_notion2api_query_preserves_finish_reason(fake_httpx, notion_env):
+    fake_httpx.responses.append((
+        200,
+        {
+            "choices": [{
+                "delta": {"content": "partial output"},
+                "finish_reason": "length",
+            }],
+            "usage": {"total_tokens": 10},
+        },
+        "",
+    ))
+
+    result = await Notion2APIProvider().query(
+        "notion2api:grok-4.3",
+        [{"role": "user", "content": "rank"}],
+        max_output_tokens=16000,
+    )
+
+    assert result["content"] == "partial output"
+    assert result["finish_reason"] == "length"
+    sent = fake_httpx.instances[-1].kwargs["json"]
+    assert sent["max_tokens"] == 16000

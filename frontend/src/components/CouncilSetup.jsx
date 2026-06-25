@@ -3,6 +3,7 @@ import { api } from '../api';
 import CouncilGrid from './CouncilGrid';
 import EditableCouncilGrid, { NEW_MEMBER_INDEX } from './EditableCouncilGrid';
 import { deduplicateModels } from '../utils/modelHelpers';
+import { shouldLoadCustomEndpointModels } from '../utils/providerSources';
 import './CouncilSetup.css';
 
 const MAX_MEMBERS = 8;
@@ -59,7 +60,7 @@ function getConfiguredModelSources(settings) {
     openrouter: !!settings.openrouter_api_key_set && (ep.openrouter !== false),
     ollama: !!settings.ollama_base_url && (ep.ollama !== false),
     direct: hasDirect && ((ep.direct !== false) || (settings.notion2api_api_key_set && ep.notion2api !== false)),
-    custom: !!settings.custom_endpoint_url && (ep.custom !== false),
+    custom: shouldLoadCustomEndpointModels(settings),
   };
 }
 

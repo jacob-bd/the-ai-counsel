@@ -11,6 +11,18 @@ import StageTimer from './StageTimer';
 import ModelVisualIcon from './ModelVisualIcon';
 import { copyToClipboard } from '../utils/clipboard';
 
+function looksLikeEvaluatorRefusal(text) {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!normalized) return false;
+
+    return [
+        'i cannot perform this task',
+        "i can't perform this task",
+        'the request you pasted requires capabilities and a role i do not have',
+        'i do not have tools or the ability to',
+        'my capabilities are strictly limited to notion workspace operations',
+    ].some((marker) => normalized.includes(marker));
+}
 function deAnonymizeText(text, labelToModel) {
     if (!labelToModel) return text;
 
@@ -327,6 +339,11 @@ function RawEvaluationTabs({
     onFireProvider
 }) {
     const currentStatus = getRequestStatus(currentRanking);
+    const isRankingFormatError = ['invalid_evaluator_output', 'truncated_evaluator_output'].includes(currentRanking?.status);
+    const isTruncatedEvaluatorOutput = currentRanking?.status === 'truncated_evaluator_output';
+    const isProviderError = currentRanking?.status === 'provider_error';
+    const isEvaluatorRefusal = currentRanking?.status === 'evaluator_refused'
+        || looksLikeEvaluatorRefusal(currentRanking?.ranking);
 
     return (
         <>
@@ -438,10 +455,35 @@ function RawEvaluationTabs({
                         <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                             <div className="error-icon">⚠️</div>
                             <div className="error-details">
-                                <div className="error-title">{currentStatus === 'unaccounted' ? 'Request Result Missing' : 'Model Failed to Respond'}</div>
+                                <div className="error-title">
+                                    {currentStatus === 'unaccounted'
+                                        ? 'Request Result Missing'
+                                        : isEvaluatorRefusal
+                                            ? 'Evaluator Refused Task'
+                                            : isTruncatedEvaluatorOutput
+                                                ? 'Evaluator Output Truncated'
+                                                : isRankingFormatError
+                                                    ? 'Ranking Missing or Unparseable'
+                                                    : isProviderError
+                                                        ? 'Provider Request Failed'
+                                                        : 'Ranking Request Failed'}
+                                </div>
                                 <div className="error-message">{currentRanking?.error_message || 'Unknown error'}</div>
                             </div>
                         </div>
+                        {(isRankingFormatError || isEvaluatorRefusal) && currentRanking?.ranking && (
+                            <details className="raw-evaluations-collapse">
+                                <summary className="raw-evaluations-toggle">Show unparsed model response</summary>
+                                <MarkdownContent className="ranking-content">
+                                    {deAnonymizeText(
+                                        typeof currentRanking.ranking === 'string'
+                                            ? currentRanking.ranking
+                                            : String(currentRanking.ranking),
+                                        labelToModel
+                                    )}
+                                </MarkdownContent>
+                            </details>
+                        )}
                         {onRetryProvider && !currentRanking.retrying && currentStatus !== 'unaccounted' && (
                             <button
                                 className="retry-provider-button"

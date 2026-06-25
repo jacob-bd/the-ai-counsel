@@ -14,6 +14,7 @@ import Stage4, { Stage4Skeleton } from './Stage4';
 import RoundNavigator from './RoundNavigator';
 import CostReport from './CostReport';
 import PauseBanner from './PauseBanner';
+import OperationalStatus from './OperationalStatus';
 import DocumentUpload from './DocumentUpload';
 import './ChatInterface.css';
 import { getShortModelName } from '../utils/modelHelpers';
@@ -163,7 +164,7 @@ export default function ChatInterface({
         if (isNearBottom) {
             messagesEndRef.current?.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth' });
         }
-    }, [conversation]);
+    }, [conversation, isLoading]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -234,8 +235,16 @@ export default function ChatInterface({
         );
     }
 
+    const activeMessage = conversation.messages?.[conversation.messages.length - 1] || null;
+    const latestUserMessage = [...(conversation.messages || [])]
+        .reverse()
+        .find((message) => message?.role === 'user');
+    const sourceWordCount = typeof latestUserMessage?.content === 'string'
+        ? latestUserMessage.content.trim().split(/\s+/).filter(Boolean).length
+        : 0;
+
     return (
-        <div className="chat-interface">
+        <div className={`chat-interface ${(isLoading || runPaused) ? 'is-running' : ''}`}>
             {/* Messages Area */}
             <div className="messages-area" ref={messagesContainerRef}>
                 {mode === 'advisors' && conversation.messages.length === 0 ? (
@@ -283,10 +292,17 @@ export default function ChatInterface({
                                         || (index === conversation.messages.length - 1 ? executionMode : null);
                                     if (!knownMode) return null;
 
-                                    const rounds = msg.metadata?.rounds?.length || msg.metadata?.debate_rounds_configured || 1;
-                                    const critique = msg.metadata?.critique_mode || 'freeform';
+                                    const isActiveMessage = index === conversation.messages.length - 1;
+                                    const rounds = msg.metadata?.rounds?.length
+                                        || msg.metadata?.debate_rounds_configured
+                                        || (isActiveMessage ? debateRounds : 1);
+                                    const critique = msg.metadata?.critique_mode
+                                        || (isActiveMessage ? critiqueMode : 'freeform');
+                                    const failedEmptyRun = msg.metadata?.debate_rounds_executed === 0
+                                        && !msg.metadata?.rounds?.length;
                                     let label;
-                                    if (knownMode === 'chat_only') label = '💬 Chat Only';
+                                    if (failedEmptyRun) label = critique === 'audit' ? '⚠️ Audit Failed' : '⚠️ Run Failed';
+                                    else if (knownMode === 'chat_only') label = '💬 Chat Only';
                                     else if (knownMode === 'chat_ranking') label = '⚖️ Chat + Ranking';
                                     else if (knownMode === 'full') {
                                         if (rounds > 1) {
@@ -454,6 +470,16 @@ export default function ChatInterface({
                             )}
                         </div>
 
+                        <OperationalStatus
+                            message={activeMessage}
+                            isLoading={isLoading}
+                            runPaused={runPaused}
+                            pendingCount={pendingCount}
+                            activeProviders={activeProviders}
+                            pendingProviders={pendingProviders}
+                            sourceWordCount={sourceWordCount}
+                        />
+
                         <div className="input-row-bottom">
                             <DocumentUpload
                                 disabled={isLoading}
@@ -519,6 +545,22 @@ function CouncilMessageRenderer({
 
     const showStage1 = msg.loading?.stage1 || (Array.isArray(displayStage1) && displayStage1.length > 0);
     const showStage4 = msg.loading?.stage4 || displayMetadata.stage4;
+    const hasAnyLoading = Object.values(msg.loading || {}).some(Boolean);
+    const hasDisplayedOutput = Boolean(
+        showStage1
+        || (Array.isArray(displayStage2) && displayStage2.length > 0)
+        || displayStage3
+        || showStage4
+        || displayMetadata.search_context
+    );
+    const pipelineErrorMessage = displayMetadata.pipeline_error?.message;
+    const emptyCompletedRun = Boolean(
+        !hasAnyLoading
+        && !msg.error
+        && !msg.aborted
+        && !hasDisplayedOutput
+        && (displayMetadata.pipeline_error || displayMetadata.debate_rounds_executed === 0)
+    );
 
     return (
         <>
@@ -526,6 +568,22 @@ function CouncilMessageRenderer({
                 <div className="council-error">
                     <span className="council-error-icon">⚠️</span>
                     <span className="council-error-text">{msg.error}</span>
+                </div>
+            )}
+
+            {!msg.error && pipelineErrorMessage && (
+                <div className="council-error">
+                    <span className="council-error-icon">⚠️</span>
+                    <span className="council-error-text">{pipelineErrorMessage}</span>
+                </div>
+            )}
+
+            {emptyCompletedRun && !pipelineErrorMessage && (
+                <div className="council-error">
+                    <span className="council-error-icon">⚠️</span>
+                    <span className="council-error-text">
+                        This council run ended without any saved model results. Re-run the request; the prior run cannot be recovered.
+                    </span>
                 </div>
             )}
 
@@ -556,7 +614,7 @@ function CouncilMessageRenderer({
             )}
 
             {/* Round Navigator */}
-            {totalRounds > 1 && (
+            {totalRounds > 1 && !emptyCompletedRun && (
                 <RoundNavigator
                     currentRound={activeRoundNum}
                     totalRounds={totalRounds}

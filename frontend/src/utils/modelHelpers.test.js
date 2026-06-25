@@ -2,18 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   VERIFIED_NOTION2API_MODELS,
   getModelPickerDisplayName,
+  getModelPickerIdentifier,
   getModelRawId,
   getModelVisuals,
   getNotion2APIModelFamily,
   getNotion2APIModelMetadata,
   getShortModelName,
+  modelMatchesStoredValue,
   modelSearchMatches,
 } from './modelHelpers';
 
 describe('verified Notion2API model labels', () => {
-  it('contains the 19 verified models and excludes Fable 5', () => {
-    expect(Object.keys(VERIFIED_NOTION2API_MODELS)).toHaveLength(19);
-    expect(Object.keys(VERIFIED_NOTION2API_MODELS).some((id) => id.includes('fable5'))).toBe(false);
+  it('contains one verified entry for each canonical Notion2API model', () => {
+    expect(Object.keys(VERIFIED_NOTION2API_MODELS)).toHaveLength(21);
+    expect(VERIFIED_NOTION2API_MODELS['acai-budino'].displayName).toBe('Fable 5');
+    expect(VERIFIED_NOTION2API_MODELS['baseten-glm-5.2'].displayName).toBe('GLM 5.2');
   });
 
   it('maps exact Notion2API IDs to friendly names without changing the ID', () => {
@@ -32,6 +35,49 @@ describe('verified Notion2API model labels', () => {
     });
     expect(getModelRawId(model)).toBe('apricot-sorbet-high');
   });
+
+  it('shows the public alias instead of the internal Notion codename', () => {
+    const model = {
+      id: 'notion2api:almond-croissant-low',
+      provider: 'Notion2API',
+      source: 'notion2api',
+      public_name: 'claude-sonnet4.6',
+    };
+
+    expect(getModelPickerIdentifier(model)).toBe('claude-sonnet4.6');
+  });
+
+  it('prefers API-supplied display metadata for Notion2API models', () => {
+    const model = {
+      id: 'notion2api:baseten-glm-5.2',
+      provider: 'Notion2API',
+      source: 'notion2api',
+      display_name: 'GLM 5.2',
+    };
+
+    expect(getModelPickerDisplayName(model)).toBe('GLM 5.2');
+    expect(getNotion2APIModelFamily(model.id)).toBe('glm');
+    expect(getModelVisuals(model.id)).toMatchObject({
+      name: 'GLM via Notion2API',
+      short: 'GLM',
+    });
+  });
+
+  it('matches legacy saved aliases to the canonical Notion2API option', () => {
+    const model = {
+      id: 'notion2api:baseten-glm-5.2',
+      provider: 'Notion2API',
+      source: 'notion2api',
+      public_name: 'glm-5.2',
+      aliases: ['glm-5.2'],
+    };
+
+    expect(modelMatchesStoredValue(model, 'notion2api:baseten-glm-5.2')).toBe(true);
+    expect(modelMatchesStoredValue(model, 'notion2api:glm-5.2')).toBe(true);
+    expect(modelMatchesStoredValue(model, 'glm-5.2')).toBe(true);
+    expect(modelMatchesStoredValue(model, 'notion2api:other-model')).toBe(false);
+  });
+
   it('does not apply the registry to another provider using the same codename', () => {
     const model = {
       id: 'custom:apricot-sorbet-high',

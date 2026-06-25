@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import Select, { components as SelectComponents } from 'react-select';
 import {
   getModelPickerDisplayName,
-  getModelRawId,
+  getModelPickerIdentifier,
+  modelMatchesStoredValue,
   modelSearchMatches,
 } from '../utils/modelHelpers';
 
@@ -21,12 +22,13 @@ const PROVIDER_ORDER = [
 function getGroupLabel(model) {
   const isOpenRouter = model.source === 'openrouter' || model.provider === 'OpenRouter';
   const isOllama = model.id?.startsWith('ollama:') || model.provider === 'Ollama';
+  const isCustom = model.source === 'custom' || model.id?.startsWith('custom:');
   const isNotion2Api = model.source === 'notion2api'
-    || model.provider?.toLowerCase() === 'notion2api'
     || model.id?.startsWith('notion2api:');
 
   if (isOpenRouter) return 'OpenRouter (Cloud)';
   if (isOllama) return 'Local (Ollama)';
+  if (isCustom) return `${model.provider || 'Custom'} (Custom)`;
   if (isNotion2Api) return 'Notion2API (Direct)';
   return `${model.provider || 'Direct'} (Direct)`;
 }
@@ -109,13 +111,22 @@ export default function SearchableModelSelect({
       if (!grouped[groupLabel]) grouped[groupLabel] = [];
 
       const label = getModelPickerDisplayName(model);
-      const rawId = getModelRawId(model);
+      const rawId = getModelPickerIdentifier(model);
       grouped[groupLabel].push({
         value: model.id,
         label,
         rawId,
         model,
-        searchText: [label, rawId, model.id, model.name, model.provider, model.source]
+        searchText: [
+          label,
+          rawId,
+          model.id,
+          model.name,
+          model.provider,
+          model.source,
+          model.public_name,
+          ...(Array.isArray(model.aliases) ? model.aliases : []),
+        ]
           .filter(Boolean)
           .join(' '),
       });
@@ -140,14 +151,14 @@ export default function SearchableModelSelect({
 
   const selectedOption = useMemo(() => {
     const available = options.flatMap((group) => group.options);
-    const selected = available.find((option) => option.value === value);
+    const selected = available.find((option) => modelMatchesStoredValue(option.model, value));
     if (selected || !value || !Array.isArray(allModels)) return selected || null;
 
     const currentModel = allModels.find((model) => model.id === value);
     if (!currentModel) return null;
 
     const label = getModelPickerDisplayName(currentModel);
-    const rawId = getModelRawId(currentModel);
+    const rawId = getModelPickerIdentifier(currentModel);
     return {
       value: currentModel.id,
       label,

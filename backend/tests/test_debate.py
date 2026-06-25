@@ -1,9 +1,13 @@
 """Tests for iterative debate logic."""
+import pytest
+
+from backend.council import EvaluationError
 from backend.debate import (
     check_convergence, truncate_text,
     pre_segment_paragraphs, format_numbered_paragraphs,
     aggregate_claim_verdicts, select_top_claims_for_model,
     format_claim_verdicts_for_prompt, format_contested_claims_for_stage4,
+    _parse_claim_verdicts_from_ranking,
 )
 
 MAX_DEBATE_ROUNDS = 5
@@ -199,3 +203,26 @@ class TestStage3ClaimMetadata:
         assert "A2" in text
         assert "The amount is unsupported." in text
         assert "A1" not in text
+
+
+class TestClaimVerdictParsing:
+    def test_accepts_complete_substantive_claim_verdicts(self):
+        text = '''```json
+{"A1":{"verdict":"strong","reason":"The payment deadline is stated directly in the supplied contract."},"A2":{"verdict":"weak","reason":"The conclusion is plausible but needs a defined notice period."}}
+```
+FINAL RANKING:
+1. Response A
+2. Response B'''
+        parsed = _parse_claim_verdicts_from_ranking(text, ["A1", "A2"])
+        assert parsed["A1"]["verdict"] == "strong"
+        assert parsed["A2"]["verdict"] == "weak"
+
+    def test_rejects_tautological_claim_reasons(self):
+        text = '{"A1":{"verdict":"strong","reason":"Accurately reflects the claim in GPT 5.5."}}'
+        with pytest.raises(EvaluationError, match="boilerplate"):
+            _parse_claim_verdicts_from_ranking(text, ["A1"])
+
+    def test_rejects_missing_claim_ids(self):
+        text = '{"A1":{"verdict":"strong","reason":"The clause expressly provides a thirty-day payment deadline."}}'
+        with pytest.raises(EvaluationError, match="Claim IDs"):
+            _parse_claim_verdicts_from_ranking(text, ["A1", "A2"])

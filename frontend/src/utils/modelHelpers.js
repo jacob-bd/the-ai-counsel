@@ -24,12 +24,47 @@ export const VERIFIED_NOTION2API_MODELS = Object.freeze({
   'xinomavro-cake': { displayName: 'Grok Build 0.1', family: 'xai', group: 'intelligent' },
   'galette-medium-thinking': { displayName: 'Gemini 3.1 Pro', family: 'gemini', group: 'intelligent' },
   'anthropic-haiku-4.5': { displayName: 'Haiku 4.5', family: 'anthropic', group: 'fast' },
+  'acai-budino': { displayName: 'Fable 5', family: 'anthropic', group: 'intelligent' },
+  'baseten-glm-5.2': { displayName: 'GLM 5.2', family: 'glm', group: 'intelligent' },
   gingerbread: { displayName: 'Gemini 3 Flash', family: 'gemini', group: 'fast' },
 });
 
 export function getModelRawId(model) {
   const modelId = String(model?.id || model?.name || '').trim();
   return modelId.replace(/^notion2api:/i, '');
+}
+
+export function getModelPickerIdentifier(model) {
+  const modelId = String(model?.id || '').trim();
+  const isNotion2API = modelId.toLowerCase().startsWith('notion2api:')
+    || model?.source === 'notion2api'
+    || model?.provider?.toLowerCase() === 'notion2api';
+  const publicName = String(model?.public_name || '').trim();
+  return isNotion2API && publicName ? publicName : getModelRawId(model);
+}
+
+export function modelMatchesStoredValue(model, value) {
+  const normalizedValue = String(value || '').trim().toLowerCase();
+  const normalizedId = String(model?.id || '').trim().toLowerCase();
+  if (!normalizedValue || !normalizedId) return false;
+  if (normalizedValue === normalizedId) return true;
+
+  const isNotion2API = normalizedId.startsWith('notion2api:')
+    || model?.source === 'notion2api'
+    || model?.provider?.toLowerCase() === 'notion2api';
+  if (!isNotion2API) return false;
+
+  const aliases = [
+    model?.public_name,
+    ...(Array.isArray(model?.aliases) ? model.aliases : []),
+  ];
+  return aliases.some((alias) => {
+    const normalizedAlias = String(alias || '').trim().toLowerCase();
+    return normalizedAlias && (
+      normalizedValue === normalizedAlias
+      || normalizedValue === `notion2api:${normalizedAlias}`
+    );
+  });
 }
 
 export function getNotion2APIModelMetadata(modelId) {
@@ -49,6 +84,7 @@ export function getNotion2APIModelFamily(modelId) {
   if (/\bdeepseek\b/.test(rawId)) return 'deepseek';
   if (/\b(kimi|moonshot)\b/.test(rawId)) return 'kimi';
   if (/\bminimax\b/.test(rawId)) return 'minimax';
+  if (/\b(glm|zhipu|zai)\b/.test(rawId)) return 'glm';
   return null;
 }
 
@@ -68,6 +104,7 @@ export const getModelVisuals = (modelId) => {
       deepseek: { name: 'DeepSeek via Notion2API', color: '#4e80ee', short: 'DeepSeek', icon: 'DS', logo: deepseekLogo },
       kimi: { name: 'Kimi via Notion2API', color: '#cbd5e1', short: 'Kimi', icon: 'K' },
       minimax: { name: 'MiniMax via Notion2API', color: '#a78bfa', short: 'MiniMax', icon: 'M' },
+      glm: { name: 'GLM via Notion2API', color: '#2563eb', short: 'GLM', icon: 'GLM' },
     };
 
     return familyVisuals[family]
@@ -211,6 +248,9 @@ export function getModelPickerDisplayName(model) {
   const isNotion2API = modelId.toLowerCase().startsWith('notion2api:')
     || model?.source === 'notion2api'
     || model?.provider?.toLowerCase() === 'notion2api';
+  const apiDisplayName = String(model?.display_name || '').trim();
+  if (isNotion2API && apiDisplayName) return apiDisplayName;
+
   const verified = isNotion2API ? getNotion2APIModelMetadata(modelId) : null;
   if (verified) return verified.displayName;
 

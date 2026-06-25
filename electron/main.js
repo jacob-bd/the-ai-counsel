@@ -861,7 +861,13 @@ ipcMain.handle('hotkeys:testClipboardToNewAdvisors', async () => {
 
 // IPC Handlers for Diagnostics
 ipcMain.handle('diagnostics:status', () => {
-  return getDiagnosticsStatus(ROOT_DIR, BACKEND_URL, FRONTEND_URL);
+  const settings = readSettingsFile();
+  return getDiagnosticsStatus(
+    ROOT_DIR,
+    BACKEND_URL,
+    FRONTEND_URL,
+    resolveNotionApiKey(settings),
+  );
 });
 
 ipcMain.handle('diagnostics:start', () => {

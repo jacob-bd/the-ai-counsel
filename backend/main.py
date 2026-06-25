@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Literal, Optional
 import logging
 import os
+import re
 
 # Sanitize no_proxy/NO_PROXY for httpx IPv6 parser bug (crashes on ::1)
 for env_name in ("no_proxy", "NO_PROXY"):
@@ -49,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 # In-memory registry of active streaming council/debate runs.
 # Key: conversation_id, Value: progress snapshot updated as stages complete.
-# NOTE: process-local â€” only valid for single-worker deployments.
+# NOTE: process-local — only valid for single-worker deployments.
 _active_runs: Dict[str, Dict[str, Any]] = {}
 
 
@@ -1121,6 +1122,7 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
         effective_critique_mode = body.critique_mode or settings.critique_mode or "freeform"
         effective_audit_profile = body.audit_profile or settings.audit_profile or "general"
         debate_converged = False
+        debate_error = None
         _register_run(conversation_id, body.execution_mode, critique_mode=effective_critique_mode, audit_profile=effective_audit_profile)
         try:
             validated_docs = validate_documents_for_request(body.documents)
@@ -1300,7 +1302,15 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                 elif event_type == "stage4_complete":
                     run_info["stage4_response"] = event.get("data")
 
+                if event_type in {"stage2a_error", "stage2b_error", "stage2c_error"}:
+                    debate_error = {
+                        "stage": event_type.removesuffix("_error"),
+                        "status": event.get("status") or event_type,
+                        "message": event.get("message") or "The audit pipeline stopped before completion.",
+                    }
+
                 if event_type == "debate_complete":
+                    debate_error = event.get("error") or debate_error
                     rounds_data = event.get("rounds", [])
                     cost_report = event.get("cost_report") or build_iterative_debate_cost_report(rounds_data, event.get("stage4"))
                     debate_converged = event.get("converged", False)
@@ -1337,25 +1347,28 @@ async def send_debate_message_stream(conversation_id: str, body: SendMessageRequ
                 "rounds": rounds_data,
                 "cost_report": cost_report or build_iterative_debate_cost_report(rounds_data, final_stage4),
             }
+            if debate_error:
+                metadata["pipeline_error"] = debate_error
             if debate_critique_mode == "audit":
                 metadata["audit_profile"] = effective_audit_profile
                 if rounds_data:
                     last_round = rounds_data[-1]
+                    last_round_meta = last_round.get("metadata") or {}
                     metadata["audit"] = {
                         "schema_version": 1,
-                        "status": "complete",
+                        "status": "failed" if debate_error else "complete",
                         "stage2a": {
-                            "evaluations": last_round.get("stage2a_results") or [],
+                            "evaluations": last_round.get("stage2a") or last_round_meta.get("stage2a_results") or [],
                             "ranking": final_aggregate_rankings.get("ranking", []) if isinstance(final_aggregate_rankings, dict) else []
                         },
                         "claim_extraction": {
                             "claims": final_canonical_claims or []
                         },
                         "stage2b": {
-                            "audits": last_round.get("stage2b_results") or []
+                            "audits": last_round.get("stage2b") or last_round_meta.get("stage2b_results") or []
                         },
                         "stage2c": {
-                            "correction_record": last_round.get("stage2c_result") or {}
+                            "correction_record": last_round.get("stage2c") or last_round_meta.get("stage2c_result") or {}
                         }
                     }
             if body.execution_mode in ["chat_ranking", "full"]:
@@ -1712,6 +1725,7 @@ async def ask_oneshot(body: AskRequest):
 
         rounds = debate_complete_data.get("rounds", [])
         cost_report = debate_complete_data.get("cost_report")
+        pipeline_error = debate_complete_data.get("error")
 
         stage1 = []
         stage2a_responses = []
@@ -1755,7 +1769,7 @@ async def ask_oneshot(body: AskRequest):
             "cost_report": cost_report,
             "audit": {
                 "schema_version": 1,
-                "status": "complete",
+                "status": "failed" if pipeline_error else "complete",
                 "stage2a": {
                     "evaluations": stage2a_responses,
                     "ranking": aggregate_rankings.get("ranking", []) if isinstance(aggregate_rankings, dict) else []
@@ -1775,6 +1789,8 @@ async def ask_oneshot(body: AskRequest):
             "label_to_model": label_to_model,
             "aggregate_rankings": aggregate_rankings,
         }
+        if pipeline_error:
+            metadata["pipeline_error"] = pipeline_error
 
         if search_context:
             metadata["search_context"] = search_context
@@ -2488,24 +2504,47 @@ async def update_app_settings(request: UpdateSettingsRequest):
     }
 
 
+def _normalize_provider_endpoint(value: str | None) -> str:
+    """Normalize provider endpoint URLs for duplicate-transport detection."""
+    return str(value or "").strip().rstrip("/").lower()
+
+
+def _custom_endpoint_duplicates_notion2api(settings: Settings) -> bool:
+    """Return whether the legacy custom endpoint points at the dedicated Notion2API URL."""
+    custom_url = _normalize_provider_endpoint(settings.custom_endpoint_url)
+    notion_url = _normalize_provider_endpoint(settings.notion2api_base_url)
+    return bool(custom_url and notion_url and custom_url == notion_url)
+
+
 @app.get("/api/models/direct")
 async def get_direct_models():
     """Get available models from all configured direct providers."""
-    all_models = []
+    provider_models: Dict[str, List[Dict[str, Any]]] = {}
 
-    # Iterate over all providers
+    # Fetch each direct provider independently so a failed provider cannot hide others.
     for provider_id, provider in PROVIDERS.items():
-        # Skip OpenRouter and Ollama as they are handled separately
         if provider_id in ["openrouter", "ollama", "hybrid"]:
             continue
 
         try:
-            # Fetch models from provider
-            models = await provider.get_models()
-            all_models.extend(models)
+            provider_models[provider_id] = await provider.get_models()
         except Exception as e:
             print(f"Error fetching models for {provider_id}: {e}")
+            provider_models[provider_id] = []
 
+    # Older configurations may still point the generic custom endpoint at the same
+    # Notion2API URL. Prefer the dedicated provider when it returned models, while
+    # retaining custom as a fallback if the dedicated provider is unavailable.
+    settings = get_settings()
+    if (
+        _custom_endpoint_duplicates_notion2api(settings)
+        and provider_models.get("notion2api")
+    ):
+        provider_models["custom"] = []
+
+    all_models: List[Dict[str, Any]] = []
+    for provider_id in PROVIDERS:
+        all_models.extend(provider_models.get(provider_id, []))
     return all_models
 
 
@@ -3144,61 +3183,122 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
                 search_context_block=search_context_block
             )
             valid_label_list = ", ".join(label_to_model.keys())
-            ranking_prompt += f"\n\nCRITICAL: Your FINAL RANKING must include ONLY these labels, each exactly once: {valid_label_list}."
         except Exception:
             valid_label_list = ", ".join(label_to_model.keys())
-            ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses. FINAL RANKING must include ONLY: {valid_label_list}."
+            ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses."
+
+        ranking_prompt += (
+            f"\n\nCRITICAL OUTPUT CONTRACT: Use ONLY these anonymized labels, "
+            f"each exactly once: {valid_label_list}. "
+            f"Do not identify, infer, mention, or rank model/provider names. "
+            f"BEGIN with FINAL RANKING: followed by {len(label_to_model)} numbered items, "
+            f"one allowed Response label per line. Put the complete ranking before any "
+            f"audit or explanation so it survives output truncation."
+        )
 
         ranking_prompt = apply_response_language(ranking_prompt, settings.response_language)
         messages = [{"role": "user", "content": ranking_prompt}]
 
-        from .council import _query_model_gated, strip_thinking_blocks, parse_ranking_from_text
+        from .council import (
+            STAGE2_FORMAT_RETRY_ATTEMPTS,
+            STAGE2_MAX_OUTPUT_TOKENS_DEFAULT,
+            _query_model_gated,
+            build_stage2_recovery_prompt,
+            build_stage2_result,
+        )
         model_timeout = getattr(settings, "model_timeout_seconds", 300)
         if run_info.get("continuation_mode") == "conservative":
             model_timeout = model_timeout * 2
 
         try:
-            response = await _query_model_gated(
+            stage2_max_output_tokens = int(
+                getattr(settings, "stage2_max_output_tokens", STAGE2_MAX_OUTPUT_TOKENS_DEFAULT)
+                or STAGE2_MAX_OUTPUT_TOKENS_DEFAULT
+            )
+        except (TypeError, ValueError):
+            stage2_max_output_tokens = STAGE2_MAX_OUTPUT_TOKENS_DEFAULT
+        stage2_max_output_tokens = max(4096, min(stage2_max_output_tokens, 32768))
+
+        valid_labels = list(label_to_model.keys())
+        attempt_messages = messages
+        attempts_ledger = []
+        new_result = None
+        safe_model = re.sub(r"[^A-Za-z0-9_.-]+", "-", model_id).strip("-") or "model"
+
+        for attempt in range(1, STAGE2_FORMAT_RETRY_ATTEMPTS + 1):
+            try:
+                response = await _query_model_gated(
+                    model_id,
+                    attempt_messages,
+                    timeout=model_timeout,
+                    temperature=settings.stage2_temperature,
+                    conversation_id=f"{conversation_id}-stage2-manual-{safe_model}-{attempt}",
+                    max_output_tokens=stage2_max_output_tokens,
+                )
+            except Exception as exc:
+                response = {"error": True, "error_message": str(exc)}
+
+            classified = build_stage2_result(
                 model_id,
-                messages,
-                timeout=model_timeout,
-                temperature=settings.stage2_temperature,
-                conversation_id=conversation_id
-            )
-        except Exception as e:
-            response = {"error": True, "error_message": str(e)}
-
-        if response.get("error"):
-            new_result = {
-                "model": model_id,
-                "ranking": None,
-                "parsed_ranking": [],
-                "error": response.get("error"),
-                "error_message": response.get("error_message", "Unknown error"),
-                "usage": response.get("usage"),
-                "cost": response.get("cost"),
-            }
-        else:
-            full_text = response.get("content", "")
-            if not isinstance(full_text, str):
-                full_text = str(full_text) if full_text is not None else ""
-            full_text = strip_thinking_blocks(full_text)
-
-            parsed = parse_ranking_from_text(
-                full_text,
+                response,
+                valid_labels=valid_labels,
                 expected_count=len(successful_results),
-                valid_labels=list(label_to_model.keys())
             )
-            new_result = {
-                "model": model_id,
-                "ranking": full_text,
-                "parsed_ranking": parsed,
-                "error": None,
-                "usage": response.get("usage"),
-                "cost": response.get("cost"),
+            retryable_format_failure = classified.get("status") in {
+                "invalid_evaluator_output",
+                "truncated_evaluator_output",
             }
+            attempt_record = {
+                "attempt": attempt,
+                "status": classified.get("status", "completed"),
+                "error_message": classified.get("error_message"),
+                "finish_reason": classified.get("finish_reason"),
+                "truncated": bool(classified.get("truncated")),
+                "usage": classified.get("usage"),
+                "cost": classified.get("cost"),
+            }
+            if retryable_format_failure:
+                attempt_record["raw_response"] = classified.get("ranking", "")
+            attempts_ledger.append(attempt_record)
+
+            if retryable_format_failure and attempt < STAGE2_FORMAT_RETRY_ATTEMPTS:
+                attempt_messages = [{
+                    "role": "user",
+                    "content": build_stage2_recovery_prompt(
+                        ranking_prompt,
+                        valid_labels,
+                        classified.get("parse_error") or classified.get("error_message") or "missing ranking",
+                    ),
+                }]
+                continue
+
+            new_result = classified
+            break
+
+        if new_result is None:
+            new_result = build_stage2_result(
+                model_id,
+                {"error": True, "error_message": "Stage 2 manual retry ended without a terminal result."},
+                valid_labels=valid_labels,
+                expected_count=len(successful_results),
+            )
 
         responses = run_info.get("stage2_responses", [])
+        prior_entry = next((item for item in responses if item.get("model") == model_id), None)
+        prior_attempts = list((prior_entry or {}).get("attempts") or [])
+        if prior_entry and not prior_attempts and (prior_entry.get("ranking") or prior_entry.get("error")):
+            prior_attempts.append({
+                "attempt": "prior",
+                "status": prior_entry.get("status") or ("provider_error" if prior_entry.get("error") else "completed"),
+                "error_message": prior_entry.get("error_message"),
+                "finish_reason": prior_entry.get("finish_reason"),
+                "truncated": bool(prior_entry.get("truncated")),
+                "raw_response": prior_entry.get("ranking") or "",
+            })
+        new_result["attempts"] = prior_attempts + attempts_ledger
+        new_result["recovered_after_retry"] = bool(new_result.get("error") is None)
+        new_result["max_output_tokens"] = stage2_max_output_tokens
+
         updated = False
         for idx, r in enumerate(responses):
             if r.get("model") == model_id:
@@ -3222,6 +3322,10 @@ async def retry_failed_provider(conversation_id: str, body: RetryRequest):
                 "stage": stage,
                 "success": success,
                 "response": new_result.get("response") if stage == "stage1" else new_result.get("ranking"),
+                "parsed_ranking": new_result.get("parsed_ranking") if stage == "stage2" else None,
+                "status": new_result.get("status"),
+                "finish_reason": new_result.get("finish_reason"),
+                "truncated": new_result.get("truncated", False),
                 "error_message": new_result.get("error_message")
             }
         }
@@ -3371,15 +3475,22 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
                 search_context_block=search_context_block
             )
             valid_label_list = ", ".join(label_to_model.keys())
-            ranking_prompt += f"\n\nCRITICAL: Your FINAL RANKING must include ONLY these labels, each exactly once: {valid_label_list}."
         except Exception:
             valid_label_list = ", ".join(label_to_model.keys())
-            ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses. FINAL RANKING must include ONLY: {valid_label_list}."
+            ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses."
+
+        ranking_prompt += (
+            f"\n\nCRITICAL OUTPUT CONTRACT: Use ONLY these anonymized labels, "
+            f"each exactly once: {valid_label_list}. "
+            f"Do not identify, infer, mention, or rank model/provider names. "
+            f"End with FINAL RANKING: followed by {len(label_to_model)} numbered items, "
+            f"one allowed Response label per line."
+        )
 
         ranking_prompt = apply_response_language(ranking_prompt, settings.response_language)
         messages = [{"role": "user", "content": ranking_prompt}]
 
-        from .council import _query_model_gated, strip_thinking_blocks, parse_ranking_from_text
+        from .council import EvaluationError, _query_model_gated, parse_ranking_from_text, strip_thinking_blocks
         model_timeout = getattr(settings, "model_timeout_seconds", 300)
         if run_info.get("continuation_mode") == "conservative":
             model_timeout = model_timeout * 2
@@ -3411,19 +3522,31 @@ async def fire_pending_provider(conversation_id: str, body: FireRequest):
                 full_text = str(full_text) if full_text is not None else ""
             full_text = strip_thinking_blocks(full_text)
 
-            parsed = parse_ranking_from_text(
-                full_text,
-                expected_count=len(successful_results),
-                valid_labels=list(label_to_model.keys())
-            )
-            new_result = {
-                "model": model_id,
-                "ranking": full_text,
-                "parsed_ranking": parsed,
-                "error": None,
-                "usage": response.get("usage"),
-                "cost": response.get("cost"),
-            }
+            try:
+                parsed = parse_ranking_from_text(
+                    full_text,
+                    expected_count=len(successful_results),
+                    valid_labels=list(label_to_model.keys())
+                )
+                new_result = {
+                    "model": model_id,
+                    "ranking": full_text,
+                    "parsed_ranking": parsed,
+                    "error": None,
+                    "usage": response.get("usage"),
+                    "cost": response.get("cost"),
+                }
+            except EvaluationError as exc:
+                new_result = {
+                    "model": model_id,
+                    "ranking": full_text,
+                    "parsed_ranking": [],
+                    "error": True,
+                    "status": "invalid_evaluator_output",
+                    "error_message": str(exc),
+                    "usage": response.get("usage"),
+                    "cost": response.get("cost"),
+                }
 
         responses = run_info.get("stage2_responses", [])
         responses.append(new_result)

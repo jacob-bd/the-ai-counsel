@@ -15,6 +15,7 @@ from .council import (
     stage3_synthesize_final,
     calculate_aggregate_rankings,
     build_stage_texts,
+    EvaluationError,
 )
 from .costs import build_iterative_debate_cost_report
 from .corrected_draft import generate_corrected_draft
@@ -456,17 +457,60 @@ def _select_top_paragraphs_from_others(
     return "\n".join(lines) if lines else "None"
 
 
-def _parse_claim_verdicts_from_ranking(ranking_text: str) -> Optional[Dict[str, Dict[str, str]]]:
-    """Extract claim verdict JSON from a Stage 2 ranking response."""
+def _parse_claim_verdicts_from_ranking(
+    ranking_text: str,
+    expected_claim_ids: Optional[List[str]] = None,
+) -> Dict[str, Dict[str, str]]:
+    """Extract and strictly validate claim verdict JSON from Stage 2 output."""
+    from collections import Counter
     from .json_repair import extract_json_block
+
     if not ranking_text:
-        return None
+        raise EvaluationError("Empty claim-evaluation output")
+
     result = extract_json_block(ranking_text)
-    if isinstance(result, dict):
-        # Validate it looks like claim verdicts {id: {verdict, reason}}
-        if all(isinstance(v, dict) and "verdict" in v for v in result.values()):
-            return result
-    return None
+    if not isinstance(result, dict):
+        raise EvaluationError("Claim evaluation JSON is not an object")
+
+    if expected_claim_ids is not None:
+        expected = set(expected_claim_ids)
+        actual = set(result.keys())
+        if actual != expected:
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected)
+            raise EvaluationError(
+                f"Claim IDs do not match expected set; missing={missing}, extra={extra}"
+            )
+
+    valid_verdicts = {"strong", "weak", "flawed"}
+    boilerplate_markers = (
+        "accurately reflects the claim",
+        "reflects the claim in",
+        "supported by the response",
+        "consistent with the response",
+    )
+    verdicts: List[str] = []
+
+    for claim_id, detail in result.items():
+        if not isinstance(detail, dict):
+            raise EvaluationError(f"Claim {claim_id} evaluation is not an object")
+        verdict = str(detail.get("verdict", "")).strip().lower()
+        reason = str(detail.get("reason", "")).strip()
+        if verdict not in valid_verdicts:
+            raise EvaluationError(f"Claim {claim_id} has invalid verdict: {verdict}")
+        if len(reason) < 20 or not any(ch.isalnum() for ch in reason):
+            raise EvaluationError(f"Claim {claim_id} has a degenerate reason")
+        lowered_reason = reason.lower()
+        if any(marker in lowered_reason for marker in boilerplate_markers):
+            raise EvaluationError(f"Claim {claim_id} uses non-substantive boilerplate")
+        verdicts.append(verdict)
+
+    if len(verdicts) >= 10:
+        _, count = Counter(verdicts).most_common(1)[0]
+        if count / len(verdicts) > 0.95:
+            raise EvaluationError("Verdict collapse detected (>95% identical claim verdicts)")
+
+    return result
 
 
 def _parse_audit_verdicts(ranking_text: str, expected_claim_ids: list = None) -> dict:
@@ -863,11 +907,22 @@ async def run_iterative_debate(
                 if isinstance(item, dict) and item.get("paused"):
                     yield {"type": "stage2_pause", "data": item, "round": round_num}
                     continue
-                # Post-process: extract structured data from ranking text
+                # Post-process: extract and validate mode-specific structured data.
                 if effective_mode == "claim" and item.get("ranking"):
-                    cv = _parse_claim_verdicts_from_ranking(item["ranking"])
-                    if cv:
-                        item["claim_verdicts"] = cv
+                    expected_claim_ids = [
+                        str(claim.get("id"))
+                        for claims in (canonical_claims or {}).values()
+                        for claim in claims
+                        if isinstance(claim, dict) and claim.get("id")
+                    ]
+                    try:
+                        item["claim_verdicts"] = _parse_claim_verdicts_from_ranking(
+                            item["ranking"], expected_claim_ids
+                        )
+                    except EvaluationError as exc:
+                        item["error"] = True
+                        item["error_message"] = f"Invalid claim evaluation: {exc}"
+                        item["parsed_ranking"] = []
                 elif effective_mode == "paragraph" and item.get("ranking"):
                     anns = _parse_paragraph_annotations_from_ranking(item["ranking"])
                     if anns:
@@ -1046,7 +1101,7 @@ async def run_iterative_debate(
             chairman_override=chairman_override,
             conversation_id=conversation_id,
             max_attempts=2,
-            minimum_word_ratio=0.70,
+            minimum_word_ratio=0.85,
         )
         yield {"type": "stage4_complete", "data": stage4_result}
 
