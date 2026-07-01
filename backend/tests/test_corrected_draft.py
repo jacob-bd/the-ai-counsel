@@ -147,6 +147,22 @@ def test_validate_corrected_draft_headings_structure():
     assert not valid
     assert "Missing" in err
 
+    # 5. Inline Markdown emphasis changes should not count as renamed headings
+    styled_original = "### 1. Omitted lawsuits ? *ask the debtor*\n## If time runs out"
+    styled_corrected = "### 1. Omitted lawsuits ? ask the debtor\n## If time runs out"
+    valid, err = validate_corrected_draft(styled_original, styled_corrected)
+    assert valid
+    assert not err
+
+    # 6. One early mismatch must not falsely report every later heading as missing
+    cascade_original = "# Missing first\n## Present second\n## Present third"
+    cascade_corrected = "## Present second\n## Present third"
+    valid, err = validate_corrected_draft(cascade_original, cascade_corrected)
+    assert not valid
+    assert "# Missing first" in err
+    assert "## Present second" not in err
+    assert "## Present third" not in err
+
 def test_validate_corrected_draft_length():
     original = "a " * 100
 

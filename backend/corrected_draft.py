@@ -165,28 +165,35 @@ def parse_headings_structure(text: str) -> List[Dict[str, Any]]:
 
 
 def verify_heading_subsequence(original_headings: List[Dict[str, Any]], corrected_headings: List[Dict[str, Any]]) -> Tuple[bool, List[str]]:
-    """Verify that original_headings is a subsequence of corrected_headings (matching level and text normalized)."""
+    """Verify heading level, wording, and relative order without cascading failures."""
     missing = []
     corr_idx = 0
     corr_len = len(corrected_headings)
 
     def normalize(t: str) -> str:
-        return re.sub(r'\s+', ' ', t.strip().lower())
+        # Inline emphasis is presentation, not heading substance. Preserve punctuation
+        # and wording so materially renamed headings still fail validation.
+        without_emphasis = re.sub(r"(?<!\\)[*_`]+", "", t.strip())
+        return re.sub(r"\s+", " ", without_emphasis.casefold())
 
     for orig in original_headings:
         orig_text_norm = normalize(orig["text"])
         orig_level = orig["level"]
+        match_index = None
 
-        found = False
-        while corr_idx < corr_len:
-            curr = corrected_headings[corr_idx]
-            corr_idx += 1
+        for candidate_index in range(corr_idx, corr_len):
+            curr = corrected_headings[candidate_index]
             if curr["level"] == orig_level and normalize(curr["text"]) == orig_text_norm:
-                found = True
+                match_index = candidate_index
                 break
 
-        if not found:
+        if match_index is None:
+            # Do not consume all remaining corrected headings after one mismatch.
+            # Later original headings may still be present and should be diagnosed accurately.
             missing.append(f"{'#' * orig_level} {orig['text']}")
+            continue
+
+        corr_idx = match_index + 1
 
     return len(missing) == 0, missing
 
