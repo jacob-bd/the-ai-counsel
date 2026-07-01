@@ -1,8 +1,7 @@
 import pytest
 import json
-import base64
 import httpx
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock
 from backend.providers.custom_openai import CustomOpenAIProvider
 from backend.settings import Settings
 

@@ -1,7 +1,5 @@
 import base64
-import pytest
 from backend.documents import (
-    PreparedDocuments,
     prepare_documents,
     AttachmentCapabilities,
 )

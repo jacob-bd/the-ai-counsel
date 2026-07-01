@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import patch, MagicMock
 from backend.documents import AttachmentCapabilities
 from backend.settings import Settings
 from backend.providers.notion2api import Notion2APIProvider
@@ -26,10 +25,7 @@ def test_replay_policy_first_round(base_settings):
 
     def get_caps_mocked(model: str, round_num: int, settings: Settings) -> AttachmentCapabilities:
         # Replicate the inline _get_capabilities_for_model logic to verify the expected behavior
-        from backend.providers.notion2api import Notion2APIProvider
-        from backend.providers.custom_openai import CustomOpenAIProvider
         from backend.documents import AttachmentCapabilities
-        from backend.council import get_provider_for_model
 
         provider = get_provider_for_model(model)
         replay_policy = getattr(settings, "attachment_replay_policy", "stateless_only")
