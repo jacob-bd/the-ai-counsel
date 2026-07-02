@@ -4,38 +4,62 @@ import re
 from typing import Any, Optional
 
 
+_FENCED_JSON_RE = re.compile(
+    r"```(?:json|text)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _iter_balanced_json_candidates(text: str):
+    """Yield balanced object/array candidates while ignoring delimiters in strings."""
+    matching = {"{": "}", "[": "]"}
+    closing = set(matching.values())
+
+    for start, opening in enumerate(text):
+        if opening not in matching:
+            continue
+
+        stack = []
+        in_string = False
+        escaped = False
+        for index in range(start, len(text)):
+            char = text[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+            elif char in matching:
+                stack.append(char)
+            elif char in closing:
+                if not stack or matching[stack[-1]] != char:
+                    break
+                stack.pop()
+                if not stack:
+                    yield text[start:index + 1]
+                    break
+
+
 def extract_json_block(text: str) -> Optional[Any]:
-    """Extract JSON from markdown code fence or raw braces."""
+    """Extract the first repairable JSON value from fenced or surrounding text."""
     if not text:
         return None
 
-    # Try markdown fence first
-    match = re.search(r'```json\s*\n(.*?)\n\s*```', text, re.DOTALL)
-    if match:
-        result = repair_json(match.group(1))
+    for fenced_content in _FENCED_JSON_RE.findall(text):
+        result = repair_json(fenced_content.strip())
         if result is not None:
             return result
 
-    # Try raw JSON (find outermost braces/brackets)
-    # Sort by which delimiter appears first in the text
-    delimiters = [('{', '}'), ('[', ']')]
-    delimiters.sort(key=lambda d: text.find(d[0]) if text.find(d[0]) != -1 else float('inf'))
-    for start_char, end_char in delimiters:
-        start = text.find(start_char)
-        if start == -1:
-            continue
-        # Find matching end
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == start_char:
-                depth += 1
-            elif text[i] == end_char:
-                depth -= 1
-                if depth == 0:
-                    result = repair_json(text[start:i+1])
-                    if result is not None:
-                        return result
-                    break
+    for candidate in _iter_balanced_json_candidates(text):
+        result = repair_json(candidate)
+        if result is not None:
+            return result
 
     return None
 
