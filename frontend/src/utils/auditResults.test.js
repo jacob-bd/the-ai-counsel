@@ -185,11 +185,26 @@ describe('buildAuditViewModel', () => {
       stage2b: null,
       stage2c: null,
       metadata: {},
-      loading: { stage2a: true, stage2b: false, stage2c: false },
+      loading: { stage2: true, stage2a: true, stage2b: false, stage2c: false },
       timers: {},
     });
     expect(vm.stage2a.loading).toBe(true);
     expect(vm.stage2a.evaluators).toHaveLength(0);
+    expect(vm.stage2b.loading).toBe(false);
+    expect(vm.stage2c.loading).toBe(false);
+  });
+
+  it('does not project the legacy aggregate Stage 2 flag onto substages', () => {
+    const vm = buildAuditViewModel({
+      stage2a: null,
+      stage2b: null,
+      stage2c: null,
+      metadata: {},
+      loading: { stage2: true },
+      timers: {},
+    });
+
+    expect(vm.stage2a.loading).toBe(false);
     expect(vm.stage2b.loading).toBe(false);
     expect(vm.stage2c.loading).toBe(false);
   });
