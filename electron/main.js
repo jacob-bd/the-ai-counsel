@@ -30,7 +30,15 @@ let tray;
 let backendProcess;
 let frontendProcess;
 let providerProcess;
+let stackStartPromise;
 let isQuitting = false;
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => showWindow());
+}
 
 function ensureLogDir() {
   fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -120,6 +128,31 @@ function getJson(url, timeoutMs = 5000) {
       reject(new Error(`Timed out waiting for ${url}`));
     });
   });
+}
+
+function isUrlAvailable(url, timeoutMs = 1500) {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    const req = http.get(url, res => {
+      res.resume();
+      finish(res.statusCode >= 200 && res.statusCode < 500);
+    });
+    req.on('error', () => finish(false));
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      finish(false);
+    });
+  });
+}
+
+function isChildRunning(child) {
+  return !!(child && child.pid && child.exitCode === null && !child.killed);
 }
 
 
@@ -250,9 +283,10 @@ function resolveNotionApiKey(settings = {}) {
 }
 
 function startProvider(settings = {}) {
-  if (providerProcess && providerProcess.pid && !providerProcess.killed) {
+  if (isChildRunning(providerProcess)) {
     return providerProcess;
   }
+  providerProcess = null;
   const root = resolveProviderRoot(settings);
   if (!root) {
     log('Notion2API auto-launch skipped: no checkout root found');
@@ -279,9 +313,10 @@ function startProvider(settings = {}) {
 }
 
 
-function stopProvider() {
-  stopProcess(providerProcess, 'notion2api');
+async function stopProvider() {
+  const child = providerProcess;
   providerProcess = null;
+  await stopProcess(child, 'notion2api');
 }
 
 async function waitForManagedStatus(timeoutMs = 45000) {
@@ -296,7 +331,12 @@ async function waitForManagedStatus(timeoutMs = 45000) {
 
 async function startProviderFromMenu() {
   const settings = await getJson(`${BACKEND_URL}/api/settings`, 5000);
-  startProvider(settings);
+  const status = await getManagedStatus();
+  if (status.running) {
+    log(`Notion2API already running (${status.model_count || 0} models)`);
+    return null;
+  }
+  return startProvider(settings);
 }
 
 
@@ -352,7 +392,7 @@ function waitForUrl(url, timeoutMs = 90000) {
   });
 }
 
-function startStack() {
+async function startStackInternal() {
   const settings = readSettingsFile();
   const notionApiKey = resolveNotionApiKey(settings);
   log(`Starting stack, resolved Notion2API API key: ${notionApiKey ? notionApiKey.substring(0, 10) + '...' : 'none'}`);
@@ -362,47 +402,91 @@ function startStack() {
     updateEnvFile(backendEnvPath, 'NOTION2API_API_KEY', notionApiKey);
   }
 
-  if (!backendProcess || backendProcess.killed) {
-    const backendEnv = {
-      LLM_COUNCIL_BIND_HOST: process.env.LLM_COUNCIL_BIND_HOST || '127.0.0.1',
-    };
-    if (notionApiKey) {
-      backendEnv.NOTION2API_API_KEY = notionApiKey;
+  if (!isChildRunning(backendProcess)) {
+    backendProcess = null;
+    if (await isUrlAvailable(HEALTH_URL)) {
+      log(`Backend already healthy at ${HEALTH_URL}; reusing existing listener`);
+    } else {
+      const backendEnv = {
+        LLM_COUNCIL_BIND_HOST: process.env.LLM_COUNCIL_BIND_HOST || '127.0.0.1',
+      };
+      if (notionApiKey) {
+        backendEnv.NOTION2API_API_KEY = notionApiKey;
+      }
+      backendProcess = spawnLogged('backend', commandForUv(), ['run', 'python', '-m', 'backend.main'], {
+        cwd: ROOT_DIR,
+        env: backendEnv,
+      });
     }
-    backendProcess = spawnLogged('backend', commandForUv(), ['run', 'python', '-m', 'backend.main'], {
-      cwd: ROOT_DIR,
-      env: backendEnv,
-    });
   }
 
-  if (!frontendProcess || frontendProcess.killed) {
-    frontendProcess = spawnLogged('frontend', commandForNpm(), ['run', 'dev', '--', '--host', '127.0.0.1'], {
-      cwd: FRONTEND_DIR,
-      env: {
-        VITE_API_URL: BACKEND_URL,
-      },
+  if (!isChildRunning(frontendProcess)) {
+    frontendProcess = null;
+    if (await isUrlAvailable(FRONTEND_URL)) {
+      log(`Frontend already healthy at ${FRONTEND_URL}; reusing existing listener`);
+    } else {
+      frontendProcess = spawnLogged('frontend', commandForNpm(), ['run', 'dev', '--', '--host', '127.0.0.1'], {
+        cwd: FRONTEND_DIR,
+        env: {
+          VITE_API_URL: BACKEND_URL,
+        },
+      });
+    }
+  }
+}
+
+function startStack() {
+  if (!stackStartPromise) {
+    stackStartPromise = startStackInternal().finally(() => {
+      stackStartPromise = null;
     });
   }
+  return stackStartPromise;
 }
 
 function stopProcess(child, name) {
-  if (!child || !child.pid || child.killed) return;
+  if (!isChildRunning(child)) return Promise.resolve();
+
+  log(`Stopping ${name} (pid=${child.pid})`);
+  if (process.platform === 'win32') {
+    return new Promise(resolve => {
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      killer.on('error', error => {
+        log(`Failed to stop ${name}: ${error.message}`);
+        resolve();
+      });
+      killer.on('close', code => {
+        if (code !== 0 && isChildRunning(child)) {
+          log(`Failed to stop ${name}: taskkill exited with code ${code}`);
+        }
+        resolve();
+      });
+    });
+  }
+
   try {
-    log(`Stopping ${name}`);
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      process.kill(-child.pid, 'SIGTERM');
-    }
+    process.kill(-child.pid, 'SIGTERM');
   } catch (error) {
     log(`Failed to stop ${name}: ${error.message}`);
   }
+  return Promise.resolve();
 }
 
-function stopStack() {
-  stopProcess(frontendProcess, 'frontend');
-  stopProcess(backendProcess, 'backend');
-  stopProvider();
+async function stopStack() {
+  const frontend = frontendProcess;
+  const backend = backendProcess;
+  const provider = providerProcess;
+  frontendProcess = null;
+  backendProcess = null;
+  providerProcess = null;
+  await Promise.all([
+    stopProcess(frontend, 'frontend'),
+    stopProcess(backend, 'backend'),
+    stopProcess(provider, 'notion2api'),
+  ]);
 }
 
 function appIconPath() {
@@ -462,14 +546,17 @@ function reloadApp() {
   if (mainWindow) mainWindow.loadURL(FRONTEND_URL);
 }
 
-function restartApplication() {
+async function restartApplication() {
   log('Restarting application...');
   isQuitting = true;
-  stopStack();
-  setTimeout(() => {
+  try {
+    await stopStack();
     app.relaunch();
     app.exit(0);
-  }, 1000);
+  } catch (error) {
+    isQuitting = false;
+    log(`Restart failed: ${error.stack || error.message}`);
+  }
 }
 
 function openLogs() {
@@ -761,10 +848,10 @@ function menuTemplate() {
         { label: 'Open Notion2API Status', click: () => shell.openExternal(BACKEND_URL + '/api/' + 'notion2api' + '/status') },
         { label: 'Open Logs', click: openLogs },
         { type: 'separator' },
-        { label: 'Start Stack', click: startStack },
+        { label: 'Start Stack', click: () => startStack().catch(error => log('Start Stack failed: ' + error.message)) },
         { label: 'Start Notion2API', click: () => startProviderFromMenu().catch(error => log('Start Notion2API failed: ' + error.message)) },
-        { label: 'Stop Notion2API', click: stopProvider },
-        { label: 'Stop Stack', click: stopStack },
+        { label: 'Stop Notion2API', click: () => stopProvider().catch(error => log('Stop Notion2API failed: ' + error.message)) },
+        { label: 'Stop Stack', click: () => stopStack().catch(error => log('Stop Stack failed: ' + error.message)) },
         { type: 'separator' },
         { label: `About ${APP_NAME}`, click: showAbout },
         { label: 'Quit', click: () => app.quit() },
@@ -870,19 +957,19 @@ ipcMain.handle('diagnostics:status', () => {
   );
 });
 
-ipcMain.handle('diagnostics:start', () => {
-  startStack();
+ipcMain.handle('diagnostics:start', async () => {
+  await startStack();
   return { ok: true };
 });
 
 ipcMain.handle('diagnostics:retryStartup', async () => {
-  stopStack();
+  await stopStack();
   await startStackAndLoadUi();
   return { ok: true };
 });
 
-ipcMain.handle('diagnostics:stop', () => {
-  stopStack();
+ipcMain.handle('diagnostics:stop', async () => {
+  await stopStack();
   return { ok: true };
 });
 
@@ -918,7 +1005,7 @@ async function loadStartupErrorPage(error) {
 }
 
 async function startStackAndLoadUi() {
-  startStack();
+  await startStack();
   await waitForUrl(HEALTH_URL, 90000);
   await ensureProviderAutoLaunch();
   await waitForUrl(FRONTEND_URL, 90000);
@@ -940,10 +1027,12 @@ async function startDesktopApp() {
   }
 }
 
-app.whenReady().then(startDesktopApp).catch(error => {
-  log(`Fatal desktop startup error: ${error.stack || error.message}`);
-  dialog.showErrorBox(`${APP_NAME} startup failed`, error.message);
-});
+if (hasSingleInstanceLock) {
+  app.whenReady().then(startDesktopApp).catch(error => {
+    log(`Fatal desktop startup error: ${error.stack || error.message}`);
+    dialog.showErrorBox(`${APP_NAME} startup failed`, error.message);
+  });
+}
 
 app.on('activate', showWindow);
 
@@ -951,11 +1040,12 @@ app.on('before-quit', event => {
   if (isQuitting) return;
   isQuitting = true;
   event.preventDefault();
-  stopStack();
-  setTimeout(() => {
-    app.removeAllListeners('before-quit');
-    app.quit();
-  }, 1500);
+  stopStack()
+    .catch(error => log(`Shutdown cleanup failed: ${error.stack || error.message}`))
+    .finally(() => {
+      app.removeAllListeners('before-quit');
+      app.quit();
+    });
 });
 
 app.on('window-all-closed', () => {

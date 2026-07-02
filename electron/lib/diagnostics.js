@@ -21,7 +21,7 @@ function requestText(url, options = {}) {
       let body = '';
       response.setEncoding('utf8');
       response.on('data', chunk => {
-        if (body.length < 12000) body += chunk;
+        if (body.length < (options.maxChars || 12000)) body += chunk;
       });
       response.on('end', () => {
         const statusOk = options.requireSuccess
@@ -97,18 +97,29 @@ async function getDiagnosticsStatus(rootDir, backendUrl, frontendUrl, resolvedNo
       : Promise.resolve({ name: 'Notion2API Models', url: notion2apiModelsUrl, ok: false, detail: 'notion2api_api_key is missing' }),
   ]);
 
-  // Test capabilities
-  const [settingsExportRes, askRes, healthRes] = await Promise.all([
+  // Test capabilities. Method-sensitive routes such as POST /api/ask cannot
+  // be detected reliably with a GET probe, so use the backend's OpenAPI schema.
+  const [settingsExportRes, openApiRes, healthRes] = await Promise.all([
     requestText(`${backendUrl}/api/settings/export`),
-    requestText(`${backendUrl}/api/ask`),
+    requestText(`${backendUrl}/openapi.json`, { requireSuccess: true, maxChars: 100000 }),
     requestText(`${backendUrl}/api/health`),
   ]);
 
+  let openApiPaths = {};
+  if (openApiRes.ok) {
+    try {
+      openApiPaths = JSON.parse(openApiRes.body || '{}').paths || {};
+    } catch (error) {
+      openApiPaths = {};
+    }
+  }
+  const supportsRoute = (route, method) => !!openApiPaths[route]?.[method.toLowerCase()];
+
   const capabilities = {
     settings: services.find(s => s.name === 'LLM Council Backend')?.ok || false,
-    settingsExport: settingsExportRes.ok,
-    settingsImport: settingsExportRes.ok,
-    ask: askRes.statusCode !== 404,
+    settingsExport: supportsRoute('/api/settings/export', 'get') || settingsExportRes.ok,
+    settingsImport: supportsRoute('/api/settings/import', 'post'),
+    ask: supportsRoute('/api/ask', 'post'),
     health: healthRes.ok,
   };
 
