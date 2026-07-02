@@ -335,12 +335,37 @@ async def extract_material_claims(
                     clean_key = str(key).strip().strip('"').strip("'").strip()
                     if not isinstance(val, list):
                         raise EvaluationError(f"Value for {clean_key} is not a list")
-                    normalized_result[clean_key] = val
-                    total_claims += len(val)
-
-                    # Check 8 claims limit per response
                     if len(val) > 8:
-                        raise EvaluationError(f"Response {clean_key} has {len(val)} claims, exceeding the maximum of 8.")
+                        raise EvaluationError(
+                            f"Response {clean_key} has {len(val)} claims, exceeding the maximum of 8."
+                        )
+
+                    normalized_claims = []
+                    for index, item in enumerate(val, start=1):
+                        default_id = f"{clean_key}_{index}"
+                        if isinstance(item, str):
+                            claim_id = default_id
+                            claim_text = item.strip()
+                        elif isinstance(item, dict):
+                            raw_text = item.get("claim") or item.get("text") or item.get("content")
+                            claim_text = raw_text.strip() if isinstance(raw_text, str) else ""
+                            raw_id = item.get("id")
+                            claim_id = str(raw_id).strip() if raw_id is not None else default_id
+                        else:
+                            raise EvaluationError(
+                                f"Claim {index} for {clean_key} must be a string or object"
+                            )
+
+                        if not claim_text:
+                            raise EvaluationError(
+                                f"Claim {index} for {clean_key} is missing non-empty claim text"
+                            )
+                        if not claim_id:
+                            claim_id = default_id
+                        normalized_claims.append({"id": claim_id, "claim": claim_text})
+
+                    normalized_result[clean_key] = normalized_claims
+                    total_claims += len(normalized_claims)
 
                 attempts_ledger.append({
                     "attempt": attempt + 1,

@@ -895,6 +895,63 @@ async def test_extract_material_claims_accumulates_dict_cost_on_retry_failure(mo
 
 
 @pytest.mark.asyncio
+async def test_extract_material_claims_normalizes_supported_claim_shapes(mock_settings):
+    mock_settings.claim_extraction_timeout_seconds = 180.0
+    response = {
+        "content": json.dumps({
+            "Response A": [
+                "  Water boils near 100 C.  ",
+                {"id": " A-2 ", "text": "  Ice melts near 0 C. "},
+                {"content": "Steam is gaseous water."},
+            ]
+        }),
+        "usage": None,
+        "cost": None,
+        "error": False,
+    }
+
+    with patch("backend.audit_pipeline._query_model_gated", return_value=response):
+        result = await extract_material_claims(
+            "Response A:\nAnswer A",
+            "test-normalized-claims",
+            mock_settings,
+            chairman_override="chairman",
+        )
+
+    assert result["claims"]["Response A"] == [
+        {"id": "Response A_1", "claim": "Water boils near 100 C."},
+        {"id": "A-2", "claim": "Ice melts near 0 C."},
+        {"id": "Response A_3", "claim": "Steam is gaseous water."},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_extract_material_claims_retries_malformed_claim_with_correction(mock_settings):
+    mock_settings.claim_extraction_timeout_seconds = 180.0
+    responses = [
+        {"content": json.dumps({"Response A": [{}]}), "usage": None, "cost": None, "error": False},
+        {
+            "content": json.dumps({"Response A": [{"id": "A-1", "claim": "Valid claim."}]}),
+            "usage": None,
+            "cost": None,
+            "error": False,
+        },
+    ]
+
+    with patch("backend.audit_pipeline._query_model_gated", side_effect=responses) as query:
+        result = await extract_material_claims(
+            "Response A:\nAnswer A",
+            "test-corrected-claim-retry",
+            mock_settings,
+            chairman_override="chairman",
+        )
+
+    retry_messages = query.call_args_list[1].args[1]
+    assert any("Validation Error:" in message["content"] for message in retry_messages)
+    assert result["claims"]["Response A"] == [{"id": "A-1", "claim": "Valid claim."}]
+
+
+@pytest.mark.asyncio
 async def test_run_audit_pipeline_stage3_invalid_type_provider_result(mock_settings):
     """Verify that run_audit_pipeline handles a non-dictionary result from query_model gracefully."""
     stage1_items = [
