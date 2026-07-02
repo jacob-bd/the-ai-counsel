@@ -13,13 +13,6 @@ import logging
 import os
 import re
 
-# Sanitize no_proxy/NO_PROXY for httpx IPv6 parser bug (crashes on ::1)
-for env_name in ("no_proxy", "NO_PROXY"):
-    if env_name in os.environ:
-        entries = [e.strip() for e in os.environ[env_name].split(",") if e.strip()]
-        cleaned = [e for e in entries if ":" not in e]
-        os.environ[env_name] = ",".join(cleaned)
-
 import secrets
 import uuid
 import json
