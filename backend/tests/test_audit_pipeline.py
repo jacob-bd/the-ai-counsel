@@ -4,7 +4,6 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 from backend.audit_pipeline import (
-    parse_stage2a_output,
     _parse_audit_verdicts,
     run_audit_pipeline,
     normalize_and_deduplicate_claims,
@@ -14,7 +13,12 @@ from backend.audit_pipeline import (
     format_aggregate_verdicts_for_prompt,
     format_audit_corrections_for_stage4
 )
-from backend.council import EvaluationError
+from backend.council import (
+    EvaluationError,
+    parse_stage2a_output,
+    parse_stage2a_output_with_fallback,
+    build_stage2a_json_skeleton,
+)
 
 
 # ==========================================
@@ -54,6 +58,26 @@ def test_parse_stage2a_output_leakage():
     '''
     with pytest.raises(EvaluationError):
         parse_stage2a_output(content, ["Response A", "Response B"])
+
+
+def test_parse_stage2a_output_with_fallback_recovers_markdown_ranking():
+    content = """
+    Here are my thoughts on each response.
+
+    FINAL RANKING:
+    1. Response B
+    2. Response A
+    """
+    result = parse_stage2a_output_with_fallback(content, ["Response A", "Response B"])
+    assert result["degraded"] is True
+    assert result["ranking"] == ["Response B", "Response A"]
+    assert set(result["responses"].keys()) == {"Response A", "Response B"}
+
+
+def test_build_stage2a_json_skeleton_includes_all_labels():
+    skeleton = build_stage2a_json_skeleton(["Response A", "Response B"])
+    assert set(skeleton["responses"].keys()) == {"Response A", "Response B"}
+    assert skeleton["ranking"] == ["Response A", "Response B"]
 
 def test_parse_audit_verdicts_malformed():
     with pytest.raises(EvaluationError):
@@ -309,7 +333,7 @@ async def test_run_audit_pipeline_chat_ranking(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_audit_failure_preserves_partial_results(mock_settings):
+async def test_audit_empty_claims_falls_back_to_stage2a_synthesis(mock_settings):
     stage1_items = [
         2,
         {"model": "model_a", "response": "Answer A", "error": None},
@@ -317,14 +341,27 @@ async def test_audit_failure_preserves_partial_results(mock_settings):
     ]
     stage2a_items = [
         {"type": "stage2a_init", "total": 2, "round": 1},
-        {"type": "stage2a_progress", "data": {"model": "model_a", "parsed": {"ranking": ["Response A", "Response B"]}}, "count": 1, "total": 2, "round": 1},
-        {"type": "stage2a_complete", "data": [{"model": "model_a"}], "label_to_model": {"A": "model_a", "B": "model_b"}, "round": 1},
+        {
+            "type": "stage2a_progress",
+            "data": {"model": "model_a", "parsed": {"ranking": ["Response A", "Response B"]}},
+            "count": 1,
+            "total": 2,
+            "round": 1,
+        },
+        {
+            "type": "stage2a_complete",
+            "data": [{"model": "model_a"}],
+            "label_to_model": {"A": "model_a", "B": "model_b"},
+            "round": 1,
+        },
     ]
 
     with patch("backend.audit_pipeline.get_settings", return_value=mock_settings), \
          patch("backend.audit_pipeline.stage1_collect_responses", side_effect=make_async_gen(stage1_items)), \
          patch("backend.audit_pipeline.stage2a_collect_evaluations", side_effect=make_async_gen(stage2a_items)), \
-         patch("backend.audit_pipeline.extract_material_claims", return_value={"claims": {}, "model": "extractor"}):
+         patch("backend.audit_pipeline.extract_material_claims", return_value={"claims": {}, "model": "extractor"}), \
+         patch("backend.audit_pipeline.query_model", return_value={"content": "Synthesis without claim audit"}) as mock_query, \
+         patch("backend.audit_pipeline.get_chairman_model", return_value="chairman"):
         events = []
         async for event in run_audit_pipeline(
             "Query?",
@@ -334,16 +371,22 @@ async def test_audit_failure_preserves_partial_results(mock_settings):
         ):
             events.append(event)
 
+    event_types = [e["type"] for e in events]
+    assert "stage2b_skipped" in event_types
+    assert "stage2b_start" not in event_types
+    assert "stage3_start" in event_types
+    assert "stage4_start" not in event_types
+
     complete_event = next(event for event in events if event["type"] == "debate_complete")
-    assert len(complete_event["rounds"]) == 1
-    assert len(complete_event["rounds"][0]["stage1"]) == 2
-    assert len(complete_event["rounds"][0]["stage2a"]) == 1
-    assert complete_event["error"] == {
-        "stage": "claim_decomposition",
-        "status": "no_canonical_claims",
-        "message": "No canonical claims extracted from responses.",
-    }
-    assert complete_event["convergence_status"] == "failed"
+    assert complete_event.get("error") is None
+    assert complete_event["convergence_status"] == "partial"
+    assert complete_event["warnings"][0]["status"] == "no_canonical_claims"
+    metadata = complete_event["rounds"][0]["metadata"]
+    assert metadata["claim_audit_status"] == "unavailable"
+    assert complete_event["rounds"][0]["stage3"]["response"] == "Synthesis without claim audit"
+
+    stage3_prompt = mock_query.call_args.args[1][0]["content"]
+    assert "claim-level audit was unavailable" in stage3_prompt.lower()
 
 
 def test_format_aggregate_verdicts_for_prompt_includes_authoritative_count_and_claims():

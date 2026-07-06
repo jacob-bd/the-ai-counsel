@@ -295,7 +295,9 @@ Evaluate each of the complete answers holistically using these dimensions:
 Provide ONE concise evaluation per response.
 After your evaluations, provide a ranked list of the responses.
 
-Respond with ONLY valid JSON:
+Respond with ONLY valid JSON. Include every response label exactly once in both
+`responses` and `ranking`. Do not omit any label. The keys of `responses` and the
+entries of `ranking` must exactly match.
 ```json
 {{
   "responses": {{
@@ -311,6 +313,28 @@ Respond with ONLY valid JSON:
         "Treats a disputed inference as established."
       ],
       "overall_assessment": "Useful but materially overstates the certainty."
+    }},
+    "Response B": {{
+      "instruction_compliance": 3,
+      "record_grounding": 3,
+      "authority_discipline": 3,
+      "reasoning_quality": 3,
+      "remedy_calibration": 3,
+      "completeness": 3,
+      "clarity": 3,
+      "material_defects": [],
+      "overall_assessment": "Adequate but less complete than the top response."
+    }},
+    "Response C": {{
+      "instruction_compliance": 5,
+      "record_grounding": 4,
+      "authority_discipline": 4,
+      "reasoning_quality": 4,
+      "remedy_calibration": 4,
+      "completeness": 5,
+      "clarity": 4,
+      "material_defects": [],
+      "overall_assessment": "Best overall balance of accuracy and completeness."
     }}
   }},
   "ranking": [
@@ -339,7 +363,9 @@ Evaluate each of the complete answers holistically using these legal dimensions:
 Provide ONE concise evaluation per response.
 After your evaluations, provide a ranked list of the responses.
 
-Respond with ONLY valid JSON:
+Respond with ONLY valid JSON. Include every response label exactly once in both
+`responses` and `ranking`. Do not omit any label. The keys of `responses` and the
+entries of `ranking` must exactly match.
 ```json
 {{
   "responses": {{
@@ -355,6 +381,28 @@ Respond with ONLY valid JSON:
         "Treats a disputed record inference as established."
       ],
       "overall_assessment": "Useful but materially overstates the remedy."
+    }},
+    "Response B": {{
+      "instruction_compliance": 3,
+      "record_grounding": 3,
+      "authority_discipline": 3,
+      "reasoning_quality": 3,
+      "remedy_calibration": 3,
+      "completeness": 3,
+      "clarity": 3,
+      "material_defects": [],
+      "overall_assessment": "Adequate but less complete than the top response."
+    }},
+    "Response C": {{
+      "instruction_compliance": 5,
+      "record_grounding": 4,
+      "authority_discipline": 4,
+      "reasoning_quality": 4,
+      "remedy_calibration": 4,
+      "completeness": 5,
+      "clarity": 4,
+      "material_defects": [],
+      "overall_assessment": "Best overall legal analysis and remedy calibration."
     }}
   }},
   "ranking": [
@@ -507,6 +555,23 @@ Strictly adhere to the findings of the correction record (Stage 2C):
 - Treat the Stage 2B `claims_evaluated` value as the only authoritative claim count. Do not infer or recompute a different count.
 
 Provide a clear, well-reasoned final answer that represents the council's audited collective wisdom:"""
+
+STAGE3_AUDIT_NO_CLAIMS_PROMPT = """You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question. Holistic peer evaluations were completed (Stage 2A), but claim-level audit was unavailable because no material claims could be extracted from the responses.
+
+Original Question: {user_query}
+
+{search_context_block}
+STAGE 1 - Individual Responses:
+{responses_text}
+
+STAGE 2A - Holistic Peer Evaluations:
+{rankings_text}
+
+CLAIM-LEVEL AUDIT: Unavailable. No canonical material claims were extracted, so there is no Stage 2B verification record or Stage 2C correction record. Base your synthesis on Stage 1 responses and Stage 2A holistic rankings/evaluations only. Do not invent claim-level audit findings.
+
+Your task as Chairman is to synthesize this information into a single, comprehensive final answer to the user's original question. Note where claim-level verification was unavailable when relevant limitations apply.
+
+Provide a clear, well-reasoned final answer:"""
 
 
 

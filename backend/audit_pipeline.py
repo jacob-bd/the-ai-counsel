@@ -12,13 +12,15 @@ from .prompts import (
     apply_response_language,
     MATERIAL_CLAIM_EXTRACTION_PROMPT,
     STAGE3_AUDIT_PROMPT_DEFAULT,
+    STAGE3_AUDIT_NO_CLAIMS_PROMPT,
 )
 from .config import get_chairman_model
 from .council import (
     stage1_collect_responses,
     build_stage_texts,
     EvaluationError,
-    parse_stage2a_output,
+    parse_stage2a_output_with_fallback,
+    build_stage2a_json_skeleton,
     query_model,
     stage3_synthesize_final,
     _query_model_gated
@@ -140,14 +142,14 @@ async def stage2a_collect_evaluations(
                 # Strict parsing
                 expected_keys = [f"Response {label}" for label in valid_labels]
                 try:
-                    parsed = parse_stage2a_output(content, expected_keys)
+                    parsed = parse_stage2a_output_with_fallback(content, expected_keys)
                     attempts_ledger.append({
                         "attempt": attempt + 1,
                         "status": "success",
                         "usage": response.get("usage"),
                         "cost": response.get("cost"),
                     })
-                    return {
+                    result = {
                         "model": model,
                         "raw_output": content,
                         "parsed": parsed,
@@ -155,6 +157,10 @@ async def stage2a_collect_evaluations(
                         "cost": response.get("cost"),
                         "attempts": attempts_ledger,
                     }
+                    if parsed.get("degraded"):
+                        result["degraded"] = True
+                        result["degraded_reason"] = parsed.get("degraded_reason")
+                    return result
                 except EvaluationError as e:
                     last_error = str(e)
                     attempts_ledger.append({
@@ -165,8 +171,18 @@ async def stage2a_collect_evaluations(
                     })
                     logger.warning(f"Stage 2A validation failed for {model} (attempt {attempt+1}): {e}")
                     if attempt == 0:
+                        skeleton = build_stage2a_json_skeleton(expected_keys)
                         messages.append({"role": "assistant", "content": content})
-                        messages.append({"role": "user", "content": f"Validation Error: {e}\nPlease correct your output and provide ONLY valid JSON."})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                f"Validation Error: {e}\n\n"
+                                "Return ONLY valid JSON matching this exact structure. "
+                                "Fill in every response evaluation. "
+                                "`ranking` must list every label exactly once:\n"
+                                f"{json.dumps(skeleton, indent=2)}"
+                            ),
+                        })
             except Exception as e:
                 last_error = str(e)
                 attempts_ledger.append({
@@ -288,6 +304,7 @@ async def extract_material_claims(
     cumulative_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     cumulative_cost = 0.0
     attempts_ledger = []
+    last_raw_output = None
 
     for attempt in range(2):
         try:
@@ -323,6 +340,7 @@ async def extract_material_claims(
                 break
 
             content = response.get("content", "")
+            last_raw_output = content
             try:
                 result = extract_json_block(content)
 
@@ -416,9 +434,11 @@ async def extract_material_claims(
     return {
         "claims": None,
         "model": extractor,
+        "raw_output": last_raw_output,
         "usage": cumulative_usage,
         "cost": cumulative_cost,
         "attempts": attempts_ledger,
+        "error_message": last_error,
     }
 
 def normalize_and_deduplicate_claims(
@@ -1142,72 +1162,111 @@ async def run_audit_pipeline(
     if raw_claims:
         canonical_claims = normalize_and_deduplicate_claims(raw_claims)
 
-    if not canonical_claims:
-        logger.warning("No canonical claims extracted; aborting.")
-        error_message = "No canonical claims extracted from responses."
-        yield {
-            "type": "stage2b_error",
-            "status": "no_canonical_claims",
-            "message": error_message,
-        }
-        partial_round = {
-            "stage1": stage1_results,
-            "stage2": stage2a_results,
-            "stage2a": stage2a_results,
-            "metadata": {
-                "label_to_model": label_to_model,
-                "aggregate_rankings": aggregate_rankings,
-                "canonical_claims": [],
-                "stage2a_results": stage2a_results,
-            },
-        }
-        yield {
-            "type": "debate_complete",
-            "rounds": [partial_round],
-            "critique_mode": "audit",
-            "debate_rounds_configured": 1,
-            "debate_rounds_executed": 1,
-            "convergence_status": "failed",
-            "converged": False,
-            "error": {
-                "stage": "claim_decomposition",
-                "status": "no_canonical_claims",
-                "message": error_message,
-            },
-            "cost_report": build_iterative_debate_cost_report([partial_round], None),
-        }
-        return
+    claim_audit_unavailable = False
+    pipeline_warnings: List[Dict[str, str]] = []
+    stage2b_results: List[Dict[str, Any]] = []
+    stage2c_result: Dict[str, Any] = {}
+    aggregated_2b: Dict[str, Any] = {}
 
-    # --- Stage 2B ---
-    await check_disconnect()
-    yield {"type": "stage2b_start", "round": 1}
-    stage2b_results = []
-    async for item in stage2b_collect_audits(
-        user_query, search_context, stage1_results, canonical_claims, conversation_id, settings,
-        audit_profile=audit_profile, disconnect_check=disconnect_check
-    ):
-        if item["type"] == "stage2b_init":
-            yield item
-        elif item["type"] == "provider_status":
-            yield item
-        elif item["type"] == "stage2b_progress":
-            stage2b_results.append(item["data"])
-            yield item
-        elif item["type"] == "stage2b_complete":
-            yield item
-        elif item["type"] == "stage2b_error":
-            yield item
+    if not canonical_claims:
+        claim_audit_unavailable = True
+        warning_message = (
+            "Claim extraction returned zero canonical claims. "
+            "Proceeding with Stage 2A-only synthesis. Claim-level audit unavailable."
+        )
+        logger.warning(warning_message)
+        pipeline_warnings.append({
+            "stage": "claim_decomposition",
+            "status": "no_canonical_claims",
+            "message": warning_message,
+        })
+        yield {
+            "type": "stage2b_skipped",
+            "status": "no_canonical_claims",
+            "message": warning_message,
+            "claim_extraction": raw_claims_result,
+        }
+    else:
+        # --- Stage 2B ---
+        await check_disconnect()
+        yield {"type": "stage2b_start", "round": 1}
+        async for item in stage2b_collect_audits(
+            user_query, search_context, stage1_results, canonical_claims, conversation_id, settings,
+            audit_profile=audit_profile, disconnect_check=disconnect_check
+        ):
+            if item["type"] == "stage2b_init":
+                yield item
+            elif item["type"] == "provider_status":
+                yield item
+            elif item["type"] == "stage2b_progress":
+                stage2b_results.append(item["data"])
+                yield item
+            elif item["type"] == "stage2b_complete":
+                yield item
+            elif item["type"] == "stage2b_error":
+                yield item
+                partial_round = {
+                    "stage1": stage1_results,
+                    "stage2": stage2a_results,
+                    "stage2a": stage2a_results,
+                    "stage2b": stage2b_results,
+                    "metadata": {
+                        "label_to_model": label_to_model,
+                        "aggregate_rankings": aggregate_rankings,
+                        "canonical_claims": canonical_claims,
+                        "stage2a_results": stage2a_results,
+                        "stage2b_results": stage2b_results,
+                    },
+                }
+                yield {
+                    "type": "debate_complete",
+                    "rounds": [partial_round],
+                    "critique_mode": "audit",
+                    "debate_rounds_configured": 1,
+                    "debate_rounds_executed": 1,
+                    "convergence_status": "failed",
+                    "converged": False,
+                    "error": {
+                        "stage": "stage2b",
+                        "status": item.get("status") or "stage2b_failed",
+                        "message": item.get("message") or "Stage 2B audit failed.",
+                    },
+                    "cost_report": build_iterative_debate_cost_report([partial_round], None),
+                }
+                return
+
+        # --- Stage 2C ---
+        await check_disconnect()
+        yield {"type": "stage2c_start", "round": 1}
+        aggregated_2b = aggregate_2b_results(stage2b_results, canonical_claims)
+        stage2c_result = await stage2c_adjudicate(
+            aggregated_2b, conversation_id, settings,
+            audit_profile=audit_profile,
+            expected_claim_ids=[c["claim_id"] for c in canonical_claims],
+            chairman_override=chairman_override,
+        )
+        if stage2c_result.get("error"):
+            error_message = stage2c_result.get("error_message") or "Stage 2C adjudication failed"
+            yield {
+                "type": "stage2c_error",
+                "status": "failed_adjudication",
+                "message": error_message,
+            }
             partial_round = {
                 "stage1": stage1_results,
                 "stage2": stage2a_results,
                 "stage2a": stage2a_results,
                 "stage2b": stage2b_results,
+                "stage2c": stage2c_result,
                 "metadata": {
                     "label_to_model": label_to_model,
                     "aggregate_rankings": aggregate_rankings,
                     "canonical_claims": canonical_claims,
+                    "aggregated_2b": aggregated_2b,
+                    "aggregate_claim_verdicts": aggregated_2b,
                     "stage2a_results": stage2a_results,
                     "stage2b_results": stage2b_results,
+                    "stage2c_result": stage2c_result,
                 },
             }
             yield {
@@ -1219,65 +1278,14 @@ async def run_audit_pipeline(
                 "convergence_status": "failed",
                 "converged": False,
                 "error": {
-                    "stage": "stage2b",
-                    "status": item.get("status") or "stage2b_failed",
-                    "message": item.get("message") or "Stage 2B audit failed.",
+                    "stage": "stage2c",
+                    "status": "failed_adjudication",
+                    "message": error_message,
                 },
                 "cost_report": build_iterative_debate_cost_report([partial_round], None),
             }
             return
-
-    # --- Stage 2C ---
-    await check_disconnect()
-    yield {"type": "stage2c_start", "round": 1}
-    aggregated_2b = aggregate_2b_results(stage2b_results, canonical_claims)
-    stage2c_result = await stage2c_adjudicate(
-        aggregated_2b, conversation_id, settings,
-        audit_profile=audit_profile,
-        expected_claim_ids=[c["claim_id"] for c in canonical_claims],
-        chairman_override=chairman_override,
-    )
-    if stage2c_result.get("error"):
-        error_message = stage2c_result.get("error_message") or "Stage 2C adjudication failed"
-        yield {
-            "type": "stage2c_error",
-            "status": "failed_adjudication",
-            "message": error_message,
-        }
-        partial_round = {
-            "stage1": stage1_results,
-            "stage2": stage2a_results,
-            "stage2a": stage2a_results,
-            "stage2b": stage2b_results,
-            "stage2c": stage2c_result,
-            "metadata": {
-                "label_to_model": label_to_model,
-                "aggregate_rankings": aggregate_rankings,
-                "canonical_claims": canonical_claims,
-                "aggregated_2b": aggregated_2b,
-                "aggregate_claim_verdicts": aggregated_2b,
-                "stage2a_results": stage2a_results,
-                "stage2b_results": stage2b_results,
-                "stage2c_result": stage2c_result,
-            },
-        }
-        yield {
-            "type": "debate_complete",
-            "rounds": [partial_round],
-            "critique_mode": "audit",
-            "debate_rounds_configured": 1,
-            "debate_rounds_executed": 1,
-            "convergence_status": "failed",
-            "converged": False,
-            "error": {
-                "stage": "stage2c",
-                "status": "failed_adjudication",
-                "message": error_message,
-            },
-            "cost_report": build_iterative_debate_cost_report([partial_round], None),
-        }
-        return
-    yield {"type": "stage2c_complete", "data": stage2c_result, "aggregated": aggregated_2b, "round": 1}
+        yield {"type": "stage2c_complete", "data": stage2c_result, "aggregated": aggregated_2b, "round": 1}
 
     # --- Stage 3 Synthesis ---
     stage3_response = None
@@ -1285,27 +1293,37 @@ async def run_audit_pipeline(
         await check_disconnect()
         yield {"type": "stage3_start"}
 
-        # Build synthesis prompt using Stage 2A and 2C Correction Record
+        # Build synthesis prompt using Stage 2A (and Stage 2C when available)
         stage2a_text = "Holistic Evaluations (Stage 2A):\n"
         for r in stage2a_results:
             if not r.get("error"):
                 stage2a_text += f"\nEvaluator {r['model']}:\n{json.dumps(r.get('parsed', {}), indent=2)}\n"
 
-        stage2c_text = "Specific Correction Record (Stage 2C):\n"
-        if not stage2c_result.get("error"):
-            stage2c_text += json.dumps(stage2c_result.get("record", {}), indent=2)
-        else:
-            stage2c_text += "Not available.\n"
-
         stage1_text, _ = build_stage_texts(stage1_results, [])
-        claim_audit_text = format_aggregate_verdicts_for_prompt(aggregated_2b)
-        synthesis_prompt = STAGE3_AUDIT_PROMPT_DEFAULT.format(
-            user_query=user_query,
-            responses_text=stage1_text,
-            rankings_text=stage2a_text + "\n" + stage2c_text,
-            claim_audit_text=claim_audit_text,
-            search_context_block=f"Context from Web Search:\n{search_context}\n" if search_context else ""
-        )
+        search_context_block = f"Context from Web Search:\n{search_context}\n" if search_context else ""
+
+        if claim_audit_unavailable:
+            synthesis_prompt = STAGE3_AUDIT_NO_CLAIMS_PROMPT.format(
+                user_query=user_query,
+                responses_text=stage1_text,
+                rankings_text=stage2a_text,
+                search_context_block=search_context_block,
+            )
+        else:
+            stage2c_text = "Specific Correction Record (Stage 2C):\n"
+            if not stage2c_result.get("error"):
+                stage2c_text += json.dumps(stage2c_result.get("record", {}), indent=2)
+            else:
+                stage2c_text += "Not available.\n"
+
+            claim_audit_text = format_aggregate_verdicts_for_prompt(aggregated_2b)
+            synthesis_prompt = STAGE3_AUDIT_PROMPT_DEFAULT.format(
+                user_query=user_query,
+                responses_text=stage1_text,
+                rankings_text=stage2a_text + "\n" + stage2c_text,
+                claim_audit_text=claim_audit_text,
+                search_context_block=search_context_block,
+            )
         synthesis_prompt = apply_response_language(synthesis_prompt, settings.response_language)
 
         chairman = chairman_override or get_chairman_model()
@@ -1350,6 +1368,7 @@ async def run_audit_pipeline(
     stage4_result = None
     if (
         execution_mode == "full"
+        and not claim_audit_unavailable
         and stage3_response
         and not stage3_response.get("error")
         and stage3_response.get("response")
@@ -1392,6 +1411,8 @@ async def run_audit_pipeline(
             "label_to_model": label_to_model,
             "aggregate_rankings": aggregate_rankings if 'aggregate_rankings' in locals() else calculate_audit_aggregate_rankings(stage2a_results, label_to_model),
             "canonical_claims": canonical_claims,
+            "claim_audit_status": "unavailable" if claim_audit_unavailable else "complete",
+            "claim_extraction": raw_claims_result if claim_audit_unavailable else None,
             "aggregated_2b": aggregated_2b,
             "aggregate_claim_verdicts": aggregated_2b,
             "stage2a_results": stage2a_results,
@@ -1430,8 +1451,9 @@ async def run_audit_pipeline(
         "critique_mode": "audit",
         "debate_rounds_configured": 1,
         "debate_rounds_executed": 1,
-        "convergence_status": "not_applicable",
+        "convergence_status": "partial" if claim_audit_unavailable else "not_applicable",
         "converged": False,
+        "warnings": pipeline_warnings or None,
         "stage4": stage4_result,
         "cost_report": build_iterative_debate_cost_report(rounds_data, stage4_result),
     }

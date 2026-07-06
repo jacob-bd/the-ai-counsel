@@ -1773,6 +1773,21 @@ def parse_ranking_from_text(
     )
 
 
+def build_stage2a_json_skeleton(valid_labels: List[str]) -> Dict[str, Any]:
+    """Build a strict JSON skeleton for Stage 2A retry prompts."""
+    responses = {
+        label: {
+            "overall_assessment": "One concise holistic evaluation.",
+            "material_defects": [],
+        }
+        for label in valid_labels
+    }
+    return {
+        "responses": responses,
+        "ranking": list(valid_labels),
+    }
+
+
 def parse_stage2a_output(
     ranking_text: str,
     valid_labels: List[str],
@@ -1812,6 +1827,48 @@ def parse_stage2a_output(
         raise EvaluationError("Duplicate labels found in ranking array")
 
     return result
+
+
+def parse_stage2a_output_with_fallback(
+    ranking_text: str,
+    valid_labels: List[str],
+) -> Dict[str, Any]:
+    """
+    Parse Stage 2A output strictly, then recover a degraded ranking-only result
+    from markdown or partial JSON when strict validation fails.
+    """
+    try:
+        return parse_stage2a_output(ranking_text, valid_labels)
+    except EvaluationError as strict_error:
+        try:
+            recovered = parse_ranking_from_text(
+                ranking_text,
+                expected_count=len(valid_labels),
+                valid_labels=valid_labels,
+            )
+        except EvaluationError:
+            raise strict_error from None
+
+        prefixed = [label if label.startswith("Response ") else f"Response {label}" for label in recovered]
+        expected_set = set(valid_labels)
+        if set(prefixed) != expected_set:
+            raise strict_error from None
+
+        return {
+            "responses": {
+                label: {
+                    "degraded": True,
+                    "overall_assessment": (
+                        "Ranking recovered from non-JSON evaluator output; "
+                        "per-response scores unavailable."
+                    ),
+                }
+                for label in valid_labels
+            },
+            "ranking": prefixed,
+            "degraded": True,
+            "degraded_reason": "Recovered ranking from non-JSON output.",
+        }
 
 
 def calculate_aggregate_rankings(
