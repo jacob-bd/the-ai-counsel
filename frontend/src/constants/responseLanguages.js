@@ -23,4 +23,5 @@ export const RESPONSE_LANGUAGES_FALLBACK = [
   'Korean',
   'Chinese (Simplified)',
   'Chinese (Traditional)',
+  'Greek',
 ];

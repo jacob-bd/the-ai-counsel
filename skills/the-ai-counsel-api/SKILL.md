@@ -1,6 +1,6 @@
 ---
 name: the-ai-counsel-api
-version: 0.10.4
+version: 0.10.5
 description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", etc.
 ---
 

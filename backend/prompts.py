@@ -20,6 +20,7 @@ VALID_RESPONSE_LANGUAGES = (
     "Korean",
     "Chinese (Simplified)",
     "Chinese (Traditional)",
+    "Greek",
 )
 
 
