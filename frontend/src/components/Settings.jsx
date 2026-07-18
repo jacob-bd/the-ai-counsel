@@ -2078,8 +2078,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
               <div className="settings-content confirmation-content" style={{ padding: '20px 24px' }}>
                 <p style={{ marginBottom: '16px' }}>
                   Move {countStoredCredentials(settings)} stored credential{countStoredCredentials(settings) === 1 ? '' : 's'} from{' '}
-                  <strong>{currentCredentialStorage === 'file' ? 'encrypted file' : 'OS keystore'}</strong> to{' '}
-                  <strong>{credentialStorageTarget === 'file' ? 'encrypted file' : 'OS keystore'}</strong>?
+                  <strong>{currentCredentialStorage === 'file' ? 'local file' : 'OS keystore'}</strong> to{' '}
+                  <strong>{credentialStorageTarget === 'file' ? 'local file' : 'OS keystore'}</strong>?
                 </p>
                 <p className="api-key-hint">Existing credentials are removed from the old location after a successful copy.</p>
               </div>

@@ -6,10 +6,12 @@ How The AI Counsel stores API keys, OAuth tokens, and related secrets (v0.11.0+)
 
 | Mode | Location | When to use |
 |------|----------|-------------|
-| **Encrypted file** (default) | `data/credentials.json` (mode `0600` when possible) | Docker, servers, most installs |
+| **Local file** (default) | `data/credentials.json` — **plaintext JSON**, restricted file mode `0600` when possible (not encrypted at rest) | Docker, servers, most installs |
 | **OS keystore** | macOS Keychain / Windows Credential Manager / libsecret — service name **`the-ai-counsel`** | Desktop only |
 
 Choose the mode under **Settings → LLM API Keys → Where secrets are stored**. Switching modes **migrates** Counsel’s secrets between file and the `the-ai-counsel` keystore entry, then removes them from the old location.
+
+The file store is **not** encrypted — anyone who can read the file can read the keys. Prefer OS keystore on desktop when you want OS-managed protection, and keep `data/` out of git / backups you do not trust.
 
 **`settings.json` never holds API keys** after upgrade. Non-secret config (council, prompts, toggles) stays in `data/settings.json`. On first launch after the credentials release, any legacy plaintext keys in `settings.json` are moved into the credential store automatically.
 
@@ -53,7 +55,7 @@ Desktop only (not available in Docker/containers).
 
 ### File → Keychain after import
 
-If you import while on **Encrypted file**, then switch storage to **OS keystore**:
+If you import while on **Local file**, then switch storage to **OS keystore**:
 
 - Secrets move into Keychain service **`the-ai-counsel`** (Counsel account ids like `api:anthropic`).
 - The original **`relay-ai`** Keychain entries are **not** modified or deleted.

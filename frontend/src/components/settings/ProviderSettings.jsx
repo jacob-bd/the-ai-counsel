@@ -139,7 +139,7 @@ export default function ProviderSettings({
                             onChange={() => onCredentialStorageChange?.('file')}
                             disabled={credentialStorageBusy}
                         />
-                        <span>Encrypted file (data volume)</span>
+                        <span>Local file (data volume)</span>
                     </label>
                     <label className={`radio-option ${!settings?.credential_storage_available?.keyring ? 'radio-option--disabled' : ''}`}>
                         <input

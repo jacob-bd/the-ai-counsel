@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Credential storage mode (file vs OS keystore) lives under Settings → LLM API Keys, not Backup & Reset.
 - Opt-in relay-ai credential import lives under Settings → General, not Backup & Reset.
 - Ollama Settings match other providers: Connect enables it, Retest when already enabled, Disconnect disables it.
+- Sidebar credit shows GitHub user `jacob-bd` instead of a full legal name.
+- Credential storage UI labels the file option **Local file (data volume)** (not “Encrypted”) — `data/credentials.json` is plaintext JSON with restricted permissions (`0600`), not encryption at rest.
 
 ### Fixed
 - GitHub Copilot model picker now filters to models enabled for the signed-in plan (`model_picker_enabled` / policy), so Free/Student users no longer see premium models that fail with `model_not_supported`.

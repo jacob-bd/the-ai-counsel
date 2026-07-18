@@ -78,7 +78,7 @@ export default function GeneralSettings({
         <h4>Import from relay-ai</h4>
         <p className="section-description">
           Copy credentials from a local relay-ai install (OS keystore). Imported keys are saved to your
-          chosen credential store (Encrypted file or OS keystore) — not into settings.json — so Retest
+          chosen credential store (local file or OS keystore) — not into settings.json — so Retest
           works without re-pasting. Click Discover only when you want to scan; macOS Keychain may ask
           once per credential (use Always Allow). Import may ask again for large/chunked secrets.
         </p>

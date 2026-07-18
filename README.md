@@ -342,7 +342,7 @@ Settings changes save automatically (~1 second after you stop editing). API keys
 
 ### LLM API Keys
 
-At the top of this section you can choose **where secrets are stored**: encrypted file (`data/credentials.json`) or the OS keystore (desktop only; unavailable in Docker).
+At the top of this section you can choose **where secrets are stored**: local file (`data/credentials.json`, plaintext with restricted permissions) or the OS keystore (desktop only; unavailable in Docker).
 
 | Provider | Get API Key |
 |----------|-------------|
