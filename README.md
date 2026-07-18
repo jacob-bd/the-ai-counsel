@@ -60,7 +60,7 @@ npm install --prefix frontend && \
 
 *(Note: `uv sync` installs the backend dependencies, `npm install --prefix frontend` installs the frontend dependencies, and `./start.sh` spins up both servers together).*
 
-Then open **http://localhost:5173** and configure your API keys in Settings.
+Then open **http://localhost:5173** and configure your API keys (or subscription OAuth logins) in Settings.
 
 > **Prerequisites:** Python 3.10+, Node.js 18+, [uv](https://docs.astral.sh/uv/)
 
@@ -246,7 +246,7 @@ Some provider/model combinations only accept their default temperature. The app 
 - **Run Cost Reporting** — See total cost, input/output token split, call count, pricing confidence, and per-model breakdowns for council and advisor runs
 - **Rate Limit Warnings** — Alerts when your config may hit API limits
 - **"I'm Feeling Lucky"** — Randomize your council composition
-- **Import & Export** — Backup and share your settings, API keys, and prompts
+- **Import & Export** — Backup and share your settings and prompts (admin export can include the credential store; see [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md))
 - **Per-request Model Overrides** — Use different models for individual requests without changing global config
 - **One-shot API** — `POST /api/ask` for scripts and MCP agents; each completed run is saved to the UI and returns a `conversation_id`
 - **Docker Deployment** — Single-container production deployment via `docker compose`
@@ -303,7 +303,7 @@ Then open **http://YOUR_SERVER_IP:8001**. Conversations and settings persist to 
 
 For Ollama integration, reverse proxy setup, environment variables, and upgrade instructions, see **[docs/DOCKER.md](docs/DOCKER.md)**.
 
-> **Coming from LLM Council Plus?** See the **[Migration Guide](docs/MIGRATION.md)** for step-by-step upgrade instructions. Your data and configs carry over without changes.
+> **Coming from LLM Council Plus?** See the **[Migration Guide](docs/MIGRATION.md)** for step-by-step upgrade instructions. Copy your `data/` directory; secrets migrate into `credentials.json` on first launch (see [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md)).
 
 ### Network Access
 
@@ -331,16 +331,18 @@ Remote admin endpoints (`/api/settings/export`, `/api/settings/import`, `/api/se
 
 On first launch, configure at least one LLM provider in Settings:
 
-1. **LLM API Keys** — Enter API keys for your chosen providers (and Ollama URL / custom endpoint if used)
+1. **LLM API Keys** — Enter API keys, connect Ollama, or sign in with subscription OAuth; optionally import from [relay-ai](https://github.com/jacob-bd/relay-ai) under **Settings → General**
 2. **Council Config** (Settings) or **welcome-screen Council Setup** — add members and chairman; both edit the same saved lineup (auto-saves)
 
-Settings changes save automatically (~1 second after you stop editing). API keys **auto-save** when you click "Test" and the connection succeeds.
+Settings changes save automatically (~1 second after you stop editing). API keys **auto-save** when you click "Test" / "Connect" and the connection succeeds. See [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md) for where secrets are stored, Disconnect, and relay-ai import.
 
 **Provider toggles are global:** Settings → Council Config **provider toggles** control which sources appear in **all** model pickers — Council Setup and Advisor Setup alike. A provider must be both configured (API key) and enabled (toggle on) to show its models.
 
 **Advisor presets:** In Advisor Setup, save named lineups (personas, models, optional rounds/web search) from the Model Assignment section. Presets persist in `settings.json` as `advisor_presets` (max 20; one default).
 
 ### LLM API Keys
+
+At the top of this section you can choose **where secrets are stored**: encrypted file (`data/credentials.json`) or the OS keystore (desktop only; unavailable in Docker).
 
 | Provider | Get API Key |
 |----------|-------------|
@@ -439,7 +441,8 @@ All data is stored locally in the `data/` directory:
 
 ```
 data/
-├── settings.json              # Configuration (includes API keys)
+├── settings.json              # Non-secret configuration (council, prompts, toggles)
+├── credentials.json           # API keys & OAuth tokens (file storage mode; mode 0600)
 ├── persona_overrides.json     # Advisor persona customizations
 └── conversations/             # Conversation history
     ├── {uuid}.json
@@ -448,12 +451,14 @@ data/
 
 **Privacy**: Prompts and responses are sent only to your configured LLM/search providers. Cost reporting also fetches public model-pricing catalogs; it does not send prompt text, responses, or API keys.
 
-> **⚠️ Security Warning: API Keys Stored in Plain Text**
+Full details: [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md).
+
+> **⚠️ Security Warning: Secrets on Disk**
 >
-> API keys are stored in clear text in `data/settings.json`. The `data/` folder is included in `.gitignore` by default.
+> In file storage mode, API keys and OAuth tokens live in clear text in `data/credentials.json` (not `settings.json`). The `data/` folder is in `.gitignore` by default.
 >
 > - **Do NOT remove `data/` from `.gitignore`**
-> - Never commit `data/settings.json` to version control
+> - Never commit `data/credentials.json` or `data/settings.json`
 > - If you accidentally expose your keys, rotate them immediately
 
 ---

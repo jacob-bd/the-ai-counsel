@@ -86,7 +86,8 @@ class OpenCodeProvider(LLMProvider):
         return self.config["name"]
 
     def _get_api_key(self) -> str:
-        return get_settings().opencode_api_key or ""
+        from ..credentials import get_api_key
+        return get_api_key("opencode")
 
     def _strip_prefix(self, model_id: str) -> str:
         prefix = f"{self.config['prefix']}:"

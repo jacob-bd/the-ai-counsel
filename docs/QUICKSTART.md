@@ -63,8 +63,11 @@ The Settings panel opens automatically on first launch.
 ### Option C: Use Direct APIs
 1. Get API keys from your preferred providers (OpenAI, Anthropic, Google, OpenCode Zen/Go, etc.)
 2. Enter keys in **LLM API Keys** → **Direct LLM Connections**
-3. Click **Test** for each (auto-saves on success)
+3. Click **Test** / **Retest** for each (auto-saves on success; Retest uses the credential store — you do not need to re-paste)
 4. Go to **Council Config** → Enable "Direct Connections" → Select models (saves automatically)
+
+### Option C2: Import from relay-ai (desktop)
+If you already use [relay-ai](https://github.com/jacob-bd/relay-ai), open **Settings → General → Import from relay-ai**, Discover, select keys, Import. Keys are copied into Counsel’s credential store (not into `settings.json`). Details: [`CREDENTIALS.md`](CREDENTIALS.md).
 
 ### Option D: Use OpenCode Zen / Go
 - OpenCode ships both a free **Zen** tier (zero-cost `*-free` models — `minimax-m3-free`, `deepseek-v4-flash-free`, etc.) and a paid **Go** subscription tier (per-1M token pricing shown as an estimate; flagged with a subscription note in the cost report).

@@ -10,6 +10,7 @@ import deepseekIcon from '../../assets/icons/deepseek.svg';
 import nvidiaIcon from '../../assets/icons/nvidia.svg';
 import customEndpointIcon from '../../assets/icons/openai-compatible.svg';
 import opencodeIcon from '../../assets/icons/opencode.svg';
+import SubscriptionOAuth from './SubscriptionOAuth';
 
 const PROVIDER_ICONS = {
     openai: openaiIcon,
@@ -55,7 +56,9 @@ export default function ProviderSettings({
     isTestingOllama,
     ollamaTestResult,
     ollamaStatus,
+    ollamaEnabled = false,
     loadOllamaModels,
+    onDisconnectOllama,
     // Direct
     directKeys,
     setDirectKeys,
@@ -80,7 +83,18 @@ export default function ProviderSettings({
     isTestingCustomEndpoint,
     customEndpointTestResult,
     customEndpointModels,
-    onClearCustomEndpoint
+    onClearCustomEndpoint,
+    onDisconnectOpenRouter,
+    onDisconnectGroq,
+    onDisconnectDirectKey,
+    onDisconnectOpencode,
+    onOAuthSettingsChange,
+    onOAuthModelsRefresh,
+    // Credential storage
+    currentCredentialStorage = 'file',
+    credentialStorageBusy = false,
+    onCredentialStorageChange,
+    onNavigateToGeneral,
 }) {
     const getDirectProviderModelsCount = (providerId) => {
         const providerNameMap = {
@@ -105,6 +119,59 @@ export default function ProviderSettings({
                 Configure keys for LLM providers.
                 Keys are <strong>auto-saved</strong> immediately upon successful test.
             </p>
+
+            <div className="subsection credential-storage-panel">
+                <h4>Where secrets are stored</h4>
+                <p className="section-description">
+                    Choose where API keys and OAuth tokens are kept on this machine.
+                    {settings?.credential_storage_effective
+                        && settings.credential_storage_effective !== currentCredentialStorage && (
+                        <> Currently using <strong>{settings.credential_storage_effective}</strong> (effective).</>
+                    )}
+                </p>
+                <div className="credential-storage-options">
+                    <label className="radio-option">
+                        <input
+                            type="radio"
+                            name="credential-storage"
+                            value="file"
+                            checked={currentCredentialStorage === 'file'}
+                            onChange={() => onCredentialStorageChange?.('file')}
+                            disabled={credentialStorageBusy}
+                        />
+                        <span>Encrypted file (data volume)</span>
+                    </label>
+                    <label className={`radio-option ${!settings?.credential_storage_available?.keyring ? 'radio-option--disabled' : ''}`}>
+                        <input
+                            type="radio"
+                            name="credential-storage"
+                            value="keyring"
+                            checked={currentCredentialStorage === 'keyring'}
+                            onChange={() => onCredentialStorageChange?.('keyring')}
+                            disabled={credentialStorageBusy || !settings?.credential_storage_available?.keyring}
+                        />
+                        <span>OS keystore (Keychain / Credential Manager)</span>
+                    </label>
+                </div>
+                {!settings?.credential_storage_available?.keyring && settings?.credential_storage_unavailable_reason && (
+                    <p className="api-key-hint">{settings.credential_storage_unavailable_reason}</p>
+                )}
+                <p className="api-key-hint" style={{ marginTop: '10px' }}>
+                    Using{' '}
+                    <a href="https://github.com/jacob-bd/relay-ai" target="_blank" rel="noopener noreferrer">
+                        relay-ai
+                    </a>
+                    ? Import its credentials from{' '}
+                    <button
+                        type="button"
+                        className="settings-inline-link"
+                        onClick={() => onNavigateToGeneral?.()}
+                    >
+                        Settings → General
+                    </button>
+                    . Imports go into this credential store (not settings.json).
+                </p>
+            </div>
 
             {/* OpenRouter */}
             <form className="api-key-section" onSubmit={e => e.preventDefault()}>
@@ -147,9 +214,18 @@ export default function ProviderSettings({
                     </button>
                 </div>
                 {settings?.openrouter_api_key_set && !openrouterApiKey && (
-                    <div className="key-status set">
-                        ✓ API key configured
-                        {availableModels.length > 0 && ` · ${availableModels.length} models available`}
+                    <div className="key-status set key-status-row">
+                        <span>
+                            ✓ API key configured
+                            {availableModels.length > 0 && ` · ${availableModels.length} models available`}
+                        </span>
+                        <button
+                            type="button"
+                            className="test-button danger"
+                            onClick={onDisconnectOpenRouter}
+                        >
+                            Disconnect
+                        </button>
                     </div>
                 )}
                 {openrouterTestResult && (
@@ -188,9 +264,18 @@ export default function ProviderSettings({
                     </button>
                 </div>
                 {settings?.groq_api_key_set && !groqApiKey && (
-                    <div className="key-status set">
-                        ✓ API key configured
-                        {groqModelsCount > 0 && ` · ${groqModelsCount} models available`}
+                    <div className="key-status set key-status-row">
+                        <span>
+                            ✓ API key configured
+                            {groqModelsCount > 0 && ` · ${groqModelsCount} models available`}
+                        </span>
+                        <button
+                            type="button"
+                            className="test-button danger"
+                            onClick={onDisconnectGroq}
+                        >
+                            Disconnect
+                        </button>
                     </div>
                 )}
                 {groqTestResult && (
@@ -216,7 +301,6 @@ export default function ProviderSettings({
                         value={ollamaBaseUrl}
                         onChange={(e) => {
                             setOllamaBaseUrl(e.target.value);
-                            // setOllamaTestResult(null); // Missing prop
                         }}
                     />
                     <button
@@ -224,7 +308,9 @@ export default function ProviderSettings({
                         onClick={handleTestOllama}
                         disabled={!ollamaBaseUrl || isTestingOllama}
                     >
-                        {isTestingOllama ? 'Testing...' : 'Connect'}
+                        {isTestingOllama
+                            ? 'Testing...'
+                            : (ollamaEnabled && ollamaStatus?.connected ? 'Retest' : 'Connect')}
                     </button>
                 </div>
                 {ollamaTestResult && (
@@ -232,33 +318,60 @@ export default function ProviderSettings({
                         {ollamaTestResult.message}
                     </div>
                 )}
-                {ollamaStatus && ollamaStatus.connected && (
-                    <div className="ollama-auto-status connected">
-                        <span className="status-indicator connected">●</span>
-                        <span className="status-text">
-                            <strong>Connected</strong>
+                {ollamaEnabled && ollamaStatus?.connected && (
+                    <div className="key-status set key-status-row">
+                        <span>
+                            ✓ Connected
                             {ollamaAvailableModels.length > 0 && ` · ${ollamaAvailableModels.length} models available`}
-                            <span className="status-separator">·</span>
-                            <span className="status-time">Last: {new Date(ollamaStatus.lastConnected).toLocaleTimeString()}</span>
+                            {ollamaStatus.lastConnected && (
+                                <>
+                                    <span className="status-separator">·</span>
+                                    <span className="status-time">Last: {new Date(ollamaStatus.lastConnected).toLocaleTimeString()}</span>
+                                </>
+                            )}
+                        </span>
+                        <button
+                            type="button"
+                            className="test-button danger"
+                            onClick={onDisconnectOllama}
+                        >
+                            Disconnect
+                        </button>
+                    </div>
+                )}
+                {!ollamaEnabled && ollamaStatus?.connected && !ollamaStatus.testing && (
+                    <div className="ollama-auto-status">
+                        <span className="status-indicator disconnected">●</span>
+                        <span className="status-text">
+                            Ollama is running — click Connect to enable it as a provider
                         </span>
                     </div>
                 )}
-                {ollamaStatus && !ollamaStatus.connected && !ollamaStatus.testing && (
+                {!ollamaEnabled && ollamaStatus && !ollamaStatus.connected && !ollamaStatus.testing && (
                     <div className="ollama-auto-status">
                         <span className="status-indicator disconnected">●</span>
                         <span className="status-text">Not connected</span>
                     </div>
                 )}
-                <div className="model-options-row" style={{ marginTop: '12px' }}>
-                    <button
-                        type="button"
-                        className="reset-defaults-button"
-                        onClick={() => loadOllamaModels(ollamaBaseUrl)}
-                    >
-                        Refresh Local Models
-                    </button>
-                </div>
+                {ollamaEnabled && (
+                    <div className="model-options-row" style={{ marginTop: '12px' }}>
+                        <button
+                            type="button"
+                            className="reset-defaults-button"
+                            onClick={() => loadOllamaModels(ollamaBaseUrl)}
+                        >
+                            Refresh Local Models
+                        </button>
+                    </div>
+                )}
             </form>
+
+            <SubscriptionOAuth
+                settings={settings}
+                onSettingsChange={onOAuthSettingsChange}
+                onModelsRefresh={onOAuthModelsRefresh}
+                directAvailableModels={directAvailableModels}
+            />
 
             {/* Direct LLM API Connections */}
             <div className="subsection" style={{ marginTop: '24px' }}>
@@ -286,9 +399,18 @@ export default function ProviderSettings({
                             </button>
                         </div>
                         {settings?.[`${dp.key}_set`] && !directKeys[dp.key] && (
-                            <div className="key-status set">
-                                ✓ API key configured
-                                {getDirectProviderModelsCount(dp.id) > 0 && ` · ${getDirectProviderModelsCount(dp.id)} models available`}
+                            <div className="key-status set key-status-row">
+                                <span>
+                                    ✓ API key configured
+                                    {getDirectProviderModelsCount(dp.id) > 0 && ` · ${getDirectProviderModelsCount(dp.id)} models available`}
+                                </span>
+                                <button
+                                    type="button"
+                                    className="test-button danger"
+                                    onClick={() => onDisconnectDirectKey?.(dp.id, dp.key)}
+                                >
+                                    Disconnect
+                                </button>
                             </div>
                         )}
                         {keyValidationStatus[dp.id] && (
@@ -330,9 +452,18 @@ export default function ProviderSettings({
                         </button>
                     </div>
                     {settings?.opencode_api_key_set && !opencodeApiKey && (
-                        <div className="key-status set">
-                            ✓ API key configured
-                            {opencodeAvailableModels.length > 0 && ` · ${opencodeAvailableModels.length} models available`}
+                        <div className="key-status set key-status-row">
+                            <span>
+                                ✓ API key configured
+                                {opencodeAvailableModels.length > 0 && ` · ${opencodeAvailableModels.length} models available`}
+                            </span>
+                            <button
+                                type="button"
+                                className="test-button danger"
+                                onClick={onDisconnectOpencode}
+                            >
+                                Disconnect
+                            </button>
                         </div>
                     )}
                     {opencodeTestResult && (

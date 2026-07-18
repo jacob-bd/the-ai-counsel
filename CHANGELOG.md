@@ -5,6 +5,34 @@ All notable changes to The AI Counsel will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.11.0] - 2026-07-18
+### Added
+- Subscription OAuth providers: xAI SuperGrok (`xai-oauth:`), ChatGPT Plus/Pro (`openai-oauth:`), and GitHub Copilot (`github-copilot:`) via device-code login in Settings.
+- Unified credential storage for API keys and OAuth tokens: text file (`data/credentials.json`) or OS keystore (desktop only; service `the-ai-counsel`), with migrate-on-switch from Settings → LLM API Keys.
+- Opt-in import of credentials discovered from relay-ai’s OS keystore (Settings → General; Claude Code / Antigravity never imported), with green success confirmation and auto-enable of imported providers.
+- Settings → Backup & Reset → **Disconnect All Providers** clears every stored API key / OAuth login and disables provider toggles (keeps council config and prompts).
+- Per-provider **Disconnect** on LLM API Keys and Search providers (same pattern as custom endpoint / OAuth).
+- Cost reporting treats subscription OAuth runs as free with an explanatory note (not catalog USD estimates).
+- User guide [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md) covering storage modes, Disconnect, env overrides, and relay-ai import vs Keychain migration.
+
+### Changed
+- API keys and OAuth secrets are no longer stored inline in `settings.json` after upgrade; admin export includes a `credentials` section; saves always redact secret fields.
+- Credential storage mode (file vs OS keystore) lives under Settings → LLM API Keys, not Backup & Reset.
+- Opt-in relay-ai credential import lives under Settings → General, not Backup & Reset.
+- Ollama Settings match other providers: Connect enables it, Retest when already enabled, Disconnect disables it.
+
+### Fixed
+- GitHub Copilot model picker now filters to models enabled for the signed-in plan (`model_picker_enabled` / policy), so Free/Student users no longer see premium models that fail with `model_not_supported`.
+- Included Copilot models are labeled `· Free` in the model list (via `billing.multiplier == 0` or known included model IDs).
+- Copilot Auto router aliases (`*-auto` / `*-free-auto`) and non-chat models are hidden from the picker — they are not callable via chat/completions.
+- Hide `gpt-5-mini` from the Copilot picker on Free/Student: chat often returns `model_not_supported` even though the catalog lists it (use `gpt-4.1` / `gpt-4o` instead).
+- Detect GitHub Copilot Free vs paid via `GET /copilot_internal/user` (`access_type_sku` / `copilot_plan`); Free/Student use a strict chat allowlist, paid users get the full filtered catalog; Settings shows Free/Paid plan next to Copilot.
+- Disconnect for API keys now clears the credential store and ignores env overrides (e.g. `OPENCODE_API_KEY`) until a new key is saved — fixes Disconnect appearing to do nothing when a key was injected via the environment.
+- Retest for imported/stored API keys now reads from the credential store instead of empty `settings.json` fields — fixes “No API key provided or configured” after relay-ai import.
+- Settings backup/reset tests isolate (and mock) credential wipe so they cannot clear a developer’s real `data/credentials.json`.
+
 ## [0.10.5] - 2026-07-09
 ### Added
 - Added support for the Greek language in the model response settings.

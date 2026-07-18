@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState, useEffect, useRef, useCallback, Component } from 'react';
 import Sidebar from './components/Sidebar';
 import { api, DEFAULT_EXECUTION_MODE, buildAvailableSearchProviders } from './api';
+import { hasConfiguredProviders } from './constants/oauthProviders';
 import './App.css';
 import './components/StageCopyButtons.css';
 import './ModeToggle.css';
@@ -134,6 +135,7 @@ function App() {
     testing: false
   });
   const [councilConfigured, setCouncilConfigured] = useState(true); // Assume configured until checked
+  const [providersConfigured, setProvidersConfigured] = useState(true); // Assume until checked
   const [councilModels, setCouncilModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState(null);
   const [searchProvider, setSearchProvider] = useState('duckduckgo');
@@ -208,14 +210,6 @@ function App() {
 
       setAvailableSearchProviders(buildAvailableSearchProviders(settings));
 
-      const hasApiKey = settings.openrouter_api_key_set ||
-        settings.groq_api_key_set ||
-        settings.openai_api_key_set ||
-        settings.anthropic_api_key_set ||
-        settings.google_api_key_set ||
-        settings.mistral_api_key_set ||
-        settings.deepseek_api_key_set;
-
       // 2. Test Ollama Connection
       // We do this regardless to update the status indicator
       const ollamaUrl = settings.ollama_base_url || 'http://localhost:11434';
@@ -249,8 +243,11 @@ function App() {
 
       setCouncilConfigured(computeCouncilConfigured(models));
 
+      const providersOk = hasConfiguredProviders(settings, { ollamaConnected: isOllamaConnected });
+      setProvidersConfigured(providersOk);
+
       // 4. If no providers are configured, open settings
-      if (!hasApiKey && !isOllamaConnected) {
+      if (!providersOk) {
         setShowSettings(true);
       }
 
@@ -280,6 +277,9 @@ function App() {
       setDateFormat(settings.date_format || 'auto');
 
       setCouncilConfigured(computeCouncilConfigured(models));
+      setProvidersConfigured(hasConfiguredProviders(settings, {
+        ollamaConnected: !!ollamaStatus?.connected,
+      }));
     } catch (error) {
       console.error('Error after closing settings:', error);
     }
@@ -1657,6 +1657,7 @@ function App() {
                 onAbort={handleAbort}
                 isLoading={isLoading}
                 councilConfigured={councilConfigured}
+                providersConfigured={providersConfigured}
                 councilModels={councilModels}
                 chairmanModel={chairmanModel}
                 searchProvider={searchProvider}

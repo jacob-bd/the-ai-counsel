@@ -47,7 +47,10 @@ DEFAULT_ENABLED_PROVIDERS = {
     "ollama": False,
     "groq": False,
     "direct": False,  # Master toggle for all direct connections
-    "custom": False   # Custom OpenAI-compatible endpoint
+    "custom": False,  # Custom OpenAI-compatible endpoint
+    "xai-oauth": False,
+    "openai-oauth": False,
+    "github-copilot": False,
 }
 
 # Default direct provider toggles (individual)
@@ -194,6 +197,13 @@ class Settings(BaseModel):
     advisor_tiebreaker_prompt: str = ADVISOR_TIEBREAKER_PROMPT
     advisor_presets: List[AdvisorPreset] = Field(default_factory=list)
     council_presets: List[CouncilPreset] = Field(default_factory=list)
+
+    # Credential storage preference (secrets live in credentials.json or OS keyring)
+    credential_storage: str = "file"  # "file" | "keyring"
+    credentials_migrated: bool = False
+    relay_ai_import_dismissed: bool = False
+    # Secret IDs ignored even if present in env (Disconnect from Settings).
+    disabled_secret_ids: List[str] = Field(default_factory=list)
 
 
 PROMPT_DEFAULTS = {
@@ -401,16 +411,32 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def _redact_secret_fields(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep API keys out of settings.json (credential store is source of truth)."""
+    from .credentials.ids import SETTINGS_FIELD_TO_SECRET_ID
+
+    redacted = dict(data)
+    for field in SETTINGS_FIELD_TO_SECRET_ID:
+        redacted[field] = None
+    return redacted
+
+
 def save_settings(settings: Settings) -> None:
-    """Save settings to file and update cache."""
+    """Save settings to file and update cache.
+
+    Secret fields are always written as null — imports and Retest use the
+    credential store (data/credentials.json or OS keystore), not settings.json.
+    """
     global _settings_cache, _settings_mtime
 
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
+    payload = _redact_secret_fields(settings.model_dump())
     with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings.model_dump(), f, indent=2)
+        json.dump(payload, f, indent=2)
 
-    _settings_cache = settings
+    # Cache the redacted model so in-memory reads match on-disk settings.json.
+    _settings_cache = Settings(**payload)
     _settings_mtime = SETTINGS_FILE.stat().st_mtime
 
 
@@ -419,6 +445,8 @@ def update_settings(**kwargs) -> Settings:
     current = get_settings()
     updated_data = current.model_dump()
     updated_data.update(kwargs)
+    # Never persist secrets via kwargs (route through credential store instead).
+    updated_data = _redact_secret_fields(updated_data)
     updated_data = _normalize_prompt_defaults(updated_data)
     updated = Settings(**updated_data)
     save_settings(updated)

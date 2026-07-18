@@ -3,7 +3,7 @@
 from typing import List, Dict, Any
 from .base import LLMProvider
 from .. import openrouter
-from ..settings import get_settings
+from ..credentials import get_api_key
 
 class OpenRouterProvider(LLMProvider):
     """OpenRouter API provider."""
@@ -20,8 +20,7 @@ class OpenRouterProvider(LLMProvider):
         # We can reuse the existing endpoint logic or implement a direct fetch here
         # For now, let's implement a direct fetch to match the interface pattern
         import httpx
-        settings = get_settings()
-        api_key = settings.openrouter_api_key
+        api_key = get_api_key("openrouter")
         
         if not api_key:
             return []

@@ -12,8 +12,9 @@ class OpenAIProvider(LLMProvider):
     BASE_URL = "https://api.openai.com/v1"
     
     def _get_api_key(self) -> str:
-        settings = get_settings()
-        return settings.openai_api_key or ""
+        from ..credentials import get_api_key
+        return get_api_key("openai")
+
 
     async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         api_key = self._get_api_key()

@@ -108,6 +108,7 @@ export default function ChatInterface({
     onAbort,
     isLoading,
     councilConfigured,
+    providersConfigured = true,
     onOpenSettings,
     councilModels = [],
     chairmanModel = null,
@@ -371,7 +372,11 @@ export default function ChatInterface({
                     <div className="input-container config-required">
                         <span className="config-message">
                             ⚠️ Council not ready — add at least one member.
-                            <button className="config-link" onClick={() => onOpenSettings('llm_keys')}>Configure API Keys</button>
+                            {!providersConfigured && (
+                                <button className="config-link" onClick={() => onOpenSettings('llm_keys')}>
+                                    Configure API Keys
+                                </button>
+                            )}
                         </span>
                     </div>
                 ) : (

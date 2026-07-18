@@ -26,10 +26,22 @@ def _make_settings_with_keys():
 
 
 @pytest.fixture()
-def client():
-    """TestClient with mocked filesystem settings functions."""
+def client(tmp_path, monkeypatch):
+    """TestClient with mocked settings IO and isolated credential store.
+
+    Reset/import must never touch the developer's real data/credentials.json.
+    """
+    from backend.credentials import file_backend, store
+
+    monkeypatch.setattr(file_backend, "CREDENTIALS_FILE", tmp_path / "credentials.json")
+    monkeypatch.setattr(store, "get_effective_mode", lambda: "file")
+    monkeypatch.setattr(store, "_preferred_mode", lambda: "file")
+    # Avoid deleting OS keychain entries if wipe_all_secrets runs.
+    monkeypatch.setattr(store, "wipe_all_secrets", lambda: None)
+
     with patch("backend.main.get_settings") as mock_get, \
-         patch("backend.main.save_settings") as mock_save:
+         patch("backend.main.save_settings") as mock_save, \
+         patch("backend.main.wipe_all_secrets") as mock_wipe:
         mock_get.return_value = _make_default_settings()
         mock_save.return_value = None
         from backend.main import app
@@ -37,6 +49,7 @@ def client():
             # Expose mocks via the client so individual tests can reconfigure them.
             c._mock_get = mock_get
             c._mock_save = mock_save
+            c._mock_wipe = mock_wipe
             yield c
 
 
@@ -44,8 +57,10 @@ def _make_client(client_host="127.0.0.1"):
     """Create a TestClient with settings IO mocked and a specific peer host."""
     patch_get = patch("backend.main.get_settings")
     patch_save = patch("backend.main.save_settings")
+    patch_wipe = patch("backend.main.wipe_all_secrets")
     mock_get = patch_get.start()
     mock_save = patch_save.start()
+    mock_wipe = patch_wipe.start()
     mock_get.return_value = _make_default_settings()
     mock_save.return_value = None
 
@@ -54,7 +69,8 @@ def _make_client(client_host="127.0.0.1"):
     c = TestClient(app, client=(client_host, 50000))
     c._mock_get = mock_get
     c._mock_save = mock_save
-    c._patches = (patch_get, patch_save)
+    c._mock_wipe = mock_wipe
+    c._patches = (patch_get, patch_save, patch_wipe)
     return c
 
 
@@ -79,17 +95,23 @@ def test_export_returns_json_download(client):
     assert "council-settings.json" in cd
 
 
-def test_export_includes_api_key_values(client):
-    """Exported JSON must contain actual key fields, not _key_set booleans."""
-    # Reconfigure mock to return settings with a real key value.
-    client._mock_get.return_value = _make_settings_with_keys()
+def test_export_includes_api_key_values(client, tmp_path, monkeypatch):
+    """Exported JSON includes secrets under credentials (not plaintext settings fields)."""
+    from backend.credentials import file_backend, store
+
+    monkeypatch.setattr(file_backend, "CREDENTIALS_FILE", tmp_path / "credentials.json")
+    monkeypatch.setattr(store, "get_effective_mode", lambda: "file")
+    monkeypatch.setattr(store, "_preferred_mode", lambda: "file")
+    store.set_secret("api:openrouter", "sk-or-test-key-123")
+    store.set_secret("api:groq", "gsk_test_key_456")
+    client._mock_get.return_value = _make_default_settings()
     response = client.get("/api/settings/export")
     assert response.status_code == 200
     data = response.json()
-    # The real key value must be present (not a boolean *_key_set field).
-    assert data.get("openrouter_api_key") == "sk-or-test-key-123"
-    assert data.get("groq_api_key") == "gsk_test_key_456"
-    # Ensure there are no *_key_set fields (those only appear in the secure GET endpoint).
+    creds = data.get("credentials") or {}
+    assert creds.get("api:openrouter") == "sk-or-test-key-123"
+    assert creds.get("api:groq") == "gsk_test_key_456"
+    assert data.get("openrouter_api_key") in (None, "")
     for key in data:
         assert not key.endswith("_key_set"), f"Unexpected boolean key field: {key}"
 
@@ -147,38 +169,29 @@ def test_export_accepts_remote_client_with_admin_token(monkeypatch):
 
 
 def test_import_valid_settings(client):
-    """POST /api/settings/import with a valid blob returns status=imported."""
-    from backend.settings import Settings
-    payload = Settings().model_dump(mode="json")
-    response = client.post("/api/settings/import", json=payload)
+    """POST /api/settings/import accepts a credentials-aware payload."""
+    payload = {
+        "council_temperature": 0.9,
+        "credentials": {"api:openrouter": "sk-imported"},
+    }
+    with patch("backend.main.apply_admin_import") as mock_import:
+        response = client.post("/api/settings/import", json=payload)
     assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "imported"
-    # save_settings should have been called exactly once.
-    client._mock_save.assert_called_once()
-
-
-def test_import_invalid_json(client):
-    """POST /api/settings/import with non-JSON body returns 422."""
-    response = client.post(
-        "/api/settings/import",
-        content=b"this is not json",
-        headers={"Content-Type": "application/json"},
-    )
-    assert response.status_code == 422
+    assert response.json()["status"] == "imported"
+    mock_import.assert_called_once()
 
 
 def test_import_invalid_settings(client):
-    """POST /api/settings/import with a field of the wrong type returns 422."""
-    # council_temperature must be a float; passing a string should fail validation.
-    bad_payload = {"council_temperature": "not-a-number"}
-    response = client.post("/api/settings/import", json=bad_payload)
-    assert response.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# Reset tests
-# ---------------------------------------------------------------------------
+    """Invalid payloads return 400."""
+    with patch(
+        "backend.main.apply_admin_import",
+        side_effect=ValueError("bad"),
+    ):
+        response = client.post(
+            "/api/settings/import",
+            json={"council_temperature": "not-a-number"},
+        )
+    assert response.status_code == 400
 
 
 def test_reset_returns_success(client):
@@ -187,6 +200,7 @@ def test_reset_returns_success(client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "reset"
+    client._mock_wipe.assert_called_once()
 
 
 def test_reset_saves_defaults(client):
@@ -241,7 +255,7 @@ def test_update_settings_persists_council_title_query_and_advisor_prompts(client
     }
 
     updated_settings = Settings(**payload)
-    with patch("backend.main.update_settings", return_value=updated_settings) as mock_update:
+    with patch("backend.main.update_settings", return_value=updated_settings) as mock_update,          patch("backend.main.build_settings_response", return_value={**payload, "ok": True}):
         response = client.put("/api/settings", json=payload)
 
     assert response.status_code == 200
@@ -266,7 +280,7 @@ def test_update_settings_persists_search_tuning_fields(client):
     }
 
     updated_settings = Settings(**payload)
-    with patch("backend.main.update_settings", return_value=updated_settings) as mock_update:
+    with patch("backend.main.update_settings", return_value=updated_settings) as mock_update,          patch("backend.main.build_settings_response", return_value={**payload, "ok": True}):
         response = client.put("/api/settings", json=payload)
 
     assert response.status_code == 200

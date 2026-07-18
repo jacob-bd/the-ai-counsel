@@ -1,6 +1,6 @@
 [project]
 name = "the-ai-counsel"
-version = "0.10.5"
+version = "0.11.0"
 description = "The AI Counsel — Collective AI Intelligence"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,6 +15,7 @@ dependencies = [
     "ddgs>=8.0.0",
     "yake>=0.4.8",
     "mcp[cli]>=1.0.0",
+    "keyring>=25.7.0",
 ]
 
 [project.scripts]

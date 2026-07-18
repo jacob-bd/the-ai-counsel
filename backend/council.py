@@ -27,6 +27,9 @@ from .providers.groq import GroqProvider
 from .providers.custom_openai import CustomOpenAIProvider
 from .providers.nvidia import NvidiaProvider
 from .providers.opencode import OpenCodeProvider
+from .providers.xai_oauth import XaiOAuthProvider
+from .providers.openai_oauth import OpenAIOauthProvider
+from .providers.github_copilot import GitHubCopilotProvider
 
 # Initialize providers
 PROVIDERS = {
@@ -42,12 +45,15 @@ PROVIDERS = {
     "custom": CustomOpenAIProvider(),
     "opencode-zen": OpenCodeProvider(product="zen"),
     "opencode-go": OpenCodeProvider(product="go"),
+    "xai-oauth": XaiOAuthProvider(),
+    "openai-oauth": OpenAIOauthProvider(),
+    "github-copilot": GitHubCopilotProvider(),
 }
 
 def get_provider_for_model(model_id: str) -> Any:
     """Determine the provider for a given model ID."""
     if ":" in model_id:
-        provider_name = model_id.split(":")[0]
+        provider_name = model_id.split(":", 1)[0]
         if provider_name in PROVIDERS:
             return PROVIDERS[provider_name]
 

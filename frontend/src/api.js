@@ -564,4 +564,94 @@ export const api = {
 
     await _consumeSSEStream(response.body, onEvent);
   },
+
+  async startOAuth(providerId) {
+    const response = await fetch(`${API_BASE}/api/oauth/${encodeURIComponent(providerId)}/start`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to start OAuth');
+    }
+    return response.json();
+  },
+
+  async oauthStatus(providerId, sessionId) {
+    const params = new URLSearchParams({ session_id: sessionId });
+    const response = await fetch(
+      `${API_BASE}/api/oauth/${encodeURIComponent(providerId)}/status?${params}`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to get OAuth status');
+    }
+    return response.json();
+  },
+
+  async disconnectOAuth(providerId) {
+    const response = await fetch(`${API_BASE}/api/oauth/${encodeURIComponent(providerId)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to disconnect OAuth');
+    }
+    return response.json();
+  },
+
+  async disconnectAllProviders() {
+    const response = await fetch(`${API_BASE}/api/settings/disconnect-all-providers`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to disconnect all providers');
+    }
+    return response.json();
+  },
+
+  async setCredentialStorage(mode) {
+    const response = await fetch(`${API_BASE}/api/settings/credential-storage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to change credential storage');
+    }
+    return response.json();
+  },
+
+  async discoverRelayAi() {
+    const response = await fetch(`${API_BASE}/api/credentials/import/relay-ai/discover`);
+    if (!response.ok) {
+      throw new Error('Failed to discover relay-ai credentials');
+    }
+    return response.json();
+  },
+
+  async importRelayAi(ids, replaceExisting = false) {
+    const response = await fetch(`${API_BASE}/api/credentials/import/relay-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, replace_existing: replaceExisting }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to import relay-ai credentials');
+    }
+    return response.json();
+  },
+
+  async dismissRelayImport() {
+    const response = await fetch(`${API_BASE}/api/settings/relay-ai-import-dismissed`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to dismiss relay-ai import');
+    }
+    return response.json();
+  },
 };

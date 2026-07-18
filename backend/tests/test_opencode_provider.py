@@ -3,6 +3,17 @@
 import json
 import pytest
 
+@pytest.fixture(autouse=True)
+def _isolate_opencode_credentials(monkeypatch, tmp_path):
+    from backend.credentials import file_backend, store
+    monkeypatch.setattr(file_backend, "CREDENTIALS_FILE", tmp_path / "credentials.json")
+    monkeypatch.setattr(store, "get_effective_mode", lambda: "file")
+    monkeypatch.setattr(store, "_preferred_mode", lambda: "file")
+    monkeypatch.setattr(store, "ENV_OVERRIDES", {})
+    # Clear any accidental env
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+
+
 from backend.providers.opencode import OpenCodeProvider
 
 
@@ -74,7 +85,10 @@ def fake_settings(monkeypatch):
         opencode_api_key = "sk-zen-test"
 
     from backend import settings as settings_module
+    from backend.credentials import store
     from backend.providers import opencode as opencode_module
+
+    store.set_secret("api:opencode", "sk-zen-test")
 
     def fake():
         return FakeSettings()

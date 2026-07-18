@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { api, buildAvailableSearchProviders } from '../api';
 import SearchableModelSelect from './SearchableModelSelect';
 import { getShortModelName } from '../utils/modelHelpers';
+import { filterOAuthModels, OAUTH_PROVIDERS } from '../constants/oauthProviders';
 import DocumentUpload from './DocumentUpload';
 import './AdvisorSetup.css';
 
@@ -95,6 +96,9 @@ function filterDirectModelsForAdvisor(directModels, settings) {
   const ep = settings.enabled_providers || {};
   const dt = settings.direct_provider_toggles || {};
   return directModels.filter((model) => {
+    if (model.id?.startsWith('xai-oauth:') || model.id?.startsWith('openai-oauth:') || model.id?.startsWith('github-copilot:')) {
+      return false;
+    }
     if (model.provider === 'Groq') {
       return settings.groq_api_key_set && (ep.groq !== false);
     }
@@ -109,11 +113,15 @@ function filterDirectModelsForAdvisor(directModels, settings) {
 /** Model sources respect global provider toggles. */
 function getAdvisorModelSources(settings) {
   const ep = settings.enabled_providers || {};
+  const hasOAuth = OAUTH_PROVIDERS.some(
+    (p) => settings[p.connectedKey] && ep[p.id] !== false
+  );
   return {
     openrouter: !!settings.openrouter_api_key_set && (ep.openrouter !== false),
     ollama: !!settings.ollama_base_url && (ep.ollama !== false),
     direct: hasAnyDirectProviderKey(settings) && (ep.direct !== false),
     custom: !!settings.custom_endpoint_url && (ep.custom !== false),
+    oauth: hasOAuth,
   };
 }
 
@@ -186,7 +194,7 @@ export default function AdvisorSetup({
         const loadSources = getAdvisorModelSources(settings);
         const ollamaUrl = settings.ollama_base_url || 'http://localhost:11434';
 
-        const [orModels, ollamaModels, directModels, customModels] = await Promise.all([
+        const [orModels, ollamaModels, directModels, customModels, oauthModels] = await Promise.all([
           loadSources.openrouter
             ? api.getModels().then(d => d.models || []).catch(() => [])
             : [],
@@ -206,9 +214,14 @@ export default function AdvisorSetup({
           loadSources.custom
             ? api.getCustomEndpointModels().then(d => d.models || []).catch(() => [])
             : [],
+          loadSources.oauth
+            ? api.getDirectModels()
+              .then(d => filterOAuthModels(Array.isArray(d) ? d : (d.models || []), settings))
+              .catch(() => [])
+            : [],
         ]);
 
-        const combined = [...orModels, ...ollamaModels, ...directModels, ...customModels];
+        const combined = [...orModels, ...ollamaModels, ...directModels, ...customModels, ...oauthModels];
         const unique = new Map();
         combined.forEach(m => unique.set(m.id, m));
         const sorted = Array.from(unique.values())

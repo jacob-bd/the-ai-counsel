@@ -41,7 +41,8 @@ This covers:
 
 | Path inside container | Host path | Contents |
 |---|---|---|
-| `/app/data/settings.json` | `./data/settings.json` | API keys, council config, all settings |
+| `/app/data/settings.json` | `./data/settings.json` | Non-secret config (council, prompts, toggles) |
+| `/app/data/credentials.json` | `./data/credentials.json` | API keys and OAuth tokens (file storage mode) |
 | `/app/data/conversations/` | `./data/conversations/` | Full conversation history |
 
 **Your data survives:**
@@ -51,7 +52,7 @@ This covers:
 
 **Your data is lost only if you delete `./data/` on the host.** Never do this unless you intend to wipe everything.
 
-> ⚠️ `./data/settings.json` contains your API keys in plain text. Keep this directory out of version control (it is already in `.gitignore`).
+> ⚠️ Secrets live in `./data/credentials.json` (plain text, mode `0600` when possible). OS keystore mode is **not available in containers** — Docker always uses file storage on the data volume. Keep `./data` out of version control (already in `.gitignore`).
 
 ---
 
@@ -162,7 +163,7 @@ Docker layer caching means only changed layers rebuild. A typical upgrade (Pytho
 
 ### Migrating from LLM Council Plus
 
-If you're upgrading from the original `llm-council-plus` repo, see the full **[Migration Guide](MIGRATION.md)** — it covers Docker, local dev, MCP server re-registration, and skill symlinks. Your `data/` directory (settings, conversations, API keys) copies over directly with no schema changes.
+If you're upgrading from the original `llm-council-plus` repo, see the full **[Migration Guide](MIGRATION.md)** — it covers Docker, local dev, MCP server re-registration, and skill symlinks. Your `data/` directory copies over; on first launch after v0.11.0, any legacy keys in `settings.json` are moved into `credentials.json` automatically.
 
 ---
 
@@ -179,7 +180,7 @@ The `docker-compose.yml` sets `restart: unless-stopped`, so the container restar
 
 - The container runs as a non-root user (`appuser`) for reduced attack surface.
 - A healthcheck polls `/api/health` every 30 seconds. Docker will report the container as `unhealthy` if the backend stops responding, and `restart: unless-stopped` will restart it.
-- API keys are stored in plain text in `./data/settings.json`. Do not expose port `8001` to the public internet without authentication (use a reverse proxy with auth, or restrict access via firewall).
+- API keys and OAuth tokens are stored in plain text in `./data/credentials.json` (file mode only in Docker). See [`CREDENTIALS.md`](CREDENTIALS.md). Do not expose port `8001` to the public internet without authentication (use a reverse proxy with auth, or restrict access via firewall).
 
 ---
 

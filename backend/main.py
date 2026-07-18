@@ -24,6 +24,19 @@ from .costs import build_advisor_cost_report, build_council_cost_report, build_i
 from .model_preflight import build_preflight_error_message, preflight_models
 from .search import perform_web_search, SearchProvider
 from .settings import get_settings, save_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, PROMPT_DEFAULTS
+from .settings_payload import apply_admin_import, build_admin_export, build_settings_response
+from .credentials import (
+    apply_settings_secret_updates,
+    disconnect_all_credentials,
+    get_api_key,
+    get_availability,
+    migrate_storage_mode,
+    resolve_api_key,
+    wipe_all_secrets,
+)
+from .credentials.relay_import import discover_relay_ai_credentials, import_relay_ai_credentials
+from .credentials.upgrade import ensure_credentials_upgraded
+from .oauth.sessions import disconnect_oauth, get_oauth_session_status, start_oauth_session
 from .prompts import VALID_RESPONSE_LANGUAGES, RESPONSE_LANGUAGE_DEFAULT
 from .personas import get_all_personas, save_persona_override, delete_persona_override, get_persona
 from .advisors import run_debate
@@ -442,14 +455,22 @@ def _apply_search_env(settings: Settings, provider_override: Optional[str] = Non
     """Set env vars for the active search provider and return it."""
     provider_str = provider_override if provider_override else settings.search_provider
     provider = SearchProvider(provider_str)
-    if settings.serper_api_key and provider == SearchProvider.SERPER:
-        os.environ["SERPER_API_KEY"] = settings.serper_api_key
-    if settings.tavily_api_key and provider == SearchProvider.TAVILY:
-        os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
-    if settings.brave_api_key and provider == SearchProvider.BRAVE:
-        os.environ["BRAVE_API_KEY"] = settings.brave_api_key
-    if settings.tinyfish_api_key and provider == SearchProvider.TINYFISH:
-        os.environ["TINYFISH_API_KEY"] = settings.tinyfish_api_key
+    if provider == SearchProvider.SERPER:
+        key = get_api_key("serper")
+        if key:
+            os.environ["SERPER_API_KEY"] = key
+    elif provider == SearchProvider.TAVILY:
+        key = get_api_key("tavily")
+        if key:
+            os.environ["TAVILY_API_KEY"] = key
+    elif provider == SearchProvider.BRAVE:
+        key = get_api_key("brave")
+        if key:
+            os.environ["BRAVE_API_KEY"] = key
+    elif provider == SearchProvider.TINYFISH:
+        key = get_api_key("tinyfish")
+        if key:
+            os.environ["TINYFISH_API_KEY"] = key
     return provider
 
 
@@ -1588,87 +1609,7 @@ class TestTavilyRequest(BaseModel):
 @app.get("/api/settings")
 async def get_app_settings():
     """Get current application settings."""
-    settings = get_settings()
-    return {
-        "search_provider": settings.search_provider,
-        "search_keyword_extraction": settings.search_keyword_extraction,
-        "search_result_count": settings.search_result_count,
-        "search_hybrid_mode": settings.search_hybrid_mode,
-        "ollama_base_url": settings.ollama_base_url,
-        "full_content_results": settings.full_content_results,
-
-        # Custom Endpoint
-        "custom_endpoint_name": settings.custom_endpoint_name,
-        "custom_endpoint_url": settings.custom_endpoint_url,
-        # Don't send the API key to frontend for security
-
-        # API Key Status
-        "serper_api_key_set": bool(settings.serper_api_key),
-        "tavily_api_key_set": bool(settings.tavily_api_key),
-        "brave_api_key_set": bool(settings.brave_api_key),
-        "tinyfish_api_key_set": bool(settings.tinyfish_api_key),
-        "openrouter_api_key_set": bool(settings.openrouter_api_key),
-        "openai_api_key_set": bool(settings.openai_api_key),
-        "anthropic_api_key_set": bool(settings.anthropic_api_key),
-        "google_api_key_set": bool(settings.google_api_key),
-        "mistral_api_key_set": bool(settings.mistral_api_key),
-        "deepseek_api_key_set": bool(settings.deepseek_api_key),
-        "groq_api_key_set": bool(settings.groq_api_key),
-        "nvidia_api_key_set": bool(settings.nvidia_api_key),
-        "opencode_api_key_set": bool(settings.opencode_api_key),
-        "custom_endpoint_api_key_set": bool(settings.custom_endpoint_api_key),
-
-        # Enabled Providers
-        "enabled_providers": settings.enabled_providers,
-        "direct_provider_toggles": settings.direct_provider_toggles,
-
-        # Council Configuration (unified)
-        "council_models": settings.council_models,
-        "chairman_model": settings.chairman_model,
-
-        # Remote/Local filters
-        "council_member_filters": settings.council_member_filters,
-        "chairman_filter": settings.chairman_filter,
-        "search_query_filter": settings.search_query_filter,
-
-        # Temperature Settings
-        "council_temperature": settings.council_temperature,
-        "chairman_temperature": settings.chairman_temperature,
-        "stage2_temperature": settings.stage2_temperature,
-
-        # Prompts
-        "stage1_prompt": settings.stage1_prompt,
-        "stage2_prompt": settings.stage2_prompt,
-        "stage3_prompt": settings.stage3_prompt,
-        "stage4_prompt": settings.stage4_prompt,
-        "title_prompt": settings.title_prompt,
-        "query_prompt": settings.query_prompt,
-
-        # Advisor Settings
-        "advisor_default_model": settings.advisor_default_model,
-        "advisor_tiebreaker_model": settings.advisor_tiebreaker_model,
-        "advisor_temperature": settings.advisor_temperature,
-        "advisor_default_rounds": settings.advisor_default_rounds,
-        "advisor_round1_prompt": settings.advisor_round1_prompt,
-        "advisor_followup_prompt": settings.advisor_followup_prompt,
-        "advisor_cross_pollination_prompt": settings.advisor_cross_pollination_prompt,
-        "advisor_verdict_prompt": settings.advisor_verdict_prompt,
-        "advisor_tiebreaker_prompt": settings.advisor_tiebreaker_prompt,
-        "advisor_presets": [p.model_dump() if hasattr(p, "model_dump") else p for p in settings.advisor_presets],
-        "council_presets": [p.model_dump() if hasattr(p, "model_dump") else p for p in settings.council_presets],
-
-        # Display Preferences
-        "date_format": settings.date_format,
-        "response_language": settings.response_language,
-        "valid_response_languages": list(VALID_RESPONSE_LANGUAGES),
-        "response_language_default": RESPONSE_LANGUAGE_DEFAULT,
-
-        # Iterative Debate
-        "critique_mode": settings.critique_mode,
-        "debate_rounds": settings.debate_rounds,
-        "auto_converge": settings.auto_converge,
-        "convergence_threshold": settings.convergence_threshold,
-    }
+    return build_settings_response()
 
 
 
@@ -1693,8 +1634,7 @@ async def export_settings():
     Admin-only — see _require_admin. Without auth, returning plaintext keys to any
     network peer would be a credential disclosure.
     """
-    settings = get_settings()
-    content = settings.model_dump_json(indent=2)
+    content = json.dumps(build_admin_export(), indent=2)
     return Response(
         content=content,
         media_type="application/json",
@@ -1703,19 +1643,42 @@ async def export_settings():
 
 
 @app.post("/api/settings/import", dependencies=[Depends(_require_admin)])
-async def import_settings(new_settings: Settings):
+async def import_settings(payload: Dict[str, Any]):
     """Import settings from a full settings JSON blob (admin-only)."""
-    from .settings import _normalize_prompt_defaults
-    normalized = Settings(**_normalize_prompt_defaults(new_settings.model_dump()))
-    save_settings(normalized)
+    try:
+        apply_admin_import(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid settings: {exc}")
     return {"status": "imported", "message": "Settings imported successfully"}
 
 
 @app.post("/api/settings/reset", dependencies=[Depends(_require_admin)])
 async def reset_settings():
     """Reset all settings to defaults (admin-only)."""
+    wipe_all_secrets()
     save_settings(Settings())
     return {"status": "reset", "message": "Settings reset to defaults"}
+
+
+@app.post("/api/settings/disconnect-all-providers", dependencies=[Depends(_require_admin)])
+async def disconnect_all_providers():
+    """Disconnect every API key / OAuth provider (keeps council config & prompts)."""
+    result = disconnect_all_credentials()
+    for env_name in (
+        "TAVILY_API_KEY",
+        "BRAVE_API_KEY",
+        "SERPER_API_KEY",
+        "TINYFISH_API_KEY",
+    ):
+        os.environ.pop(env_name, None)
+    payload = build_settings_response()
+    payload["status"] = "disconnected"
+    payload["cleared"] = result.get("cleared", 0)
+    payload["message"] = (
+        f"Disconnected all providers ({payload['cleared']} credential"
+        f"{'' if payload['cleared'] == 1 else 's'} cleared)."
+    )
+    return payload
 
 
 @app.put("/api/settings")
@@ -1924,82 +1887,100 @@ async def update_app_settings(request: UpdateSettingsRequest):
         from .settings import _normalize_council_presets
         updates["council_presets"] = _normalize_council_presets(request.council_presets)
 
+    # Route API keys into credential store (do not re-inline into settings.json).
+    updates = apply_settings_secret_updates(updates)
+
+    # Sync search env from store when keys were updated (clear when removed).
+    for env_name, secret_id in (
+        ("TAVILY_API_KEY", "tavily"),
+        ("BRAVE_API_KEY", "brave"),
+        ("SERPER_API_KEY", "serper"),
+        ("TINYFISH_API_KEY", "tinyfish"),
+    ):
+        val = get_api_key(secret_id)
+        if val:
+            os.environ[env_name] = val
+        else:
+            os.environ.pop(env_name, None)
+
     if updates:
         settings = update_settings(**updates)
     else:
         settings = get_settings()
 
-    return {
-        "search_provider": settings.search_provider,
-        "search_keyword_extraction": settings.search_keyword_extraction,
-        "search_result_count": settings.search_result_count,
-        "search_hybrid_mode": settings.search_hybrid_mode,
-        "ollama_base_url": settings.ollama_base_url,
-        "full_content_results": settings.full_content_results,
+    return build_settings_response(settings)
 
-        # Custom Endpoint
-        "custom_endpoint_name": settings.custom_endpoint_name,
-        "custom_endpoint_url": settings.custom_endpoint_url,
 
-        # API Key Status
-        "serper_api_key_set": bool(settings.serper_api_key),
-        "tavily_api_key_set": bool(settings.tavily_api_key),
-        "brave_api_key_set": bool(settings.brave_api_key),
-        "tinyfish_api_key_set": bool(settings.tinyfish_api_key),
-        "openrouter_api_key_set": bool(settings.openrouter_api_key),
-        "openai_api_key_set": bool(settings.openai_api_key),
-        "anthropic_api_key_set": bool(settings.anthropic_api_key),
-        "google_api_key_set": bool(settings.google_api_key),
-        "mistral_api_key_set": bool(settings.mistral_api_key),
-        "deepseek_api_key_set": bool(settings.deepseek_api_key),
-        "groq_api_key_set": bool(settings.groq_api_key),
-        "nvidia_api_key_set": bool(settings.nvidia_api_key),
-        "opencode_api_key_set": bool(settings.opencode_api_key),
-        "custom_endpoint_api_key_set": bool(settings.custom_endpoint_api_key),
+@app.post("/api/settings/credential-storage")
+async def set_credential_storage(payload: Dict[str, Any]):
+    """Migrate credential storage mode (file <-> keyring)."""
+    mode = (payload or {}).get("mode")
+    try:
+        result = await migrate_storage_mode(mode)
+        return {"status": "ok", **result, "availability": get_availability()}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-        # Enabled Providers
-        "enabled_providers": settings.enabled_providers,
-        "direct_provider_toggles": settings.direct_provider_toggles,
 
-        # Council Configuration (unified)
-        "council_models": settings.council_models,
-        "chairman_model": settings.chairman_model,
+class OAuthStartResponse(BaseModel):
+    session_id: str
+    provider_id: str
+    user_code: str
+    verification_uri: str
+    verification_uri_complete: Optional[str] = None
+    expires_in: Optional[int] = None
+    status: str = "pending"
 
-        # Remote/Local filters
-        "council_member_filters": settings.council_member_filters,
-        "chairman_filter": settings.chairman_filter,
 
-        # Prompts
-        "stage1_prompt": settings.stage1_prompt,
-        "stage2_prompt": settings.stage2_prompt,
-        "stage3_prompt": settings.stage3_prompt,
-        "stage4_prompt": settings.stage4_prompt,
-        "title_prompt": settings.title_prompt,
-        "query_prompt": settings.query_prompt,
+@app.post("/api/oauth/{provider_id}/start")
+async def oauth_start(provider_id: str):
+    try:
+        return await start_oauth_session(provider_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
-        # Advisor Settings
-        "advisor_default_model": settings.advisor_default_model,
-        "advisor_tiebreaker_model": settings.advisor_tiebreaker_model,
-        "advisor_temperature": settings.advisor_temperature,
-        "advisor_default_rounds": settings.advisor_default_rounds,
-        "advisor_round1_prompt": settings.advisor_round1_prompt,
-        "advisor_followup_prompt": settings.advisor_followup_prompt,
-        "advisor_cross_pollination_prompt": settings.advisor_cross_pollination_prompt,
-        "advisor_verdict_prompt": settings.advisor_verdict_prompt,
-        "advisor_tiebreaker_prompt": settings.advisor_tiebreaker_prompt,
-        "advisor_presets": [p.model_dump() if hasattr(p, "model_dump") else p for p in settings.advisor_presets],
-        "council_presets": [p.model_dump() if hasattr(p, "model_dump") else p for p in settings.council_presets],
 
-        # Display Preferences
-        "date_format": settings.date_format,
-        "response_language": settings.response_language,
+@app.get("/api/oauth/{provider_id}/status")
+async def oauth_status(provider_id: str, session_id: str):
+    return get_oauth_session_status(provider_id, session_id)
 
-        # Iterative Debate
-        "critique_mode": settings.critique_mode,
-        "debate_rounds": settings.debate_rounds,
-        "auto_converge": settings.auto_converge,
-        "convergence_threshold": settings.convergence_threshold,
-    }
+
+@app.delete("/api/oauth/{provider_id}")
+async def oauth_disconnect(provider_id: str):
+    try:
+        disconnect_oauth(provider_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "disconnected", "provider_id": provider_id}
+
+
+@app.get("/api/credentials/import/relay-ai/discover")
+async def relay_ai_discover():
+    return discover_relay_ai_credentials()
+
+
+@app.post("/api/credentials/import/relay-ai")
+async def relay_ai_import(payload: Dict[str, Any]):
+    ids = payload.get("ids") or []
+    replace_existing = bool(payload.get("replace_existing"))
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="ids must be a list")
+    try:
+        result = import_relay_ai_credentials(ids, replace_existing=replace_existing)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
+
+
+@app.put("/api/settings/relay-ai-import-dismissed")
+async def dismiss_relay_import(payload: Dict[str, Any] = None):
+    update_settings(relay_ai_import_dismissed=True)
+    return {"relay_ai_import_dismissed": True}
+
+
+
 
 
 @app.get("/api/models/direct")
@@ -2027,14 +2008,17 @@ async def get_direct_models():
 async def test_tavily_api(request: TestTavilyRequest):
     """Test Tavily API key with a simple search."""
     import httpx
-    settings = get_settings()
+
+    api_key = resolve_api_key("tavily", request.api_key)
+    if not api_key:
+        return {"success": False, "message": "No API key provided or configured"}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 "https://api.tavily.com/search",
                 json={
-                    "api_key": request.api_key or settings.tavily_api_key,
+                    "api_key": api_key,
                     "query": "test",
                     "max_results": 1,
                     "search_depth": "basic",
@@ -2063,7 +2047,10 @@ class TestBraveRequest(BaseModel):
 async def test_brave_api(request: TestBraveRequest):
     """Test Brave API key with a simple search."""
     import httpx
-    settings = get_settings()
+
+    api_key = resolve_api_key("brave", request.api_key)
+    if not api_key:
+        return {"success": False, "message": "No API key provided or configured"}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -2073,7 +2060,7 @@ async def test_brave_api(request: TestBraveRequest):
                 headers={
                     "Accept": "application/json",
                     "Accept-Encoding": "gzip",
-                    "X-Subscription-Token": request.api_key or settings.brave_api_key,
+                    "X-Subscription-Token": api_key,
                 },
             )
 
@@ -2099,7 +2086,10 @@ class TestSerperRequest(BaseModel):
 async def test_serper_api(request: TestSerperRequest):
     """Test Serper API key with a simple search."""
     import httpx
-    settings = get_settings()
+
+    api_key = resolve_api_key("serper", request.api_key)
+    if not api_key:
+        return {"success": False, "message": "No API key provided or configured"}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -2107,7 +2097,7 @@ async def test_serper_api(request: TestSerperRequest):
                 "https://google.serper.dev/search",
                 json={"q": "test", "num": 1},
                 headers={
-                    "X-API-KEY": request.api_key or settings.serper_api_key,
+                    "X-API-KEY": api_key,
                     "Content-Type": "application/json",
                 },
             )
@@ -2134,14 +2124,17 @@ class TestTinyfishRequest(BaseModel):
 async def test_tinyfish_api(request: TestTinyfishRequest):
     """Test TinyFish API key with a simple search."""
     import httpx
-    settings = get_settings()
+
+    api_key = resolve_api_key("tinyfish", request.api_key)
+    if not api_key:
+        return {"success": False, "message": "No API key provided or configured"}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(
                 "https://api.search.tinyfish.ai/",
                 params={"query": "test"},
-                headers={"X-API-Key": request.api_key or settings.tinyfish_api_key},
+                headers={"X-API-Key": api_key},
             )
 
             if response.status_code == 200:
@@ -2165,35 +2158,20 @@ class TestOpenRouterRequest(BaseModel):
 class TestProviderRequest(BaseModel):
     """Request to test a specific provider's API key."""
     provider_id: str
-    api_key: str
+    api_key: Optional[str] = None
 
 
 @app.post("/api/settings/test-provider")
 async def test_provider_api(request: TestProviderRequest):
     """Test an API key for a specific provider."""
     from .council import PROVIDERS
-    from .settings import get_settings
-    
+
     if request.provider_id not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Invalid provider ID")
 
-    api_key = request.api_key
+    api_key = resolve_api_key(request.provider_id, request.api_key)
     if not api_key:
-        # Try to get from settings
-        settings = get_settings()
-        # Provider-id → settings-key map. Falls back to "<id>_api_key".
-        _PROVIDER_SETTINGS_KEY_OVERRIDES = {
-            "opencode-zen": "opencode_api_key",
-            "opencode-go": "opencode_api_key",
-        }
-        setting_key = _PROVIDER_SETTINGS_KEY_OVERRIDES.get(
-            request.provider_id, f"{request.provider_id}_api_key"
-        )
-        if hasattr(settings, setting_key):
-             api_key = getattr(settings, setting_key)
-    
-    if not api_key:
-         return {"success": False, "message": "No API key provided or configured"}
+        return {"success": False, "message": "No API key provided or configured"}
 
     provider = PROVIDERS[request.provider_id]
     return await provider.validate_key(api_key)
@@ -2210,9 +2188,7 @@ async def test_opencode_key(request: TestOpenCodeRequest):
     """Test the OpenCode API key by listing models on Zen and/or Go."""
     from .providers.opencode import OpenCodeProvider
 
-    api_key = request.api_key
-    if not api_key:
-        api_key = get_settings().opencode_api_key
+    api_key = resolve_api_key("opencode", request.api_key)
     if not api_key:
         return {"success": False, "message": "No OpenCode API key provided or configured"}
 
@@ -2313,7 +2289,8 @@ async def test_custom_endpoint(request: TestCustomEndpointRequest):
     from .providers.custom_openai import CustomOpenAIProvider
 
     provider = CustomOpenAIProvider()
-    return await provider.validate_connection(request.url, request.api_key or "")
+    api_key = resolve_api_key("custom_endpoint", request.api_key)
+    return await provider.validate_connection(request.url, api_key)
 
 
 @app.get("/api/custom-endpoint/models")

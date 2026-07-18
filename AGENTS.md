@@ -100,7 +100,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 | `CouncilGrid.jsx` | Visual grid of council members with provider icons |
 | `CouncilSetup.jsx` | Inline council editor on welcome screen (members, chairman, presets; auto-save) |
 | `Settings.jsx` | 8-section settings: General, LLM API Keys, Council Config, Council Debate Config, Council System Prompts, Advisor System Prompts, Search Providers, Backup & Reset |
-| `GeneralSettings.jsx` | Date format and response language (General section) |
+| `GeneralSettings.jsx` | Date format, response language, and relay-ai credential import (General section) |
 | `Sidebar.jsx` | Conversation list with stacked date/time, run summaries, cumulative cost pill, sidebar search on summary text, inline delete confirmation |
 | `SearchableModelSelect.jsx` | Searchable dropdown for model selection |
 
@@ -331,14 +331,14 @@ curl https://your-endpoint.com/v1/models -H "Authorization: Bearer $API_KEY"
 ## Settings
 
 **UI Sections** (sidebar navigation):
-1. **General**: Display preferences (date format) and response language for council/advisor model outputs. Language is injected at runtime via `apply_response_language()` in `prompts.py` (not editable in system prompt tabs); title and search-query generation stay English.
-2. **LLM API Keys**: OpenRouter, Groq, Ollama, Direct providers, Custom endpoint
+1. **General**: Display preferences (date format), response language for council/advisor model outputs, and optional relay-ai credential import. Language is injected at runtime via `apply_response_language()` in `prompts.py` (not editable in system prompt tabs); title and search-query generation stay English.
+2. **LLM API Keys**: Where secrets are stored (file vs OS keystore), OpenRouter, Groq, Ollama, Subscription OAuth, Direct providers, Custom endpoint. Configured providers show Disconnect (clears stored key / OAuth, ignores env overrides for that secret until a new key is saved, and disables that source). Ollama Connect enables the provider; Disconnect disables it (daemon may still be running). API keys are never persisted in `settings.json` (always redacted on save); Retest and relay-ai import read/write the credential store. User guide: [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md).
 3. **Council Config**: **Global** provider toggles — Local (Ollama) standalone, Remote APIs master toggle with OpenRouter, Groq, Custom, and Direct Connections underneath. Temperature controls for all three stages (Council Heat, Peer Ranking Heat, Chairman Heat). Model selection (members/chairman) is handled exclusively on the welcome screen via Council Setup.
 4. **Council Debate Config**: Critique mode, debate rounds, auto-converge, convergence threshold
 5. **Council System Prompts**: Stage 1 / Stage 2 / Stage 3 / Title / Search Query are user-editable and persisted in `settings.json` (fields `stage1_prompt` / `stage2_prompt` / `stage3_prompt` / `title_prompt` / `query_prompt`, all five updated via `PUT /api/settings`), each with reset-to-default. The Title and Query prompts (`TITLE_PROMPT_DEFAULT` / query-generation prompt in `backend/prompts.py`) are used internally by `generate_conversation_title` and `generate_search_query`.
 6. **Advisor System Prompts**: Round 1, follow-up, cross-pollination, verdict, tiebreaker prompts
 7. **Search Providers**: DuckDuckGo, Tavily, Brave, Serper, TinyFish + Jina full content settings
-8. **Backup & Reset**: Import/Export config, reset to defaults
+8. **Backup & Reset**: Import/Export config, Disconnect All Providers (clears credential store + OAuth; keeps council/prompts), reset to defaults
 
 **Council presets** (`council_presets` in `settings.json`): Saved from welcome-screen Council Setup — members + chairman only. Max 20; one default auto-loads. Main screen and Settings edit the same `council_models` / `chairman_model` fields. Lineup locked in a conversation after the first message.
 
@@ -366,7 +366,7 @@ curl https://your-endpoint.com/v1/models -H "Authorization: Bearer $API_KEY"
 - OpenRouter free tier: 20 RPM, 50 requests/day
 - Groq: 30 RPM, 14,400 requests/day
 
-**Storage**: `data/settings.json`
+**Storage**: `data/settings.json` (non-secret config); secrets in `data/credentials.json` or OS keystore (Settings → LLM API Keys → Where secrets are stored). Subscription OAuth: `xai-oauth`, `openai-oauth`, `github-copilot`.
 
 ## Design Principles
 

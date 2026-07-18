@@ -381,3 +381,11 @@ Admin REST endpoints (`/api/settings/export` with bearer token) remain available
 ## REST fallback
 
 When MCP is unavailable, use [`skills/the-ai-counsel-api/SKILL.md`](../../skills/the-ai-counsel-api/SKILL.md) for equivalent REST endpoints. Preset CRUD is now available via `council_settings` / `advisor_settings` MCP actions — REST `PUT /api/settings` remains the fallback.
+
+
+### Credential / OAuth notes
+
+- `GET` settings (via `council_settings`) may include `*_oauth_connected`, `credential_storage*`, and Copilot plan fields; secrets are never returned (see [`../CREDENTIALS.md`](../CREDENTIALS.md)).
+- Device-code OAuth Connect is UI-only in v1 (not exposed as MCP actions).
+- Admin `config_backup` export/import includes the credential store when using the updated settings export shape (`credentials` object).
+- **Disconnect all providers** is REST-only: `POST /api/settings/disconnect-all-providers`. Per-key clear: `providers` → `set_api_key` with an empty key, or `PUT /api/settings` with `*_api_key: ""`.

@@ -1,7 +1,7 @@
 ---
 name: the-ai-counsel-api
-version: 0.10.5
-description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", etc.
+version: 0.11.0
+description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", "import relay-ai keys", "disconnect providers", etc.
 ---
 
 # The AI Counsel — API & MCP Skill
@@ -88,8 +88,26 @@ In Claude Code, tools appear as `mcp__the-ai-counsel__<name>` (server identifier
 | **MCP errors** (connection refused, stale SSE, tool not found) | Fallback per this skill |
 | **Raw SSE event parsing** (custom UIs) | MCP deliberation tools return consolidated results, not per-event SSE |
 | **Admin export with bearer token** | `GET /api/settings/export` — manual admin action |
+| **Disconnect all providers** | `POST /api/settings/disconnect-all-providers` — no MCP action yet |
+| **Credential storage / relay-ai import / OAuth device login** | REST only (see Credentials section below) |
 
 See [`docs/mcp/TOOLS.md`](../../docs/mcp/TOOLS.md) for MCP parameters and [`docs/mcp/EXAMPLES.md`](../../docs/mcp/EXAMPLES.md) for walkthroughs.
+
+---
+
+## Credentials & secrets (v0.11.0)
+
+User guide: [`docs/CREDENTIALS.md`](../../docs/CREDENTIALS.md).
+
+**Rules for agents:**
+
+1. Secrets live in the **credential store** (`data/credentials.json` or OS keystore service `the-ai-counsel`) — **not** in `settings.json`.
+2. `GET /api/settings` returns `*_api_key_set` / `*_oauth_connected` only — never plaintext keys.
+3. Set a key via `PUT /api/settings` with the `*_api_key` field, or MCP `providers` → `set_api_key`. Empty string = Disconnect (clears store + ignores env for that secret until a new key is saved).
+4. **Retest** with an empty `api_key` body reads the credential store (`resolve_api_key`) — do not assume keys are still on the Settings model.
+5. **relay-ai import** copies from Keychain service `relay-ai` into Counsel’s store; it does **not** share or overwrite the `relay-ai` service. Switching Counsel storage to keychain writes service **`the-ai-counsel`** only.
+6. **Disconnect All Providers:** `POST /api/settings/disconnect-all-providers` (admin/loopback). Clears all secrets + disables provider toggles; keeps council/prompts.
+7. Docker/containers always use file storage — OS keystore is unavailable.
 
 ---
 
@@ -121,6 +139,7 @@ Use this table **only when MCP tools are unavailable** or the operation has no M
 | Export settings (backup) | GET | `/api/settings/export` |
 | Import settings (restore) | POST | `/api/settings/import` |
 | Reset settings to defaults | POST | `/api/settings/reset` |
+| Disconnect all providers (keys + OAuth) | POST | `/api/settings/disconnect-all-providers` |
 
 **Model ID prefix format:**
 ```
@@ -132,7 +151,26 @@ custom:nvidia/nemotron-3-super-120b    → Custom endpoint
 groq:llama3-70b-8192                   → Groq fast inference
 opencode-zen:glm-5.1                   → Direct OpenCode Zen (chat/completions only, v1)
 opencode-go:kimi-k2.5                  → Direct OpenCode Go (chat/completions only, v1; subscription)
+xai-oauth:grok-4                       → xAI SuperGrok (subscription OAuth)
+openai-oauth:gpt-5                     → ChatGPT Plus/Pro (subscription OAuth; Codex Responses)
+github-copilot:gpt-4.1                 → GitHub Copilot (subscription OAuth)
 ```
+
+**Subscription OAuth (device-code login):**
+| Action | Method | Path |
+|--------|--------|------|
+| Start login | POST | `/api/oauth/{provider_id}/start` (`xai-oauth` \| `openai-oauth` \| `github-copilot`) |
+| Poll status | GET | `/api/oauth/{provider_id}/status?session_id=` |
+| Disconnect | DELETE | `/api/oauth/{provider_id}` |
+| Credential storage mode | POST | `/api/settings/credential-storage` body `{mode: "file"\|"keyring"}` |
+| Discover relay-ai keys | GET | `/api/credentials/import/relay-ai/discover` |
+| Import relay-ai keys | POST | `/api/credentials/import/relay-ai` body `{ids:[], replace_existing?}` |
+
+GET `/api/settings` exposes `*_oauth_connected` booleans, `credential_storage*` fields, and (when Copilot is connected) `github_copilot_plan` / `github_copilot_is_free_plan`; secrets are never returned. OS keystore mode is desktop-only (not available in Docker).
+
+**Disconnect API keys:** `PUT /api/settings` with an empty string for any `*_api_key` field clears that secret from the credential store and ignores a matching process env override (e.g. `OPENCODE_API_KEY`) until a new non-empty key is saved. Applies to OpenRouter, Groq, OpenCode, direct providers, custom endpoint, and search provider keys.
+
+**Disconnect all:** `POST /api/settings/disconnect-all-providers` — wipe credential store + OAuth, set `disabled_secret_ids` for all known secrets, disable all provider toggles. Returns `{status, cleared, message, ...settings}`.
 
 **OpenCode note (v0.8.0):** The OpenCode provider only exposes models that route to `/v1/chat/completions`. GPT Responses, Anthropic Messages, and per-model Gemini are not supported in v1 and are filtered out of `/v1/models`. A single shared `opencode_api_key` field covers both products; Go users can also use Zen's free models. Use `POST /api/settings/test-opencode` to validate both products at once.
 
@@ -188,7 +226,7 @@ Token semantics:
 Pricing order:
 
 1. Provider-reported cost when available. OpenRouter `usage.cost` / `usage.total_cost` is treated as known.
-2. Known-free rules report `$0`: `ollama:*`, `nvidia:*`, OpenRouter models ending in `:free`, the known free `opencode-zen:*` models, and custom endpoints whose configured `endpoint_url` contains the official `opencode.ai` host.
+2. Known-free rules report `$0`: `ollama:*`, `nvidia:*`, OpenRouter models ending in `:free`, subscription OAuth prefixes (`xai-oauth:*`, `openai-oauth:*`, `github-copilot:*`), the known free `opencode-zen:*` models, and custom endpoints whose configured `endpoint_url` contains the official `opencode.ai` host.
 3. OpenCode hardcoded pricing table for paid OpenCode Go and Zen models (`pricing_source: "table:opencode"`, `cost_status: "estimated"`).
 4. Catalog estimate from `https://ai-model-pricing.com/api/v1/pricing.json`, cached locally in `data/model_pricing_cache.json`.
 5. Fallback catalog estimate from LiteLLM's `model_prices_and_context_window.json`.

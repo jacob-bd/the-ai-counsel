@@ -22,11 +22,20 @@ export default function SearchableModelSelect({
     // Use source field if available, otherwise fallback to provider check
     const isOpenRouter = model.source === 'openrouter' || model.provider === 'OpenRouter';
     const isOllama = model.id?.startsWith('ollama:') || model.provider === 'Ollama';
+    const isXaiOAuth = model.id?.startsWith('xai-oauth:') || model.source === 'xai-oauth';
+    const isOpenAiOAuth = model.id?.startsWith('openai-oauth:') || model.source === 'openai-oauth';
+    const isCopilot = model.id?.startsWith('github-copilot:') || model.source === 'github-copilot';
 
     if (isOpenRouter) {
       groupLabel = 'OpenRouter (Cloud)';
     } else if (isOllama) {
       groupLabel = 'Local (Ollama)';
+    } else if (isXaiOAuth) {
+      groupLabel = 'xAI SuperGrok (Subscription)';
+    } else if (isOpenAiOAuth) {
+      groupLabel = 'ChatGPT Plus/Pro (Subscription)';
+    } else if (isCopilot) {
+      groupLabel = 'GitHub Copilot (Subscription)';
     } else {
       groupLabel = `${model.provider || 'Direct'} (Direct)`;
     }
@@ -46,6 +55,7 @@ export default function SearchableModelSelect({
   const providerOrder = [
     'OpenAI (Direct)', 'Anthropic (Direct)', 'Google (Direct)', 'Mistral (Direct)', 'DeepSeek (Direct)',
     'Groq (Direct)',
+    'xAI SuperGrok (Subscription)', 'ChatGPT Plus/Pro (Subscription)', 'GitHub Copilot (Subscription)',
     'OpenRouter (Cloud)',
     'Local (Ollama)'
   ];

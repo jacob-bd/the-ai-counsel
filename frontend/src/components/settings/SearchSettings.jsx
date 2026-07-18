@@ -79,7 +79,8 @@ export default function SearchSettings({
     searchResultCount,
     setSearchResultCount,
     searchHybridMode,
-    setSearchHybridMode
+    setSearchHybridMode,
+    onDisconnectSearchKey,
 }) {
     return (
         <section className="settings-section">
@@ -125,7 +126,16 @@ export default function SearchSettings({
                                     </button>
                                 </div>
                                 {settings?.serper_api_key_set && !serperApiKey && (
-                                    <div className="key-status set">✓ API key configured</div>
+                                    <div className="key-status set key-status-row">
+                                        <span>✓ API key configured</span>
+                                        <button
+                                            type="button"
+                                            className="test-button danger"
+                                            onClick={() => onDisconnectSearchKey?.('serper')}
+                                        >
+                                            Disconnect
+                                        </button>
+                                    </div>
                                 )}
                                 {serperTestResult && (
                                     <div className={`test-result ${serperTestResult.success ? 'success' : 'error'}`}>
@@ -168,7 +178,16 @@ export default function SearchSettings({
                                     </button>
                                 </div>
                                 {settings?.tavily_api_key_set && !tavilyApiKey && (
-                                    <div className="key-status set">✓ API key configured</div>
+                                    <div className="key-status set key-status-row">
+                                        <span>✓ API key configured</span>
+                                        <button
+                                            type="button"
+                                            className="test-button danger"
+                                            onClick={() => onDisconnectSearchKey?.('tavily')}
+                                        >
+                                            Disconnect
+                                        </button>
+                                    </div>
                                 )}
                                 {tavilyTestResult && (
                                     <div className={`test-result ${tavilyTestResult.success ? 'success' : 'error'}`}>
@@ -202,7 +221,16 @@ export default function SearchSettings({
                                     </button>
                                 </div>
                                 {settings?.brave_api_key_set && !braveApiKey && (
-                                    <div className="key-status set">✓ API key configured</div>
+                                    <div className="key-status set key-status-row">
+                                        <span>✓ API key configured</span>
+                                        <button
+                                            type="button"
+                                            className="test-button danger"
+                                            onClick={() => onDisconnectSearchKey?.('brave')}
+                                        >
+                                            Disconnect
+                                        </button>
+                                    </div>
                                 )}
                                 {braveTestResult && (
                                     <div className={`test-result ${braveTestResult.success ? 'success' : 'error'}`}>
@@ -236,7 +264,16 @@ export default function SearchSettings({
                                     </button>
                                 </div>
                                 {settings?.tinyfish_api_key_set && !tinyfishApiKey && (
-                                    <div className="key-status set">✓ API key configured</div>
+                                    <div className="key-status set key-status-row">
+                                        <span>✓ API key configured</span>
+                                        <button
+                                            type="button"
+                                            className="test-button danger"
+                                            onClick={() => onDisconnectSearchKey?.('tinyfish')}
+                                        >
+                                            Disconnect
+                                        </button>
+                                    </div>
                                 )}
                                 {tinyfishTestResult && (
                                     <div className={`test-result ${tinyfishTestResult.success ? 'success' : 'error'}`}>

@@ -12,8 +12,9 @@ class NvidiaProvider(LLMProvider):
     BASE_URL = "https://integrate.api.nvidia.com/v1"
 
     def _get_api_key(self) -> str:
-        settings = get_settings()
-        return settings.nvidia_api_key or ""
+        from ..credentials import get_api_key
+        return get_api_key("nvidia")
+
 
     async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         api_key = self._get_api_key()

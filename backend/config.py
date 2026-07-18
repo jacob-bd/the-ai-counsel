@@ -13,12 +13,10 @@ DATA_DIR = "data/conversations"
 
 
 def get_openrouter_api_key() -> str:
-    """Get OpenRouter API key from settings or environment."""
-    from .settings import get_settings
-    settings = get_settings()
-    if settings.openrouter_api_key:
-        return settings.openrouter_api_key
-    return os.getenv("OPENROUTER_API_KEY", "")
+    """Get OpenRouter API key from credential store or environment."""
+    from .credentials import get_api_key
+
+    return get_api_key("openrouter") or os.getenv("OPENROUTER_API_KEY", "")
 
 
 def get_ollama_base_url() -> str:

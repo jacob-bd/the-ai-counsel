@@ -15,7 +15,8 @@ class CustomOpenAIProvider(LLMProvider):
         settings = get_settings()
         name = settings.custom_endpoint_name or "Custom"
         url = settings.custom_endpoint_url or ""
-        api_key = settings.custom_endpoint_api_key or ""
+        from ..credentials import get_api_key
+        api_key = get_api_key("custom_endpoint")
         return name, url, api_key
 
     async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:

@@ -33,6 +33,7 @@ _SUPPORTED_PROVIDER_PREFIXES = {
     "openrouter",
     "ollama",
     "openai",
+    "openai-oauth",
     "anthropic",
     "google",
     "mistral",
@@ -42,7 +43,10 @@ _SUPPORTED_PROVIDER_PREFIXES = {
     "nvidia",
     "opencode-zen",
     "opencode-go",
+    "xai-oauth",
+    "github-copilot",
 }
+_SUBSCRIPTION_OAUTH_PROVIDERS = {"xai-oauth", "openai-oauth", "github-copilot"}
 _OPENCODE_PROVIDERS = {"opencode-zen", "opencode-go"}
 
 # OpenCode Zen / Go published per-1M-token prices. Keys are the native model id
@@ -227,6 +231,8 @@ def _is_zero_cost_model(model_id: str, provider: str) -> Tuple[bool, Optional[st
         return True, "free:ollama"
     if provider == "nvidia":
         return True, "free:nvidia"
+    if provider in _SUBSCRIPTION_OAUTH_PROVIDERS:
+        return True, "free:subscription"
     if provider == "openrouter" and native_id.endswith(":free"):
         return True, "free:openrouter"
 
@@ -617,6 +623,11 @@ async def estimate_call_cost(model_id: str, usage: Dict[str, Any]) -> Dict[str, 
     }
 
     if is_free:
+        notes = []
+        if free_source == "free:subscription":
+            notes = [
+                "Subscription OAuth — usage is covered by your provider subscription, not metered API billing."
+            ]
         return {
             **base,
             "input_cost": 0.0,
@@ -626,6 +637,7 @@ async def estimate_call_cost(model_id: str, usage: Dict[str, Any]) -> Dict[str, 
             "pricing_confidence": "high",
             "cost_status": "free",
             "is_estimate": False,
+            "notes": notes,
         }
 
     reported_cost = normalized_usage.get("reported_cost")
