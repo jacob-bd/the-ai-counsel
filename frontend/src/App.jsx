@@ -2,6 +2,7 @@ import { Suspense, lazy, useState, useEffect, useRef, useCallback, Component } f
 import Sidebar from './components/Sidebar';
 import { api, DEFAULT_EXECUTION_MODE, buildAvailableSearchProviders } from './api';
 import { hasConfiguredProviders } from './constants/oauthProviders';
+import { applyFontSize, normalizeFontSize } from './utils/fontSize';
 import './App.css';
 import './components/StageCopyButtons.css';
 import './ModeToggle.css';
@@ -146,6 +147,7 @@ function App() {
   const [autoConverge, setAutoConverge] = useState(true);
   const [convergenceThreshold, setConvergenceThreshold] = useState(2);
   const [dateFormat, setDateFormat] = useState('auto');
+  const [fontSize, setFontSize] = useState('default');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appMode, setAppMode] = useState(null); // null shows landing page
   const abortControllerRef = useRef(null);
@@ -207,6 +209,7 @@ function App() {
       setAutoConverge(settings.auto_converge !== undefined ? settings.auto_converge : true);
       setConvergenceThreshold(settings.convergence_threshold || 2);
       setDateFormat(settings.date_format || 'auto');
+      setFontSize(normalizeFontSize(settings.font_size));
 
       setAvailableSearchProviders(buildAvailableSearchProviders(settings));
 
@@ -275,6 +278,7 @@ function App() {
       setAutoConverge(settings.auto_converge !== undefined ? settings.auto_converge : true);
       setConvergenceThreshold(settings.convergence_threshold || 2);
       setDateFormat(settings.date_format || 'auto');
+      setFontSize(normalizeFontSize(settings.font_size));
 
       setCouncilConfigured(computeCouncilConfigured(models));
       setProvidersConfigured(hasConfiguredProviders(settings, {
@@ -284,6 +288,10 @@ function App() {
       console.error('Error after closing settings:', error);
     }
   };
+
+  useEffect(() => {
+    applyFontSize(fontSize);
+  }, [fontSize]);
 
   const handleOpenSettings = (section = 'council') => {
     setSettingsInitialSection(section || 'council');
@@ -1687,6 +1695,7 @@ function App() {
               ollamaStatus={ollamaStatus}
               onRefreshOllama={testOllamaConnection}
               initialSection={settingsInitialSection}
+              onFontSizeChange={setFontSize}
             />
           </Suspense>
         </AppErrorBoundary>

@@ -7,6 +7,8 @@ export { RESPONSE_LANGUAGE_DEFAULT };
 export default function GeneralSettings({
   dateFormat,
   onDateFormatChange,
+  fontSize,
+  onFontSizeChange,
   responseLanguage,
   onResponseLanguageChange,
   responseLanguages = RESPONSE_LANGUAGES_FALLBACK,
@@ -49,6 +51,22 @@ export default function GeneralSettings({
           </select>
           <span className="general-setting-hint">
             Sidebar preview: {formatDatePart(new Date(), dateFormat)}
+          </span>
+        </div>
+        <div className="general-setting-row">
+          <label htmlFor="font-size-select" className="general-setting-label">Font Size</label>
+          <select
+            id="font-size-select"
+            value={fontSize}
+            onChange={(e) => onFontSizeChange(e.target.value)}
+            className="select-input general-setting-select"
+          >
+            <option value="default">Default (slightly larger)</option>
+            <option value="large">Large</option>
+            <option value="xlarge">xLarge</option>
+          </select>
+          <span className="general-setting-hint">
+            Scales all text across the application. Saves automatically.
           </span>
         </div>
       </div>

@@ -8,6 +8,7 @@ import PromptSettings from './settings/PromptSettings';
 import DebateSettings from './settings/DebateSettings';
 import GeneralSettings, { RESPONSE_LANGUAGE_DEFAULT } from './settings/GeneralSettings';
 import { RESPONSE_LANGUAGES_FALLBACK } from '../constants/responseLanguages';
+import { normalizeFontSize } from '../utils/fontSize';
 import { countStoredCredentials, filterOAuthModels, OAUTH_PROVIDERS } from '../constants/oauthProviders';
 import './Settings.css';
 
@@ -64,7 +65,7 @@ const normalizeDirectProviderToggles = (toggles, data) => ({
   'opencode-go': !!toggles?.['opencode-go'] && !!data?.opencode_api_key_set,
 });
 
-export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys' }) {
+export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys', onFontSizeChange }) {
   const [activeSection, setActiveSection] = useState(initialSection);
 
   const [settings, setSettings] = useState(null);
@@ -74,6 +75,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const [searchResultCount, setSearchResultCount] = useState(8);
   const [searchHybridMode, setSearchHybridMode] = useState(true);
   const [dateFormat, setDateFormat] = useState('auto');
+  const [fontSize, setFontSize] = useState('default');
   const [responseLanguage, setResponseLanguage] = useState(RESPONSE_LANGUAGE_DEFAULT);
   const [responseLanguages, setResponseLanguages] = useState(RESPONSE_LANGUAGES_FALLBACK);
 
@@ -229,6 +231,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       searchHybridMode !== (settings.search_hybrid_mode ?? true) ||
       showFreeOnly !== (settings.show_free_only ?? false) ||
       dateFormat !== (settings.date_format || 'auto') ||
+      fontSize !== normalizeFontSize(settings.font_size) ||
       responseLanguage !== (settings.response_language || RESPONSE_LANGUAGE_DEFAULT) ||
       JSON.stringify(enabledProviders) !== JSON.stringify(settings.enabled_providers) ||
       JSON.stringify(directProviderToggles) !== JSON.stringify(settings.direct_provider_toggles) ||
@@ -272,6 +275,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           search_hybrid_mode: searchHybridMode,
           show_free_only: showFreeOnly,
           date_format: dateFormat,
+          font_size: fontSize,
           response_language: responseLanguage,
           enabled_providers: enabledProviders,
           direct_provider_toggles: directProviderToggles,
@@ -314,6 +318,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     searchHybridMode,
     showFreeOnly,
     dateFormat,
+    fontSize,
     responseLanguage,
     enabledProviders,
     directProviderToggles,
@@ -436,6 +441,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setSearchHybridMode(data.search_hybrid_mode ?? true);
       setShowFreeOnly(data.show_free_only ?? false);
       setDateFormat(data.date_format || 'auto');
+      const loadedFontSize = normalizeFontSize(data.font_size);
+      setFontSize(loadedFontSize);
+      onFontSizeChange?.(loadedFontSize);
       setResponseLanguage(data.response_language || RESPONSE_LANGUAGE_DEFAULT);
       setResponseLanguages(
         Array.isArray(data.valid_response_languages) && data.valid_response_languages.length > 0
@@ -1053,6 +1061,12 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
   const handleDateFormatChange = (newFormat) => setDateFormat(newFormat);
 
+  const handleFontSizeChange = (newFontSize) => {
+    const normalized = normalizeFontSize(newFontSize);
+    setFontSize(normalized);
+    onFontSizeChange?.(normalized);
+  };
+
   const handleResponseLanguageChange = (newLanguage) => setResponseLanguage(newLanguage);
 
   const handleResetToDefaults = () => {
@@ -1149,6 +1163,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setFullContentResults(3);
       setShowFreeOnly(false);
       setDateFormat('auto');
+      setFontSize('default');
+      onFontSizeChange?.('default');
       setResponseLanguage(RESPONSE_LANGUAGE_DEFAULT);
       setOllamaBaseUrl('http://localhost:11434');
 
@@ -1204,6 +1220,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         auto_converge: true,
         convergence_threshold: 2,
         date_format: 'auto',
+        font_size: 'default',
         response_language: RESPONSE_LANGUAGE_DEFAULT,
         ...defaultPrompts,
       };
@@ -1375,6 +1392,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
       // Display
       date_format: dateFormat,
+      font_size: fontSize,
       response_language: responseLanguage,
 
       // Prompts
@@ -1440,6 +1458,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
 
         // Apply Display Preferences
         if (config.date_format) setDateFormat(config.date_format);
+        if (config.font_size) handleFontSizeChange(config.font_size);
         if (config.response_language) setResponseLanguage(config.response_language);
 
         // Apply Prompts
@@ -1775,6 +1794,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
               <GeneralSettings
                 dateFormat={dateFormat}
                 onDateFormatChange={handleDateFormatChange}
+                fontSize={fontSize}
+                onFontSizeChange={handleFontSizeChange}
                 responseLanguage={responseLanguage}
                 onResponseLanguageChange={handleResponseLanguageChange}
                 responseLanguages={responseLanguages}
