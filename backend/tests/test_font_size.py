@@ -18,12 +18,13 @@ def test_missing_and_invalid_font_size_normalize_to_default():
 
     assert _normalize_prompt_defaults({})["font_size"] == "default"
     assert _normalize_prompt_defaults({"font_size": "giant"})["font_size"] == "default"
+    assert _normalize_prompt_defaults({"font_size": "xlarge"})["font_size"] == "default"
 
 
 def test_valid_font_size_is_preserved():
     from backend.settings import _normalize_prompt_defaults
 
-    assert _normalize_prompt_defaults({"font_size": "xlarge"})["font_size"] == "xlarge"
+    assert _normalize_prompt_defaults({"font_size": "large"})["font_size"] == "large"
 
 
 @pytest.fixture()

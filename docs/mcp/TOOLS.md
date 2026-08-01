@@ -248,7 +248,7 @@ Manage council configuration and presets.
 | `convergence_threshold` | integer | `update` | Consecutive stable rounds before early stop (1–3) |
 | `date_format` | string | `update` | Sidebar date format: `auto`, `MM/DD/YYYY`, `DD/MM/YYYY`, `YYYY-MM-DD` |
 | `response_language` | string | `update` | Council/advisor response language (see `valid_response_languages` on `get`) |
-| `font_size` | string | `get`, `update` | Global UI text scale: `default` (110%), `large` (150%), or `xlarge` (200%) |
+| `font_size` | string | `get`, `update` | Global UI text scale: `default` (110%) or `large` (150%) |
 
 **`get` response includes:** `council_models`, `chairman_model`, temperatures, `execution_mode`, search settings, debate settings, `date_format`, `response_language`, `font_size`, `valid_response_languages`, title/query prompts, and `council_presets`.
 

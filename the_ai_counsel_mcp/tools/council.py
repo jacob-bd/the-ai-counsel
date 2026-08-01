@@ -192,7 +192,7 @@ def register(server, base_url: str) -> None:
                 if response_language is not None:
                     updates["response_language"] = response_language
                 if font_size is not None:
-                    valid_font_sizes = ("default", "large", "xlarge")
+                    valid_font_sizes = ("default", "large")
                     if font_size not in valid_font_sizes:
                         return f"Error: font_size must be one of: {', '.join(valid_font_sizes)}."
                     updates["font_size"] = font_size

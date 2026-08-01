@@ -1,7 +1,6 @@
 export const FONT_SIZE_OPTIONS = [
-  { value: 'default', label: 'Default (slightly larger)', scale: 1.1 },
+  { value: 'default', label: 'Default', scale: 1.1 },
   { value: 'large', label: 'Large', scale: 1.5 },
-  { value: 'xlarge', label: 'xLarge', scale: 2 },
 ];
 
 const FONT_SIZE_SCALES = Object.fromEntries(

@@ -51,7 +51,7 @@ The Settings panel opens automatically on first launch.
 3. Click **Test** (auto-saves on success)
 4. Go to **Council Config** → Select models for your council (saves automatically)
 
-> **Accessibility:** If the interface feels too small, open **Settings → General → Display Preferences** and choose **Large** or **xLarge**. The preference applies immediately to existing and future chats and saves automatically.
+> **Accessibility:** If the interface feels too small, open **Settings → General → Display Preferences** and choose **Large**. The preference applies immediately to existing and future chats and saves automatically.
 
 ### Option B: Use Ollama (Free & Local)
 1. Install [Ollama](https://ollama.com/)

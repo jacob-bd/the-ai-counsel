@@ -242,7 +242,7 @@ Some provider/model combinations only accept their default temperature. The app 
 - **Advisor Presets** — Save and load named advisor lineups (personas, model mode, optional rounds/web search) from Advisor Setup
 - **Abort Anytime** — Cancel in-progress requests
 - **Conversation History** — All conversations saved locally with search; sidebar cards show stacked date/time, compact run summaries (rounds, critique mode, personas, search), and cumulative cost per thread
-- **Accessible Typography** — Settings → General offers Default (110%), Large (150%), and xLarge (200%) text sizes across the UI, including existing chats
+- **Accessible Typography** — Settings → General offers Default (110%) and Large (150%) text sizes across the UI, including existing chats
 - **Customizable System Prompts** — Edit Stage 1, 2, and 3 prompts for Council mode
 - **Run Cost Reporting** — See total cost, input/output token split, call count, pricing confidence, and per-model breakdowns for council and advisor runs
 - **Rate Limit Warnings** — Alerts when your config may hit API limits

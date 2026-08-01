@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-01
+
 ### Added
-- Accessible font-size preference under Settings → General → Display Preferences. Default uses 110% of the previous baseline, Large uses 150%, and xLarge uses 200%; the choice applies to all UI text, including existing chats, and saves automatically.
+- Accessible font-size preference under Settings → General → Display Preferences. Default uses 110% of the previous baseline and Large uses 150%; the choice applies to all UI text, including existing chats, and saves automatically.
+
+### Changed
+- Removed the oversized xLarge option. Existing saved xLarge preferences safely fall back to Default.
 
 ## [0.11.0] - 2026-07-18
 ### Added

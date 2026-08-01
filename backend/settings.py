@@ -41,7 +41,7 @@ SETTINGS_FILE = Path(__file__).parent.parent / "data" / "settings.json"
 DEFAULT_COUNCIL_MODELS = ["", ""]
 DEFAULT_CHAIRMAN_MODEL = ""
 FONT_SIZE_DEFAULT = "default"
-VALID_FONT_SIZES = ("default", "large", "xlarge")
+VALID_FONT_SIZES = ("default", "large")
 
 # Default enabled providers
 DEFAULT_ENABLED_PROVIDERS = {

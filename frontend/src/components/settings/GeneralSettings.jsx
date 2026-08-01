@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatDatePart } from '../../utils/dateFormat';
+import { FONT_SIZE_OPTIONS } from '../../utils/fontSize';
 import { RESPONSE_LANGUAGE_DEFAULT, RESPONSE_LANGUAGES_FALLBACK } from '../../constants/responseLanguages';
 
 export { RESPONSE_LANGUAGE_DEFAULT };
@@ -61,9 +62,9 @@ export default function GeneralSettings({
             onChange={(e) => onFontSizeChange(e.target.value)}
             className="select-input general-setting-select"
           >
-            <option value="default">Default (slightly larger)</option>
-            <option value="large">Large</option>
-            <option value="xlarge">xLarge</option>
+            {FONT_SIZE_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </select>
           <span className="general-setting-hint">
             Scales all text across the application. Saves automatically.
