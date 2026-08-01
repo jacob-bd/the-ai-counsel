@@ -53,11 +53,11 @@ When bumping version, update **all three together** (see `AGENTS.md` → Version
 | File | Action |
 |------|--------|
 | `backend/prompts.py` | `VALID_RESPONSE_LANGUAGES`, `apply_response_language()` — injected before council/advisor/debate prompts; title/search query stay English |
-| `backend/settings.py` | `response_language` field; invalid values fall back to English on load/import |
-| `frontend/src/components/settings/GeneralSettings.jsx` | Date format, response language, relay-ai import (Settings → General) |
-| `skills/the-ai-counsel-api/SKILL.md` | GET keys `response_language`, `valid_response_languages`, `response_language_default` |
-| `AGENTS.md` | 8-section Settings list; General first; auto-save behavior |
-| `CHANGELOG.md` | User-facing General section and language list |
+| `backend/settings.py` | `response_language` and `font_size` fields; invalid display values fall back to safe defaults on load/import |
+| `frontend/src/components/settings/GeneralSettings.jsx` | Date format, accessible font size, response language, relay-ai import (Settings → General) |
+| `skills/the-ai-counsel-api/SKILL.md` | GET keys `font_size`, `response_language`, `valid_response_languages`, `response_language_default` |
+| `AGENTS.md` | 8-section Settings list; General first; auto-save behavior and font-size scale |
+| `CHANGELOG.md` | User-facing General section, accessibility preference, and language list |
 
 ### Council behavior (members, chairman, streaming, execution modes)
 

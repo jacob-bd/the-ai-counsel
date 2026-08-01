@@ -14,7 +14,7 @@ def register(server, base_url: str) -> None:
 
     @server.tool(description=(
         "Manage council configuration. action: 'get' (current config + presets), "
-        "'update' (members/chairman/temps/mode/prompts/search/debate/provider toggles), "
+        "'update' (members/chairman/temps/mode/prompts/search/debate/provider toggles/display), "
         "'list_presets', 'save_preset', 'delete_preset', 'set_default_preset'. "
         "save_preset requires preset_name + council_models; optional chairman_model, "
         "preset_id, is_default."
@@ -50,6 +50,7 @@ def register(server, base_url: str) -> None:
         convergence_threshold: int | None = None,
         date_format: str | None = None,
         response_language: str | None = None,
+        font_size: str | None = None,
     ) -> str:
         action = action.strip().lower()
         valid = ("get", "update", "list_presets", "save_preset", "delete_preset", "set_default_preset")
@@ -78,6 +79,7 @@ def register(server, base_url: str) -> None:
                         "convergence_threshold": settings.get("convergence_threshold"),
                         "date_format": settings.get("date_format"),
                         "response_language": settings.get("response_language"),
+                        "font_size": settings.get("font_size", "default"),
                         "valid_response_languages": settings.get("valid_response_languages", []),
                         "title_prompt": settings.get("title_prompt"),
                         "query_prompt": settings.get("query_prompt"),
@@ -189,6 +191,11 @@ def register(server, base_url: str) -> None:
                     updates["date_format"] = date_format
                 if response_language is not None:
                     updates["response_language"] = response_language
+                if font_size is not None:
+                    valid_font_sizes = ("default", "large", "xlarge")
+                    if font_size not in valid_font_sizes:
+                        return f"Error: font_size must be one of: {', '.join(valid_font_sizes)}."
+                    updates["font_size"] = font_size
 
                 if not updates:
                     return "Error: no update fields provided."

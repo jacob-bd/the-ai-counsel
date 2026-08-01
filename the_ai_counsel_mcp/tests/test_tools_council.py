@@ -102,6 +102,7 @@ async def test_get_council_config(server):
                 "search_result_count": 8,
                 "search_hybrid_mode": True,
                 "full_content_results": 3,
+                "font_size": "default",
                 "title_prompt": "Title prompt",
                 "query_prompt": "Query prompt",
             })
@@ -117,6 +118,7 @@ async def test_get_council_config(server):
         assert data["search_result_count"] == 8
         assert data["search_hybrid_mode"] is True
         assert data["full_content_results"] == 3
+        assert data["font_size"] == "default"
         assert data["title_prompt"] == "Title prompt"
         assert data["query_prompt"] == "Query prompt"
         assert "council_presets" in data
@@ -163,11 +165,13 @@ async def test_configure_council_success(server):
             "models": ["openai:gpt-4.1", "anthropic:claude-sonnet-4"],
             "chairman": "anthropic:claude-opus-4",
             "execution_mode": "full",
+            "font_size": "large",
         })
         data = get_json(result)
         assert data["status"] == "updated"
         assert "council_models" in data["fields"]
         assert "execution_mode" in data["fields"]
+        assert "font_size" in data["fields"]
 
 
 @pytest.mark.asyncio

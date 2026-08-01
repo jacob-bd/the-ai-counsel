@@ -540,6 +540,7 @@ Key fields returned:
 - `enabled_providers` — global provider toggles (`openrouter`, `ollama`, `groq`, `direct`, `custom`) — apply to all model pickers (Council, Advisors, Settings)
 - `direct_provider_toggles` — per-direct-provider toggles (also global)
 - `date_format` — display date format (`"auto"`, `"MM/DD/YYYY"`, `"DD/MM/YYYY"`, `"YYYY-MM-DD"`)
+- `font_size` — global UI text scale (`"default"` = 110%, `"large"` = 150%, `"xlarge"` = 200%); applies to existing and future chats
 - `response_language` — language for council/advisor model responses (default `"English"`)
 - `valid_response_languages` — read-only list of allowed `response_language` values (canonical source: `VALID_RESPONSE_LANGUAGES` in `backend/prompts.py`)
 - `response_language_default` — default language string (`"English"`)
@@ -568,6 +569,8 @@ All fields are optional — only provided fields are updated. Requires minimum 1
 - `"full"` — all 3 stages (individual → peer review → chairman synthesis)
 - `"chat_ranking"` — stages 1+2 (no chairman synthesis)
 - `"chat_only"` — stage 1 only (fastest, individual responses)
+
+**Accessibility display preference:** `font_size` accepts `default`, `large`, or `xlarge` and can be updated through `PUT /api/settings`. The setting is global to the UI and does not alter conversation data.
 
 **Temperature fields:**
 

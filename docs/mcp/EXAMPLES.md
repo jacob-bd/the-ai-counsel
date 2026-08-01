@@ -141,6 +141,18 @@ Response:
 
 Note: The AI picks the closest available model IDs. If a model you named is not configured (e.g., you have no Google API key), the AI will flag this and suggest alternatives from what is available.
 
+Accessibility preferences are also global settings. For example, an MCP client can increase UI text without changing any conversation data:
+
+```json
+{
+  "tool": "council_settings",
+  "input": {
+    "action": "update",
+    "font_size": "large"
+  }
+}
+```
+
 ---
 
 ## Example 3: Quick check with a single model
