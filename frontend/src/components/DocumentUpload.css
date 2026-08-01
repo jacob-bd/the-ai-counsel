@@ -21,7 +21,7 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
@@ -57,7 +57,7 @@
   padding: 0 8px;
   border-radius: 8px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .document-upload__chip {

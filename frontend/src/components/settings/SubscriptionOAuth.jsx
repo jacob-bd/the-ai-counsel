@@ -104,7 +104,7 @@ export default function SubscriptionOAuth({
   return (
     <div className="subsection" style={{ marginTop: '24px' }}>
       <h4>Subscription Logins</h4>
-      <p className="subsection-description" style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>
+      <p className="subsection-description" style={{ fontSize: 'calc(13px * var(--font-scale))', color: '#94a3b8', marginBottom: '16px' }}>
         Connect paid subscriptions via OAuth device login. These use your personal subscription
         through third-party tooling — not official API billing. Use at your own discretion.
       </p>

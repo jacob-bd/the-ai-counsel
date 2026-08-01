@@ -7,7 +7,7 @@
 .stage2 h4 {
   margin: 20px 0 8px 0;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 600;
   font-family: var(--font-ui);
 }
@@ -19,7 +19,7 @@
 .stage-description {
   margin: 0 0 12px 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -52,7 +52,7 @@
 .aggregate-rankings h4 {
   margin: 0 0 6px 0;
   color: var(--accent-stage2);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-family: var(--font-ui);
 }
 
@@ -69,7 +69,7 @@
   border: none;
   color: var(--text-secondary);
   padding: 6px 14px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   font-family: var(--font-ui);
   border-radius: 6px;
@@ -132,7 +132,7 @@
 .rank-position {
   color: var(--accent-stage2);
   font-weight: 700;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   min-width: 35px;
 }
 
@@ -150,27 +150,27 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .rank-model-name {
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 500;
 }
 
 .rank-score {
   color: #ffffff;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-family: var(--font-code);
   font-weight: 600;
 }
 
 .rank-count {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 /* Tabs (Copied from Stage 1 for consistency) */
@@ -189,7 +189,7 @@
   border-radius: 12px; /* Pill/Card shape instead of file tab */
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   transition: all 0.2s ease;
   display: flex;
@@ -210,7 +210,7 @@
 }
 
 .tab-icon {
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   width: 24px;
   height: 24px;
   display: flex;
@@ -252,7 +252,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale));
   box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
@@ -264,13 +264,13 @@
 
 .model-name-large {
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .model-provider-badge {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   padding: 1px 6px;
   border-radius: 4px;
   border: 1px solid;
@@ -281,7 +281,7 @@
 }
 
 .model-status {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 20px;
@@ -303,7 +303,7 @@
 .ranking-content {
   color: #dce6f2;
   line-height: 1.68;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-family: var(--font-content);
 }
 
@@ -316,7 +316,7 @@
 
 .parsed-ranking strong {
   color: var(--accent-stage2);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .parsed-ranking ol {
@@ -328,7 +328,7 @@
 .parsed-ranking li {
   margin: 4px 0;
   font-family: var(--font-code);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 /* Error States */
@@ -345,7 +345,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -363,7 +363,7 @@
 }
 
 .response-error .error-icon {
-  font-size: 24px;
+  font-size: calc(24px * var(--font-scale));
 }
 
 .error-title {
@@ -374,7 +374,7 @@
 
 .error-message {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-family: var(--font-code);
 }
 
@@ -389,7 +389,7 @@
 
 .info-icon {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: help;
   border: 1px solid var(--text-muted);
   border-radius: 50%;
@@ -418,7 +418,7 @@
   color: var(--text-primary);
   padding: 10px 14px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   width: 260px;
   text-align: left;
   z-index: 100;
@@ -503,7 +503,7 @@
 }
 
 .trophy-icon {
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale));
   filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6));
   animation: float 3s ease-in-out infinite;
 }
@@ -516,12 +516,12 @@
 /* ==================== MOBILE RESPONSIVE ==================== */
 @media (max-width: 768px) {
   .stage2 h4 {
-    font-size: 13px;
+    font-size: calc(13px * var(--font-scale));
     margin: 16px 0 6px 0;
   }
 
   .stage-description {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .aggregate-rankings {
@@ -530,7 +530,7 @@
   }
 
   .aggregate-rankings h4 {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
     margin-bottom: 10px;
   }
 
@@ -540,18 +540,18 @@
   }
 
   .rank-position {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
     min-width: 28px;
   }
 
   .mini-avatar {
     width: 20px;
     height: 20px;
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .rank-model-name {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .tabs {
@@ -560,13 +560,13 @@
 
   .tab {
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .tab-icon {
     width: 20px;
     height: 20px;
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .tab-content {
@@ -584,15 +584,15 @@
   .model-avatar {
     width: 32px;
     height: 32px;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale));
   }
 
   .model-name-large {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
   }
 
   .ranking-content {
-    font-size: 15px;
+    font-size: calc(15px * var(--font-scale));
     line-height: 1.65;
   }
 
@@ -601,7 +601,7 @@
   }
 
   .parsed-ranking li {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .response-error {
@@ -612,7 +612,7 @@
 
   .info-tooltip {
     width: 200px;
-    font-size: 11px;
+    font-size: calc(11px * var(--font-scale));
   }
 
   .rank-bar-container {
@@ -628,6 +628,6 @@
   }
 
   .trophy-icon {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale));
   }
 }

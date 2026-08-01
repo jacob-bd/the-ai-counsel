@@ -25,7 +25,7 @@
   padding: 10px 20px;
   border-radius: 12px;
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
@@ -38,11 +38,11 @@
 }
 
 .advisor-setup__recommended-icon {
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
 }
 
 .advisor-setup__recommended-hint {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: rgba(192, 132, 252, 0.7);
   font-weight: 500;
   padding-left: 4px;
@@ -94,7 +94,7 @@
 }
 
 .advisor-setup__chevron {
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   color: var(--text-muted);
   line-height: 1;
   transition: transform 0.25s ease;
@@ -133,7 +133,7 @@
 
 .advisor-setup__section-label {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -143,7 +143,7 @@
 /* ── Count Badge ── */
 .advisor-setup__count-badge {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 20px;
@@ -162,7 +162,7 @@
 /* ── Loading State ── */
 .advisor-setup__personas-loading {
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   color: var(--text-secondary);
   text-align: center;
   padding: 24px 0;
@@ -224,7 +224,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   cursor: pointer;
   opacity: 0.35;
   transition: opacity 0.15s, background 0.15s, border-color 0.15s;
@@ -248,7 +248,7 @@
   position: absolute;
   bottom: 8px;
   right: 8px;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: #fbbf24;
   line-height: 1;
 }
@@ -289,13 +289,13 @@
 }
 
 .advisor-setup__edit-emoji {
-  font-size: 28px;
+  font-size: calc(28px * var(--font-scale));
   line-height: 1;
 }
 
 .advisor-setup__edit-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-weight: 700;
   color: var(--text-primary);
   flex: 1;
@@ -305,7 +305,7 @@
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   cursor: pointer;
   padding: 4px;
   border-radius: 6px;
@@ -334,7 +334,7 @@
 
 .advisor-setup__edit-label {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -352,7 +352,7 @@
 }
 
 .advisor-setup__edit-emoji-input {
-  font-size: 20px !important;
+  font-size: calc(20px * var(--font-scale)) !important;
   text-align: center;
   letter-spacing: 0.1em;
 }
@@ -366,7 +366,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: calc(28px * var(--font-scale));
   flex-shrink: 0;
 }
 
@@ -378,7 +378,7 @@
   border-radius: 8px;
   color: var(--text-primary);
   font-family: var(--font-content);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1.55;
   padding: 10px 12px;
   resize: vertical;
@@ -417,7 +417,7 @@
   border-radius: 10px;
   border: 1px solid var(--border-glass);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
@@ -452,7 +452,7 @@
   background: transparent;
   border-color: rgba(251, 191, 36, 0.3);
   color: #fbbf24;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .advisor-setup__edit-btn--reset:hover:not(:disabled) {
@@ -460,21 +460,21 @@
 }
 
 .advisor-setup__persona-emoji {
-  font-size: 28px;
+  font-size: calc(28px * var(--font-scale));
   line-height: 1;
   margin-bottom: 4px;
   display: block;
 }
 
 .advisor-setup__persona-name {
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 700;
   color: var(--text-primary);
   display: block;
 }
 
 .advisor-setup__persona-role {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -483,7 +483,7 @@
 }
 
 .advisor-setup__persona-desc {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.5;
   display: block;
@@ -498,7 +498,7 @@
   height: 20px;
   border-radius: 50%;
   color: white;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -537,7 +537,7 @@
   padding: 9px 12px;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
@@ -550,7 +550,7 @@
 
 .advisor-setup__preset-btn-icon {
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .advisor-setup__preset-btn-label {
@@ -573,7 +573,7 @@
   border: none;
   color: #93c5fd;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   padding: 4px 0;
@@ -620,7 +620,7 @@
   padding: 8px 10px;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-align: left;
   cursor: pointer;
   min-width: 0;
@@ -636,7 +636,7 @@
 }
 
 .advisor-setup__preset-star {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   flex-shrink: 0;
 }
 
@@ -650,7 +650,7 @@
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   width: 26px;
   height: 26px;
   border-radius: 6px;
@@ -672,7 +672,7 @@
 
 .advisor-setup__preset-empty {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
   padding: 8px 10px;
 }
@@ -691,7 +691,7 @@
   padding: 8px 10px;
   color: #93c5fd;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -704,7 +704,7 @@
 .advisor-setup__model-summary {
   margin: 4px 0 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -712,7 +712,7 @@
 .advisor-setup__model-empty {
   margin: 4px 0 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: #fbbf24;
   line-height: 1.5;
 }
@@ -720,7 +720,7 @@
 .advisor-setup__preset-dirty {
   margin: 0;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: #fbbf24;
 }
 
@@ -729,7 +729,7 @@
   align-items: center;
   gap: 10px;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -754,7 +754,7 @@
 
 .advisor-setup__mode-tab {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   padding: 5px 14px;
   border-radius: 6px;
@@ -779,7 +779,7 @@
 
 .advisor-setup__model-label {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -791,7 +791,7 @@
   border-radius: 8px;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   padding: 9px 12px;
   width: 100%;
   cursor: pointer;
@@ -823,7 +823,7 @@
 
 .advisor-setup__model-advanced-empty {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-muted);
   text-align: center;
   padding: 16px 0;
@@ -846,7 +846,7 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   color: var(--text-primary);
   min-width: 140px;
@@ -869,7 +869,7 @@
 
 .advisor-setup__config-label {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -892,7 +892,7 @@
   background: transparent;
   border: none;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   font-weight: 400;
   width: 36px;
   height: 36px;
@@ -916,7 +916,7 @@
 
 .advisor-setup__stepper-value {
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   font-weight: 700;
   color: var(--text-primary);
   min-width: 32px;
@@ -958,7 +958,7 @@
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
@@ -976,7 +976,7 @@
 }
 
 .advisor-setup__search-chevron {
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   opacity: 0.6;
   transition: transform 0.15s;
 }
@@ -1009,7 +1009,7 @@
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -1034,7 +1034,7 @@
   border-radius: 10px;
   color: var(--text-primary);
   font-family: var(--font-content);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   line-height: 1.65;
   padding: 14px 16px;
   resize: vertical;
@@ -1068,7 +1068,7 @@
 
 .advisor-setup__question-hint {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   flex: 1;
   line-height: 1.4;
@@ -1081,7 +1081,7 @@
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 700;
   cursor: not-allowed;
   transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
@@ -1133,7 +1133,7 @@
 /* ── Validation Hint ── */
 .advisor-setup__hint {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
   text-align: center;
   margin: -12px 0 0;

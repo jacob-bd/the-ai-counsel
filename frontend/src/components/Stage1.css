@@ -14,7 +14,7 @@
   border-radius: 12px;
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   display: flex;
@@ -37,7 +37,7 @@
 }
 
 .tab-icon {
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   width: 28px;
   height: 28px;
   display: flex;
@@ -66,7 +66,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -102,7 +102,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale));
   box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
@@ -114,13 +114,13 @@
 
 .model-name-large {
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .model-provider-badge {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   padding: 1px 6px;
   border-radius: 4px;
   border: 1px solid; /* Color set inline */
@@ -131,7 +131,7 @@
 }
 
 .model-status {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 20px;
@@ -162,7 +162,7 @@
 }
 
 .error-icon {
-  font-size: 24px;
+  font-size: calc(24px * var(--font-scale));
 }
 
 .error-title {
@@ -173,7 +173,7 @@
 
 .error-message {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-family: var(--font-code);
 }
 
@@ -197,13 +197,13 @@
 
   .tab {
     padding: 10px 12px;
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .tab-icon {
     width: 24px;
     height: 24px;
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
   }
 
   .tab-content {
@@ -222,19 +222,19 @@
   .model-avatar {
     width: 32px;
     height: 32px;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale));
   }
 
   .model-name-large {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
   }
 
   .model-provider-badge {
-    font-size: 10px;
+    font-size: calc(10px * var(--font-scale));
   }
 
   .model-status {
-    font-size: 10px;
+    font-size: calc(10px * var(--font-scale));
     padding: 3px 8px;
   }
 
@@ -245,7 +245,7 @@
   }
 
   .error-message {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
     word-break: break-word;
   }
 }

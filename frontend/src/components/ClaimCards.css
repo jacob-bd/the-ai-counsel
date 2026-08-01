@@ -26,11 +26,11 @@
   gap: 10px;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   color: var(--text-primary);
 }
 
-.claim-summary-icon { font-size: 20px; }
+.claim-summary-icon { font-size: calc(20px * var(--font-scale)); }
 
 .claim-summary-stats {
   display: flex;
@@ -40,7 +40,7 @@
 
 .claim-stat {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -64,7 +64,7 @@
   border-radius: 12px;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   margin-bottom: 16px;
 }
 
@@ -75,7 +75,7 @@
   background: rgba(34, 197, 94, 0.2);
   color: var(--verdict-strong);
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,7 +89,7 @@
 
 .claim-section-label {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 700;
   color: var(--text-muted);
   margin-bottom: 10px;
@@ -165,17 +165,17 @@
 }
 
 .claim-id {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
   color: var(--text-muted);
   font-family: var(--font-code);
   min-width: 28px;
 }
 
-.claim-source { font-size: 11px; color: var(--text-muted); }
+.claim-source { font-size: calc(11px * var(--font-scale)); color: var(--text-muted); }
 
 .claim-source-tag {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   font-family: var(--font-code);
   margin-left: auto;
@@ -184,7 +184,7 @@
 
 .claim-verdict-badge {
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 3px 10px;
@@ -198,7 +198,7 @@
 
 .claim-agreement {
   font-family: var(--font-code);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -206,7 +206,7 @@
 /* --- Claim Text --- */
 .claim-text {
   font-family: var(--font-content);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   color: rgba(255, 255, 255, 0.8);
   margin: 0;
   line-height: 1.6;
@@ -228,13 +228,13 @@
   grid-template-columns: 100px 60px 1fr;
   align-items: baseline;
   gap: 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .ev-model {
   color: var(--text-muted);
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -243,7 +243,7 @@
 .ev-verdict {
   font-family: var(--font-code);
   font-weight: 700;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   text-transform: uppercase;
 }
 
@@ -254,7 +254,7 @@
 .ev-reason {
   color: var(--text-muted);
   font-family: var(--font-content);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.4;
 }
 
@@ -275,7 +275,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   transition: background 0.15s;
 }
 
@@ -284,7 +284,7 @@
 }
 
 .toggle-icon {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   width: 14px;
 }
@@ -294,14 +294,14 @@
   color: var(--verdict-strong);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-transform: none;
   letter-spacing: 0;
 }
 
 .claim-section-hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   opacity: 0.6;
 }
@@ -323,21 +323,21 @@
 
 .claim-source-label {
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .claim-source-model {
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
 }
 
 .claim-source-count {
   margin-left: auto;
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   opacity: 0.5;
 }
@@ -348,14 +348,14 @@
   align-items: baseline;
   gap: 10px;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-muted);
   border-left: 2px solid rgba(34, 197, 94, 0.2);
   margin-left: 6px;
 }
 
 .claim-card-compact .claim-id {
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   min-width: 26px;
   flex-shrink: 0;
 }
@@ -370,7 +370,7 @@
 
 .claim-compact-pct {
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: rgba(34, 197, 94, 0.5);
   flex-shrink: 0;
 }
@@ -395,11 +395,11 @@
   margin-bottom: 20px;
 }
 
-.claim-evolution-icon { font-size: 22px; }
+.claim-evolution-icon { font-size: calc(22px * var(--font-scale)); }
 
 .claim-evolution-title {
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: calc(17px * var(--font-scale));
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -420,7 +420,7 @@
 
 .evolution-round-badge {
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 700;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.05);
@@ -432,7 +432,7 @@
 
 .evolution-round-stats {
   font-family: var(--font-code);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -450,7 +450,7 @@
   align-items: center;
   padding: 0 14px;
   font-family: var(--font-code);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   white-space: nowrap;
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
@@ -469,7 +469,7 @@
 .evolution-arrow {
   text-align: center;
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   padding: 6px 0;
   opacity: 0.3;
 }
@@ -483,7 +483,7 @@
 
 .evolution-contested-label {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 700;
   color: var(--verdict-flawed);
   margin-bottom: 12px;
@@ -501,19 +501,19 @@
   border: 1px solid rgba(239, 68, 68, 0.08);
   border-radius: 10px;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .evolution-claim-id {
   font-family: var(--font-code);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
   color: var(--text-muted);
 }
 
 .evolution-claim-round {
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.05);
   padding: 2px 7px;
@@ -523,7 +523,7 @@
 
 .evolution-claim-verdict {
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 700;
   text-transform: uppercase;
   padding: 2px 8px;
@@ -564,13 +564,13 @@
 .claim-cards h4 {
   font-family: var(--font-display);
   margin: 0 0 4px 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   color: var(--text-primary);
 }
 
 .claim-cards-description {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--text-muted);
   margin: 0 0 14px 0;
 }

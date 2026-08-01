@@ -31,6 +31,7 @@
   --font-ui: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-content: 'IBM Plex Sans', 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-code: 'JetBrains Mono', monospace;
+  --font-scale: 1.1;
 
   /* Shadows & glow */
   --shadow-glass: 0 12px 40px rgba(0, 0, 0, 0.35);
@@ -41,6 +42,7 @@
 body {
   margin: 0;
   font-family: var(--font-ui);
+  font-size: calc(16px * var(--font-scale));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-darker);
@@ -102,7 +104,7 @@ body::after {
 /* Markdown Content Styling */
 .markdown-content {
   font-family: var(--font-content);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-weight: 400;
   line-height: 1.68;
   color: #dce6f2;
@@ -133,7 +135,7 @@ body::after {
   background: rgba(0, 0, 0, 0.3);
   padding: 0.2em 0.4em;
   border-radius: 4px;
-  font-size: 0.9em;
+  font-size: calc(0.9em * var(--font-scale));
   color: #f472b6; /* Pink-400 for inline code */
 }
 
@@ -150,7 +152,7 @@ body::after {
   background: transparent;
   padding: 0;
   color: inherit;
-  font-size: 0.85em;
+  font-size: calc(0.85em * var(--font-scale));
 }
 
 .markdown-content ul, .markdown-content ol {
@@ -173,7 +175,7 @@ body::after {
   width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-family: var(--font-ui);
   border-radius: 8px;
   overflow: hidden;
@@ -210,6 +212,23 @@ body::after {
 }
 
 /* Global Button Reset */
-button {
+button,
+input,
+textarea,
+select {
   font-family: var(--font-ui);
+  font-size: inherit;
+}
+
+/* Accessibility scaling applies to text, while icon glyphs retain their
+   existing geometry so larger text does not break compact controls. */
+[class*="icon"],
+[class*="emoji"],
+[class*="chevron"],
+[class*="arrow"],
+[class*="trophy"],
+[class*="star"],
+[class*="avatar"],
+.close-button {
+  --font-scale: 1;
 }

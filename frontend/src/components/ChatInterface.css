@@ -18,7 +18,7 @@
 
 .empty-state h1 {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(calc(2rem * var(--font-scale)), calc(4vw * var(--font-scale)), calc(3rem * var(--font-scale)));
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 16px 0;
@@ -33,14 +33,14 @@
 }
 
 .empty-state p {
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   color: var(--text-muted);
   margin: 0 0 32px 0;
   line-height: 1.6;
 }
 
 .created-by {
-  font-size: 14px !important;
+  font-size: calc(14px * var(--font-scale)) !important;
   color: var(--text-muted);
   margin: 8px 0 32px 0 !important;
   opacity: 0.7;
@@ -53,7 +53,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-muted);
   font-weight: 400;
   width: 100%;
@@ -87,7 +87,7 @@
 
 .hero-content h1 {
   font-family: var(--font-display);
-  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  font-size: clamp(calc(2.25rem * var(--font-scale)), calc(5vw * var(--font-scale)), calc(3.5rem * var(--font-scale)));
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 12px 0;
@@ -110,7 +110,7 @@
 }
 
 .hero-subtitle {
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   color: var(--text-secondary);
   font-weight: 500;
   margin: 0;
@@ -141,7 +141,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-muted);
   font-weight: 400;
   width: 100%;
@@ -203,7 +203,7 @@
 
 .message-role {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 8px;
@@ -215,7 +215,7 @@
 .message-content {
   padding: 24px;
   border-radius: 16px;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   line-height: 1.6;
   position: relative;
   overflow: hidden;
@@ -233,7 +233,7 @@
 
 .message.user .markdown-content {
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
 }
 
 .message-attachments {
@@ -254,7 +254,7 @@
   border: 1px solid rgba(59, 130, 246, 0.22);
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
 }
 
@@ -280,7 +280,7 @@
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 24px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .search-header {
@@ -303,7 +303,7 @@
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   gap: 12px;
 }
 
@@ -317,7 +317,7 @@
 .debate-config-bar__label,
 .debate-config-bar__converge {
   color: var(--text-muted, rgba(255, 255, 255, 0.4));
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .debate-config-bar__pill {
@@ -326,7 +326,7 @@
   border-radius: 10px;
   background: rgba(59, 130, 246, 0.12);
   color: #60a5fa;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 500;
 }
 
@@ -343,7 +343,7 @@
   background: transparent;
   color: #60a5fa;
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 500;
   padding: 0;
   white-space: nowrap;
@@ -385,7 +385,7 @@
   border: none;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   padding: 12px 0;
   min-height: 24px;
   max-height: 200px;
@@ -460,7 +460,7 @@
   opacity: 0.65;
   font-family: var(--font-ui);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   white-space: nowrap;
 }
 
@@ -478,7 +478,7 @@
 }
 
 .search-icon {
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   filter: grayscale(100%);
   opacity: 0.7;
   transition: all 0.2s;
@@ -491,7 +491,7 @@
 }
 
 .search-label {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   max-width: 90px;
   overflow: hidden;
@@ -526,7 +526,7 @@
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -544,7 +544,7 @@
 }
 
 .search-popover-option-icon {
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   width: 18px;
   text-align: center;
   flex-shrink: 0;
@@ -625,7 +625,7 @@
   border-radius: 12px;
   margin-bottom: 16px;
   color: #93c5fd;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 500;
 }
 
@@ -658,7 +658,7 @@
 
 .config-message {
   color: #fca5a5;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   padding: 12px 0;
   text-align: center;
   display: flex;
@@ -672,7 +672,7 @@
   background: none;
   border: none;
   color: #60a5fa;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   text-decoration: underline;
   cursor: pointer;
   padding: 0;
@@ -685,7 +685,7 @@
 
 .config-separator {
   color: #6b7280;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 /* Aborted Indicator */
@@ -701,13 +701,13 @@
 }
 
 .aborted-icon {
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   color: #fb923c;
 }
 
 .aborted-text {
   color: #fdba74;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-family: var(--font-ui);
 }
 
@@ -729,7 +729,7 @@
 
 .council-error-text {
   color: #fecaca;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1.5;
   font-family: var(--font-ui);
 }
@@ -780,7 +780,7 @@
   }
 
   .input-container input {
-    font-size: 16px; /* Prevent iOS zoom */
+    font-size: calc(16px * var(--font-scale)); /* Prevent iOS zoom */
     padding: 12px 16px;
   }
 
@@ -791,11 +791,11 @@
   }
 
   .hero-content h1 {
-    font-size: 2rem;
+    font-size: calc(2rem * var(--font-scale));
   }
 
   .hero-subtitle {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
   }
 
   /* Empty state adjustments */
@@ -805,7 +805,7 @@
   }
 
   .empty-state h1 {
-    font-size: 1.75rem;
+    font-size: calc(1.75rem * var(--font-scale));
   }
 
   /* Welcome grid container */
@@ -821,7 +821,7 @@
 
   /* Message role header */
   .message-role {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   /* User message */
@@ -833,7 +833,7 @@
 /* Very small screens */
 @media (max-width: 480px) {
   .hero-content h1 {
-    font-size: 1.5rem;
+    font-size: calc(1.5rem * var(--font-scale));
   }
 
   .input-container input {
@@ -863,7 +863,7 @@
 
 /* Conversation mode icon in sidebar */
 .conv-mode-icon {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   margin-right: 4px;
   opacity: 0.7;
   flex-shrink: 0;
@@ -877,7 +877,7 @@
   justify-content: center;
   padding: 16px 36px;
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   font-weight: 600;
   color: #ffffff;
   background: linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%);
@@ -923,7 +923,7 @@
 
 .start-session-btn--secondary {
   padding: 10px 22px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 500;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -972,7 +972,7 @@
 }
 
 .btn-icon {
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   display: inline-block;
   animation: float-sparkle 2s ease-in-out infinite;
 }
@@ -991,7 +991,7 @@
 
 /* Debate Mode visual pill in chat headers */
 .debate-mode-pill {
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;

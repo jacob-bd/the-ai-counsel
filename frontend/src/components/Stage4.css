@@ -13,12 +13,12 @@
 }
 
 .stage-4 .stage-title .stage-icon {
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
 }
 
 .stage-4-description {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-muted);
   margin-bottom: 20px;
   line-height: 1.5;
@@ -57,7 +57,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale));
   flex-shrink: 0;
 }
 
@@ -70,7 +70,7 @@
 .corrected-draft-role {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   color: var(--accent-stage4);
   display: flex;
   align-items: center;
@@ -79,13 +79,13 @@
 
 .corrected-draft-model {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--text-secondary);
 }
 
 .corrected-draft-provider-badge {
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -93,7 +93,7 @@
 
 .corrected-draft-text {
   font-family: var(--font-content);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   line-height: 1.75;
 }
 
@@ -102,7 +102,7 @@
 .corrected-draft-text .new-badge {
   display: inline;
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 2px 8px;

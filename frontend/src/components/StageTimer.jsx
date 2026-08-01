@@ -30,7 +30,7 @@ export default function StageTimer({ startTime, endTime, label = "Elapsed" }) {
     return (
         <span className="stage-timer" style={{
             marginLeft: '10px',
-            fontSize: '12px',
+            fontSize: 'calc(12px * var(--font-scale))',
             color: '#666',
             fontFamily: 'monospace'
         }}>

@@ -32,7 +32,7 @@
 
 .sidebar-title {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale));
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
@@ -40,7 +40,7 @@
 
 .sidebar-subtitle {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 400;
   color: #ffffff;
   opacity: 0.9;
@@ -48,7 +48,7 @@
 
 .sidebar-version {
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 500;
   color: var(--accent-primary);
   opacity: 1;
@@ -74,7 +74,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   transition: all 0.2s;
 }
 
@@ -112,7 +112,7 @@
   padding: 9px 14px;
   border-radius: 10px;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
@@ -167,7 +167,7 @@
 }
 
 .btn-icon {
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1;
 }
 
@@ -189,7 +189,7 @@
   border-radius: 8px;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
 }
@@ -214,7 +214,7 @@
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   line-height: 1;
   border-radius: 4px;
   transition: color 0.2s, background 0.2s;
@@ -271,11 +271,11 @@
   text-align: center;
   color: var(--text-muted);
   padding: 40px 20px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .conversation-title {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   color: #e2e8f0;
   margin-bottom: 4px;
@@ -302,7 +302,7 @@
 }
 
 .conversation-run-summary {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   margin: 0 0 6px 0;
   line-height: 1.35;
@@ -310,7 +310,7 @@
 
 .conv-mode-tag {
   font-family: var(--font-code);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 1px 5px;
@@ -335,7 +335,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-muted);
   min-height: 24px;
 }
@@ -355,14 +355,14 @@
 }
 
 .conversation-timestamp__time {
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   opacity: 0.85;
 }
 
 .conversation-cost-pill {
   flex-shrink: 0;
   font-family: var(--font-code);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 700;
   line-height: 1;
   padding: 3px 6px;
@@ -404,7 +404,7 @@
   padding: 4px 6px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: bold;
   transition: all 0.2s;
 }
@@ -433,7 +433,7 @@
   border: 1px solid rgba(239, 68, 68, 0.4);
   color: #f87171;
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   height: 22px;
   border-radius: 6px;
@@ -464,7 +464,7 @@
   border: 1px solid var(--border-glass);
   border-radius: 8px;
   color: var(--text-primary);
-  font-size: 24px;
+  font-size: calc(24px * var(--font-scale));
   line-height: 1;
   cursor: pointer;
   align-items: center;

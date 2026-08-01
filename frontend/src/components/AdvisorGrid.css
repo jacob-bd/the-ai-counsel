@@ -11,7 +11,7 @@
 
 .advisor-round-indicator {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -94,7 +94,7 @@
 }
 
 .advisor-emoji {
-  font-size: 26px;
+  font-size: calc(26px * var(--font-scale));
   line-height: 1;
   z-index: 2;
   position: relative;
@@ -135,7 +135,7 @@
   background: #10b981;
   color: white;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,7 +159,7 @@
 
 .advisor-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -170,14 +170,14 @@
 
 .advisor-role {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--text-secondary);
   font-weight: 500;
 }
 
 .advisor-model {
   font-family: var(--font-code);
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--font-scale));
   color: var(--text-muted);
   margin-top: 1px;
 }
@@ -201,19 +201,19 @@
   }
 
   .advisor-emoji {
-    font-size: 22px;
+    font-size: calc(22px * var(--font-scale));
   }
 
   .advisor-name {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .advisor-role {
-    font-size: 10px;
+    font-size: calc(10px * var(--font-scale));
   }
 
   .advisor-model {
-    font-size: 8.5px;
+    font-size: calc(8.5px * var(--font-scale));
   }
 }
 

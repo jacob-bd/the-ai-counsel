@@ -147,7 +147,7 @@ export default function SearchSettings({
                                     target="_blank" 
                                     rel="noopener noreferrer"
                                     className="api-key-link"
-                                    style={{ marginTop: '8px', display: 'inline-block', fontSize: '12px', color: '#60a5fa' }}
+                                    style={{ marginTop: '8px', display: 'inline-block', fontSize: 'calc(12px * var(--font-scale))', color: '#60a5fa' }}
                                 >
                                     Get API key at serper.dev →
                                 </a>
@@ -280,7 +280,7 @@ export default function SearchSettings({
                                         {tinyfishTestResult.success ? '✓' : '✗'} {tinyfishTestResult.message}
                                     </div>
                                 )}
-                                <div className="rate-limit-notice" style={{ marginTop: '8px', fontSize: '12px', color: '#94a3b8' }}>
+                                <div className="rate-limit-notice" style={{ marginTop: '8px', fontSize: 'calc(12px * var(--font-scale))', color: '#94a3b8' }}>
                                     ⚠ Free tier: 5 searches/min. Upgrade at <a href="https://agent.tinyfish.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>agent.tinyfish.ai</a> for higher limits.
                                 </div>
                                 <a
@@ -288,7 +288,7 @@ export default function SearchSettings({
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="api-key-link"
-                                    style={{ marginTop: '8px', display: 'inline-block', fontSize: '12px', color: '#60a5fa' }}
+                                    style={{ marginTop: '8px', display: 'inline-block', fontSize: 'calc(12px * var(--font-scale))', color: '#60a5fa' }}
                                 >
                                     Get free API key at agent.tinyfish.ai →
                                 </a>
@@ -324,7 +324,7 @@ export default function SearchSettings({
                     <p className="setting-description">
                         DuckDuckGo includes built-in intelligent query processing that automatically:
                     </p>
-                    <ul className="feature-list" style={{ margin: '8px 0 12px 20px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                    <ul className="feature-list" style={{ margin: '8px 0 12px 20px', fontSize: 'calc(12px * var(--font-scale))', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
                         <li>Removes conversational fluff from your prompts</li>
                         <li>Detects query intent (news, factual, comparison)</li>
                         <li>Adds temporal context for current events</li>
@@ -371,7 +371,7 @@ export default function SearchSettings({
                 <p className="setting-description">
                     Choose how your prompt is sent to the search engine.
                     {selectedSearchProvider === 'duckduckgo' && (
-                        <span style={{ display: 'block', marginTop: '4px', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+                        <span style={{ display: 'block', marginTop: '4px', color: 'var(--text-tertiary)', fontSize: 'calc(12px * var(--font-scale))' }}>
                             ℹ️ DuckDuckGo uses built-in query optimization. Direct mode is recommended.
                         </span>
                     )}

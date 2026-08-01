@@ -130,7 +130,7 @@ export default function SearchableModelSelect({
     groupHeading: (base) => ({
       ...base,
       color: '#94a3b8',
-      fontSize: '11px',
+      fontSize: 'calc(11px * var(--font-scale))',
       fontWeight: '600',
       textTransform: 'uppercase',
       letterSpacing: '0.5px',
@@ -148,7 +148,7 @@ export default function SearchableModelSelect({
       padding: '8px 12px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '13px',
+      fontSize: 'calc(13px * var(--font-scale))',
       '&:active': {
         backgroundColor: 'rgba(59, 130, 246, 0.4)',
       },
@@ -156,7 +156,7 @@ export default function SearchableModelSelect({
     singleValue: (base) => ({
       ...base,
       color: '#e2e8f0',
-      fontSize: '13px',
+      fontSize: 'calc(13px * var(--font-scale))',
     }),
     input: (base) => ({
       ...base,
@@ -165,7 +165,7 @@ export default function SearchableModelSelect({
     placeholder: (base) => ({
       ...base,
       color: '#64748b',
-      fontSize: '13px',
+      fontSize: 'calc(13px * var(--font-scale))',
     }),
     indicatorSeparator: () => ({
       display: 'none',
@@ -189,7 +189,7 @@ export default function SearchableModelSelect({
     noOptionsMessage: (base) => ({
       ...base,
       color: '#64748b',
-      fontSize: '13px',
+      fontSize: 'calc(13px * var(--font-scale))',
     }),
     loadingMessage: (base) => ({
       ...base,

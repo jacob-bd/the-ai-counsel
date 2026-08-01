@@ -19,7 +19,7 @@
 .heatmap-title {
   margin: 0 0 6px 0 !important;
   color: var(--accent-stage2);
-  font-size: 16px !important;
+  font-size: calc(16px * var(--font-scale)) !important;
   font-weight: 600;
   font-family: var(--font-ui);
   letter-spacing: -0.01em;
@@ -28,7 +28,7 @@
 .heatmap-description {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -64,7 +64,7 @@
   border-spacing: 0;
   min-width: 100%;
   width: max-content;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-family: var(--font-ui);
 }
 
@@ -76,7 +76,7 @@
   max-width: 220px;
   background: rgba(15, 23, 42, 0.6);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 500;
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -90,7 +90,7 @@
   background: rgba(15, 23, 42, 0.5);
   color: var(--text-primary);
   font-weight: 500;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   text-align: center;
@@ -107,7 +107,7 @@
   background: rgba(15, 23, 42, 0.5);
   color: var(--text-primary);
   font-weight: 500;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
@@ -120,7 +120,7 @@
   padding: 10px 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   min-width: 150px;
   max-width: 150px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -173,7 +173,7 @@
   display: inline-block;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   letter-spacing: 0.02em;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -242,7 +242,7 @@
   color: var(--accent-primary);
   font-family: var(--font-code);
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   border-top: 2px solid rgba(255, 255, 255, 0.15);
 }
 

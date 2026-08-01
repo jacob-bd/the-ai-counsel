@@ -11,7 +11,7 @@
     color: rgba(255, 255, 255, 0.7);
     padding: 4px 10px;
     border-radius: 6px;
-    font-size: 0.8rem;
+    font-size: calc(0.8rem * var(--font-scale));
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -33,7 +33,7 @@
 }
 
 .copy-button .icon {
-    font-size: 0.9em;
+    font-size: calc(0.9em * var(--font-scale));
 }
 
 /* Ensure model-header in Stage 1 & 2 handles the actions container */

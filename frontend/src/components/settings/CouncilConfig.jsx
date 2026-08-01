@@ -74,7 +74,7 @@ export default function CouncilConfig({
                 <p className="section-description">
                     Toggle which providers are available across all model pickers — Council members, Chairman, and Advisor debates.
                     Disabling a provider here hides its models everywhere.
-                    <br /><em style={{ opacity: 0.7, fontSize: '12px' }}>Note: Most non-chat models (embeddings, image generation, speech, OCR, etc.) are automatically filtered out, though some may still appear.</em>
+                    <br /><em style={{ opacity: 0.7, fontSize: 'calc(12px * var(--font-scale))' }}>Note: Most non-chat models (embeddings, image generation, speech, OCR, etc.) are automatically filtered out, though some may still appear.</em>
                 </p>
 
                 <div className="hybrid-settings-card">
@@ -200,7 +200,7 @@ export default function CouncilConfig({
                                     />
                                     <span className="slider"></span>
                                 </div>
-                                <span className="toggle-text" style={{ fontSize: '13px' }}>
+                                <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>
                                     OpenRouter
                                     {!isSourceConfigured('openrouter') && (
                                         <span className="toggle-hint"> · not configured</span>
@@ -228,7 +228,7 @@ export default function CouncilConfig({
                                     />
                                     <span className="slider"></span>
                                 </div>
-                                <span className="toggle-text" style={{ fontSize: '13px' }}>
+                                <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>
                                     Groq
                                     {!isSourceConfigured('groq') && (
                                         <span className="toggle-hint"> · not configured</span>
@@ -253,7 +253,7 @@ export default function CouncilConfig({
                                         />
                                         <span className="slider"></span>
                                     </div>
-                                    <span className="toggle-text" style={{ fontSize: '13px' }}>{settings?.custom_endpoint_name || customEndpointName || 'Custom Endpoint'}</span>
+                                    <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>{settings?.custom_endpoint_name || customEndpointName || 'Custom Endpoint'}</span>
                                 </label>
                             )}
                         </div>
@@ -284,7 +284,7 @@ export default function CouncilConfig({
                                             />
                                             <span className="slider"></span>
                                         </div>
-                                        <span className="toggle-text" style={{ fontSize: '13px' }}>
+                                        <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>
                                             {dp.name}
                                         </span>
                                     </label>
@@ -304,7 +304,7 @@ export default function CouncilConfig({
                 {/* Council Heat (Stage 1) */}
                 <div className="subsection">
                     <div className="heat-slider-header">
-                        <h4>Council Heat <span style={{ fontWeight: 400, fontSize: '12px', opacity: 0.5 }}>(Stage 1)</span></h4>
+                        <h4>Council Heat <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>(Stage 1)</span></h4>
                         <span className="heat-value">{councilTemperature.toFixed(1)}</span>
                     </div>
                     <div className="heat-slider-container">
@@ -331,7 +331,7 @@ export default function CouncilConfig({
                 {/* Peer Ranking Heat (Stage 2) */}
                 <div className="subsection" style={{ marginTop: '20px' }}>
                     <div className="heat-slider-header">
-                        <h4>Peer Ranking Heat <span style={{ fontWeight: 400, fontSize: '12px', opacity: 0.5 }}>(Stage 2)</span></h4>
+                        <h4>Peer Ranking Heat <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>(Stage 2)</span></h4>
                         <span className="heat-value">{stage2Temperature.toFixed(1)}</span>
                     </div>
                     <div className="heat-slider-container">
@@ -352,7 +352,7 @@ export default function CouncilConfig({
                 {/* Chairman Heat (Stage 3) */}
                 <div className="subsection" style={{ marginTop: '20px' }}>
                     <div className="heat-slider-header">
-                        <h4>Chairman Heat <span style={{ fontWeight: 400, fontSize: '12px', opacity: 0.5 }}>(Stage 3)</span></h4>
+                        <h4>Chairman Heat <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>(Stage 3)</span></h4>
                         <span className="heat-value">{chairmanTemperature.toFixed(1)}</span>
                     </div>
                     <div className="heat-slider-container">

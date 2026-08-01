@@ -428,7 +428,7 @@ export default function ProviderSettings({
                     <img src={opencodeIcon} alt="" className="provider-icon" style={{ verticalAlign: 'middle', marginRight: '6px' }} />
                     OpenCode (Zen + Go)
                 </h4>
-                <p className="subsection-description" style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>
+                <p className="subsection-description" style={{ fontSize: 'calc(13px * var(--font-scale))', color: '#94a3b8', marginBottom: '16px' }}>
                     One OpenCode API key unlocks <strong>Zen</strong> (curated, per-token) and <strong>Go</strong> (subscription).
                     v1 supports OpenAI-compatible chat/completions models only — GPT Responses, Claude Messages, and per-model
                     Gemini endpoints are not yet wired up.
@@ -481,7 +481,7 @@ export default function ProviderSettings({
             {/* Custom OpenAI-compatible Endpoint */}
             <div className="subsection" style={{ marginTop: '24px' }}>
                 <h4>Custom OpenAI-Compatible Endpoint</h4>
-                <p className="subsection-description" style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>
+                <p className="subsection-description" style={{ fontSize: 'calc(13px * var(--font-scale))', color: '#94a3b8', marginBottom: '16px' }}>
                     Connect to any OpenAI-compatible API (Together AI, Fireworks, vLLM, LM Studio, etc.)
                 </p>
                 <form className="api-key-section" onSubmit={e => e.preventDefault()}>

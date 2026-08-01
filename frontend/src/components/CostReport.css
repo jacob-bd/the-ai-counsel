@@ -18,7 +18,7 @@
 
 .cost-report__eyebrow {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -28,7 +28,7 @@
 .cost-report__total {
   margin-top: 2px;
   font-family: var(--font-code);
-  font-size: 24px;
+  font-size: calc(24px * var(--font-scale));
   font-weight: 800;
   color: #e0f2fe;
 }
@@ -41,7 +41,7 @@
   flex-wrap: wrap;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .cost-report__metrics span {
@@ -78,7 +78,7 @@
   cursor: pointer;
   color: var(--accent-stage1);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
 }
 
@@ -97,7 +97,7 @@
   padding: 9px 11px;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   background: rgba(2, 6, 23, 0.18);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -108,7 +108,7 @@
 
 .cost-report__row--head {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -130,7 +130,7 @@
 
 .cost-report__tokens small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -139,7 +139,7 @@
   justify-self: start;
   padding: 2px 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
