@@ -40,6 +40,8 @@ SETTINGS_FILE = Path(__file__).parent.parent / "data" / "settings.json"
 # Default models (matches original llm-council defaults)
 DEFAULT_COUNCIL_MODELS = ["", ""]
 DEFAULT_CHAIRMAN_MODEL = ""
+FONT_SIZE_DEFAULT = "default"
+VALID_FONT_SIZES = ("default", "large", "xlarge")
 
 # Default enabled providers
 DEFAULT_ENABLED_PROVIDERS = {
@@ -175,6 +177,7 @@ class Settings(BaseModel):
     # Display Preferences
     date_format: str = "auto"  # "auto", "MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"
     response_language: str = RESPONSE_LANGUAGE_DEFAULT
+    font_size: str = FONT_SIZE_DEFAULT
 
     # Execution Mode
     execution_mode: str = "full"  # Default execution mode: 'chat_only', 'chat_ranking', 'full'
@@ -364,6 +367,8 @@ def _normalize_display_preferences(data: dict) -> dict:
         normalized["response_language"] = RESPONSE_LANGUAGE_DEFAULT
     if normalized.get("date_format") not in VALID_DATE_FORMATS:
         normalized["date_format"] = "auto"
+    if normalized.get("font_size") not in VALID_FONT_SIZES:
+        normalized["font_size"] = FONT_SIZE_DEFAULT
     return normalized
 
 

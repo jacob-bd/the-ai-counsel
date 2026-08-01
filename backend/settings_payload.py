@@ -112,6 +112,7 @@ def build_settings_response(settings=None) -> Dict[str, Any]:
         ],
         "date_format": settings.date_format,
         "response_language": settings.response_language,
+        "font_size": settings.font_size,
         "valid_response_languages": list(VALID_RESPONSE_LANGUAGES),
         "response_language_default": RESPONSE_LANGUAGE_DEFAULT,
         "critique_mode": settings.critique_mode,

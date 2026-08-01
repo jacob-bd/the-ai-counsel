@@ -23,7 +23,16 @@ from .config import get_chairman_model, get_council_models
 from .costs import build_advisor_cost_report, build_council_cost_report, build_iterative_debate_cost_report
 from .model_preflight import build_preflight_error_message, preflight_models
 from .search import perform_web_search, SearchProvider
-from .settings import get_settings, save_settings, update_settings, Settings, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, PROMPT_DEFAULTS
+from .settings import (
+    get_settings,
+    save_settings,
+    update_settings,
+    Settings,
+    DEFAULT_COUNCIL_MODELS,
+    DEFAULT_CHAIRMAN_MODEL,
+    PROMPT_DEFAULTS,
+    VALID_FONT_SIZES,
+)
 from .settings_payload import apply_admin_import, build_admin_export, build_settings_response
 from .credentials import (
     apply_settings_secret_updates,
@@ -1568,6 +1577,7 @@ class UpdateSettingsRequest(BaseModel):
     # Display Preferences
     date_format: Optional[str] = None
     response_language: Optional[str] = None
+    font_size: Optional[str] = None
 
     # Execution Mode
     execution_mode: Optional[str] = None
@@ -1842,6 +1852,14 @@ async def update_app_settings(request: UpdateSettingsRequest):
                 detail=f"Invalid response_language. Must be one of: {VALID_RESPONSE_LANGUAGES}",
             )
         updates["response_language"] = request.response_language
+
+    if request.font_size is not None:
+        if request.font_size not in VALID_FONT_SIZES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid font_size. Must be one of: {list(VALID_FONT_SIZES)}",
+            )
+        updates["font_size"] = request.font_size
 
     if request.execution_mode is not None:
         _validate_execution_mode(request.execution_mode)
