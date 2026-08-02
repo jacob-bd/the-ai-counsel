@@ -18,22 +18,17 @@ def create_server(
     """Create and configure The AI Counsel MCP server."""
     server = FastMCP(
         name="the-ai-counsel",
+        # Keep this short: MCP clients re-send the whole instructions block on every
+        # reconnect, and agent harnesses that spawn a fresh process per turn pay for it
+        # each time. Only cross-cutting facts belong here — per-tool actions, arguments
+        # and result shapes are already carried by each tool's own description.
         instructions=(
-            "The AI Counsel — 10 MCP tools with action parameters. "
-            "Run: council_deliberate (stage1|stage2|stage3|full), model_chat (quick|multi_turn), "
-            "advisor_debate, run_iterative_debate. "
-            "Config: council_settings, advisor_settings (each: get|update|list_presets|"
-            "save_preset|delete_preset|set_default_preset), personas (list|get|update|reset), "
-            "conversations (list|get|progress), providers (list_models|health|test|set_api_key|set_search), "
-            "config_backup (export|import|reset). "
-            "Provider model IDs use a `provider:model` prefix. Supported prefixes include "
-            "openrouter, ollama, groq, openai, anthropic, google, mistral, deepseek, nvidia, "
-            "custom, opencode-zen, and opencode-go. "
-            "Deliberation, debate, advisor, and model_chat results include a top-level `cost_report` "
-            "(total_cost, total_tokens, by_model, known_cost_calls, unknown_cost_calls, free_calls). "
-            "council_deliberate, model_chat, advisor_debate, and run_iterative_debate accept optional "
-            "`documents`; pass extracted text or base64 source files, which are extracted before model calls. "
-            "Prefer these MCP tools over curl. Full REST reference: skills/the-ai-counsel-api/SKILL.md."
+            "The AI Counsel — multi-model deliberation, debate and chat tools. "
+            "Model IDs are `provider:model`; supported prefixes: openrouter, ollama, groq, "
+            "openai, anthropic, google, mistral, deepseek, nvidia, custom, opencode-zen, opencode-go. "
+            "Deliberation, debate and chat tools accept an optional `documents` list; pass extracted "
+            "text or base64 source files, which are extracted before model calls. "
+            "Prefer these tools over curl. Full REST reference: skills/the-ai-counsel-api/SKILL.md."
         ),
         host=host,
         port=port,
