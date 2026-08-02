@@ -2,6 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
+from . import __version__
 from .tools import advisors as advisors_tools
 from .tools import config_backup as config_backup_tools
 from .tools import conversations as conversations_tools
@@ -33,6 +34,9 @@ def create_server(
         host=host,
         port=port,
     )
+    # FastMCP 1.27 exposes the protocol version on its underlying Server rather
+    # than accepting it as a constructor argument.
+    server._mcp_server.version = __version__
 
     server.base_url = base_url  # type: ignore[attr-defined]
 

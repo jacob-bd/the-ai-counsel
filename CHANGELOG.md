@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-08-02
+
 ### Changed
 - Trimmed the MCP server `instructions` block from ~1,130 to ~475 characters. Clients re-send the whole block on every reconnect, and agent harnesses that spawn a fresh CLI process per turn pay that cost on each turn. The removed per-tool roster duplicated the action lists each tool's own description already carries; the cross-cutting facts (`provider:model` prefixes, `documents` handling, REST reference) are kept.
+- Added a release version-consistency check covering backend metadata, MCP runtime metadata, frontend metadata, the sidebar, skill frontmatter, and the changelog release heading.
+- Made the MCP package version resolve from the canonical project metadata instead of maintaining a separate hardcoded value.
+
+### Fixed
+- MCP initialization now advertises The AI Counsel app version (`0.11.2`) instead of the Python MCP SDK version.
 
 ### Deployment
 - The shorter MCP `instructions` block only reaches clients after the backend process is restarted. Long-running self-hosted deployments serving `/mcp/sse` keep sending the old block until then — restart them as part of rolling out this release.

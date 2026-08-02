@@ -397,12 +397,16 @@ When bumping the version, **all** of the following files must be updated togethe
 |------|-------------------|
 | `CHANGELOG.md` | `## [x.y.z]` header at top |
 | `pyproject.toml` | `[project] version = "x.y.z"` |
+| `uv.lock` | `the-ai-counsel` package entry `version = "x.y.z"` |
+| `the_ai_counsel_mcp/__init__.py` | `__version__` must resolve from `pyproject.toml`; do not hardcode a second version |
 | `frontend/package.json` | top-level `"version": "x.y.z"` |
 | `frontend/package-lock.json` | root `"version"` and `packages[""].version` |
 | `frontend/src/components/Sidebar.jsx` | `<div className="sidebar-version">vX.Y.Z</div>` |
 | `skills/the-ai-counsel-api/SKILL.md` | YAML frontmatter `version: x.y.z` |
 
-Always update all version surfaces in the same commit. The CHANGELOG drives the canonical version; backend metadata, frontend metadata, UI, and skill must match.
+Always update all version surfaces in the same commit. `pyproject.toml` is the canonical version source; the MCP package reads it (or installed package metadata), while the changelog, frontend metadata, UI, and skill must match.
+
+Before committing a version bump, run `uv run python scripts/check_version_consistency.py`. The same consistency check is covered by `backend/tests/test_version_consistency.py` and must pass with the full test suite.
 
 **Full documentation sync** (settings fields, MCP tools, advisor/council flows): follow [`docs/DOC-SYNC.md`](docs/DOC-SYNC.md).
 
