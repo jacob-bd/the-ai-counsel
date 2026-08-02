@@ -19,6 +19,8 @@ Use **Council** for direct answers, creative prompts, factual questions, and "gi
 
 **MCP server (v0.10.0):** Built-in SSE at `http://localhost:8001/mcp/sse` (stdio: `python -m the_ai_counsel_mcp`). Exposes **10 action-based tools** (not 25). Verify via `GET /api/health` → `"mcp": {"tools": 10, "sse_url": "..."}`.
 
+**The server's connect message is minimal by design** — it does not list the tools. Use the roster below.
+
 **Default base URL (REST fallback only):** `http://localhost:8001`  
 **Remote server:** replace with `http://<server-ip>:8001`
 
