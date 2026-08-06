@@ -10,13 +10,12 @@
   overflow: hidden;
 }
 
-/* Animated gradient orbs */
+/* Static gradient orbs avoid continuous GPU compositing behind glass panels. */
 .landing-orb {
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
   pointer-events: none;
-  will-change: transform;
 }
 
 .landing-orb--blue {
@@ -25,7 +24,6 @@
   top: -15%;
   left: -10%;
   background: radial-gradient(ellipse, rgba(59, 130, 246, 0.18) 0%, transparent 70%);
-  animation: orb-drift-blue 18s ease-in-out infinite alternate;
 }
 
 .landing-orb--violet {
@@ -34,17 +32,6 @@
   bottom: -10%;
   right: -8%;
   background: radial-gradient(ellipse, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
-  animation: orb-drift-violet 22s ease-in-out infinite alternate;
-}
-
-@keyframes orb-drift-blue {
-  from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(60px, 40px) scale(1.08); }
-}
-
-@keyframes orb-drift-violet {
-  from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(-50px, -35px) scale(1.06); }
 }
 
 /* Subtle grid overlay */
