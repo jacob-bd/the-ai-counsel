@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-08
+
 ### Added
-- Backend and frontend listen ports can be set with `PORT_BACKEND` and `PORT_FRONTEND` in the root `.env`. Defaults stay **8001** and **5173**. `LLM_COUNCIL_BIND_PORT` still overrides the backend port when set. In Docker, leaving `BACKEND_HOST` empty uses the page origin so a runtime `PORT_BACKEND` change does not require rebuilding the image.
+- Backend and frontend listen ports can be set with `PORT_BACKEND` and `PORT_FRONTEND` in the root `.env`. Defaults stay **8001** and **5173**. `LLM_COUNCIL_BIND_PORT` still overrides the backend port when set. In Docker, leaving `BACKEND_HOST` empty uses the page origin so a runtime `PORT_BACKEND` change does not require rebuilding the image (PR [#26](https://github.com/jacob-bd/the-ai-counsel/pull/26)). Thanks [@nodeGarden](https://github.com/nodeGarden)!
+- Anthropic (and OpenCode) output token limits are configurable via `ANTHROPIC_MAX_TOKENS` / `OPENCODE_MAX_TOKENS`. The Anthropic default is now 32000 so reasoning models have room to think and still write an answer (PR [#27](https://github.com/jacob-bd/the-ai-counsel/pull/27)). Thanks [@nodeGarden](https://github.com/nodeGarden)!
+- Per-provider HTTP timeouts via `LLM_COUNCIL_REQUEST_TIMEOUT` and `{PROVIDER}_REQUEST_TIMEOUT` (default 180s). Timeout failures now name the limit and how to raise it instead of showing "Unknown error" (PR [#28](https://github.com/jacob-bd/the-ai-counsel/pull/28)). Thanks [@nodeGarden](https://github.com/nodeGarden)!
+
+### Fixed
+- Running the test suite no longer deletes saved API keys from the OS keyring or rewrites the developer's `data/settings.json` (PR [#24](https://github.com/jacob-bd/the-ai-counsel/pull/24)). Thanks [@nodeGarden](https://github.com/nodeGarden)!
+- Anthropic reasoning models no longer fail preflight with a bare `'text'` error when a thinking block arrives before the answer (PR [#25](https://github.com/jacob-bd/the-ai-counsel/pull/25)). Thanks [@nodeGarden](https://github.com/nodeGarden)!
+- Anthropic requests no longer exhaust a hardcoded 4096-token budget on thinking and return no visible answer (PR [#27](https://github.com/jacob-bd/the-ai-counsel/pull/27)). Thanks [@nodeGarden](https://github.com/nodeGarden)!
+
+### Thanks
+- Thanks to [@nodeGarden](https://github.com/nodeGarden) for contributing PRs [#24](https://github.com/jacob-bd/the-ai-counsel/pull/24), [#25](https://github.com/jacob-bd/the-ai-counsel/pull/25), [#26](https://github.com/jacob-bd/the-ai-counsel/pull/26), [#27](https://github.com/jacob-bd/the-ai-counsel/pull/27), and [#28](https://github.com/jacob-bd/the-ai-counsel/pull/28).
 
 ## [0.12.1] - 2026-09-04
 

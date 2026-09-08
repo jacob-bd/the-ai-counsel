@@ -1,6 +1,6 @@
 [project]
 name = "the-ai-counsel"
-version = "0.12.1"
+version = "0.13.0"
 description = "The AI Counsel — Collective AI Intelligence"
 readme = "README.md"
 requires-python = ">=3.10"
