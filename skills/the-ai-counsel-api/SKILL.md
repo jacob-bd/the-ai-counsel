@@ -21,7 +21,7 @@ Use **Council** for direct answers, creative prompts, factual questions, and "gi
 
 **The server's connect message is minimal by design** — it does not list the tools. Use the roster below.
 
-**Default base URL (REST fallback only):** `http://localhost:8001`  
+**Default base URL (REST fallback only):** `http://localhost:8001` (override with `PORT_BACKEND` / `LLM_COUNCIL_BIND_PORT`)  
 **Remote server:** replace with `http://<server-ip>:8001`
 
 ---
@@ -662,7 +662,9 @@ Security/admin environment variables:
 |----------|---------|---------|
 | `LLM_COUNCIL_ADMIN_TOKEN` | unset | Enables remote access to settings export/import/reset when callers send `Authorization: Bearer <token>`. If unset, these admin endpoints accept only direct loopback clients and reject proxied external clients. |
 | `LLM_COUNCIL_BIND_HOST` | `127.0.0.1` | Local dev launcher bind host for `python -m backend.main`. Set to `0.0.0.0` for intentional LAN access. |
-| `LLM_COUNCIL_BIND_PORT` | `8001` | Local dev launcher bind port for `python -m backend.main`. |
+| `LLM_COUNCIL_BIND_PORT` | `8001` | Legacy override for `PORT_BACKEND`; takes precedence when set. |
+| `PORT_BACKEND` | `8001` | Backend / MCP SSE listen port. Also used by Vite in local dev as the API port. |
+| `PORT_FRONTEND` | `5173` | Vite dev/preview server port. Not used by the Docker image, which serves the built UI from the backend port. |
 
 ---
 

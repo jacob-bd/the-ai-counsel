@@ -3,8 +3,10 @@ services:
     image: the-ai-counsel
     build: .
     ports:
-      - "${PORT:-8001}:8001"
+      - "${PORT_BACKEND:-8001}:${PORT_BACKEND:-8001}"
     environment:
+      # Port the backend listens on inside the container and publishes on the host.
+      PORT_BACKEND: "${PORT_BACKEND:-8001}"
       # Leave empty when serving frontend and API from this container.
       # Set to a full URL when the frontend is served elsewhere, for example:
       # BACKEND_HOST=https://api.example.com

@@ -3,7 +3,9 @@ FROM nikolaik/python-nodejs:python3.12-nodejs22-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    FRONTEND_DIST_DIR=/app/frontend/dist
+    FRONTEND_DIST_DIR=/app/frontend/dist \
+    PORT_BACKEND=8001 \
+    PORT_FRONTEND=5173
 
 RUN groupadd --system appgroup \
     && useradd --system --gid appgroup --no-create-home appuser \
@@ -27,7 +29,7 @@ RUN chown -R appuser:appgroup /app
 EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/health')" || exit 1
+    CMD python3 -c "import os, urllib.request; urllib.request.urlopen('http://localhost:%s/api/health' % os.getenv('PORT_BACKEND', '8001'))" || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["/app/.venv/bin/uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["/app/.venv/bin/uvicorn", "backend.main:app", "--host", "0.0.0.0"]

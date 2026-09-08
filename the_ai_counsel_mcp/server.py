@@ -3,6 +3,7 @@
 from mcp.server.fastmcp import FastMCP
 
 from . import __version__
+from .client import default_base_url
 from .tools import advisors as advisors_tools
 from .tools import config_backup as config_backup_tools
 from .tools import conversations as conversations_tools
@@ -12,11 +13,13 @@ from .tools import providers as providers_tools
 
 
 def create_server(
-    base_url: str = "http://localhost:8001",
+    base_url: str | None = None,
     host: str = "0.0.0.0",
     port: int = 8002,
 ) -> FastMCP:
     """Create and configure The AI Counsel MCP server."""
+    if base_url is None:
+        base_url = default_base_url()
     server = FastMCP(
         name="the-ai-counsel",
         # Keep this short: MCP clients re-send the whole instructions block on every

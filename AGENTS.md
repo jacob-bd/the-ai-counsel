@@ -42,9 +42,13 @@ LLM_COUNCIL_BIND_HOST=0.0.0.0 uv run python -m backend.main
 cd frontend && npm run dev -- --host
 ```
 
+**Port variables** (set in the root `.env`, see `.env.example`):
+- `PORT_BACKEND`: backend port, default `8001`. Read by the backend, Vite (local-dev API URL), `start.sh`, and Docker. Production/Docker uses the page origin when `BACKEND_HOST` is empty, so a runtime port change does not require rebuilding the frontend.
+- `PORT_FRONTEND`: Vite dev/preview server port, default `5173`.
+
 **Backend bind variables:**
 - `LLM_COUNCIL_BIND_HOST`: dev launcher bind host, default `127.0.0.1`. Use `0.0.0.0` only when you intentionally want LAN access.
-- `LLM_COUNCIL_BIND_PORT`: dev launcher bind port, default `8001`.
+- `LLM_COUNCIL_BIND_PORT`: legacy override for `PORT_BACKEND`; takes precedence when set.
 - `LLM_COUNCIL_ADMIN_TOKEN`: required for remote access to `/api/settings/export`, `/api/settings/import`, and `/api/settings/reset`. Without it, those admin endpoints only accept direct loopback clients and reject proxied external clients.
 
 **Installing Dependencies:**
@@ -188,7 +192,7 @@ useEffect(() => {
 
 ## Common Gotchas
 
-1. **Port Conflicts**: Backend uses 8001 (not 8000). Update `backend/main.py` and `frontend/src/api.js` together.
+1. **Port Conflicts**: Backend uses 8001, frontend 5173. Both come from `PORT_BACKEND` / `PORT_FRONTEND` in the root `.env` — change them there, not in source.
 
 2. **CORS Errors**: Frontend origins must match `main.py` CORS middleware (localhost:5173 and :3000).
 

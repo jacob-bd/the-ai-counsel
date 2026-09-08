@@ -23,6 +23,7 @@ backend/test_*.py
 backend/debug_*.py
 
 # Frontend
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/

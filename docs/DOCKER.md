@@ -81,13 +81,15 @@ Set these in a `.env` file in the project root, or inline in `docker-compose.yml
 
 | Variable | Default | Description |
 |---|---|---|
+| `PORT_BACKEND` | `8001` | Port the backend listens on, and the host port published by `docker-compose.yml`. |
+| `PORT_FRONTEND` | `5173` | Vite dev/preview server port. Not used by the container, which serves the built frontend from the backend port. |
 | `BACKEND_HOST` | *(empty)* | Full URL of the backend, e.g. `https://api.example.com`. Leave empty when frontend and API share the same domain/port. |
 | `FRONTEND_HOST` | *(empty)* | Comma-separated allowed CORS origins, e.g. `https://council.example.com`. Leave empty when serving both from the same origin. |
 | `LLM_COUNCIL_ADMIN_TOKEN` | *(empty)* | Required for remote access to settings export/import/reset. When unset, those admin endpoints only accept direct loopback clients and reject proxied external clients. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. **Must be changed when using Docker** — see below. |
 | `FRONTEND_DIST_DIR` | `/app/frontend/dist` | Path to the compiled frontend. Do not change unless you know what you're doing. |
 
-`LLM_COUNCIL_BIND_HOST` and `LLM_COUNCIL_BIND_PORT` apply only to the local `python -m backend.main` dev launcher. Docker starts uvicorn directly with `--host 0.0.0.0 --port 8001`, so use Docker port publishing or reverse proxy settings instead of those variables for container deployments.
+`PORT_BACKEND` sets the port uvicorn listens on in both the local `python -m backend.main` dev launcher and the container (the entrypoint passes it to uvicorn, and `docker-compose.yml` publishes the same port on the host). When `BACKEND_HOST` is empty, the UI calls the API on the same origin as the page, so changing `PORT_BACKEND` at runtime does not require rebuilding the image. `LLM_COUNCIL_BIND_HOST` controls the bind address for the dev launcher only; `LLM_COUNCIL_BIND_PORT` still works as a legacy override for `PORT_BACKEND`.
 
 ### Example `.env`
 

@@ -20,4 +20,14 @@ window.__AI_COUNSEL_CONFIG__ = {
 };
 EOF
 
+# Append the configured backend port to the uvicorn command. CMD omits --port so
+# that PORT_BACKEND (from .env or the compose environment) can drive it at runtime.
+case "$*" in
+  *uvicorn*)
+    if [ "${*#*--port}" = "$*" ]; then
+      set -- "$@" --port "${PORT_BACKEND:-8001}"
+    fi
+    ;;
+esac
+
 exec gosu appuser "$@"

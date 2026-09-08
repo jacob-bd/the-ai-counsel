@@ -2,30 +2,37 @@
 
 import argparse
 import asyncio
+import os
 
-from .server import create_server, run_stdio, run_sse
+from dotenv import load_dotenv
+
+from .server import create_server, default_base_url, run_stdio, run_sse
 
 
 def main():
+    # Pick up PORT_BACKEND from the repo .env when run standalone.
+    load_dotenv()
+    backend_base_url = default_base_url()
     parser = argparse.ArgumentParser(
         description="The AI Counsel MCP Server",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Examples:
   # Local backend, stdio transport (for Claude Code / Gemini CLI)
   python -m the_ai_counsel_mcp
 
   # Remote backend, stdio transport
-  python -m the_ai_counsel_mcp --base-url https://yourserver.com:8001
+  python -m the_ai_counsel_mcp --base-url https://yourserver.com:{os.getenv('PORT_BACKEND', '8001')}
 
-  # Standalone SSE transport fallback (Note: SSE is built into the main uvicorn app at /mcp/sse on port 8001!)
+  # Standalone SSE transport fallback (Note: SSE is built into the main uvicorn app
+  # at /mcp/sse on the backend port, {os.getenv('PORT_BACKEND', '8001')} by default!)
   python -m the_ai_counsel_mcp --transport sse --port 8002
         """,
     )
     parser.add_argument(
         "--base-url",
-        default="http://localhost:8001",
-        help="Base URL of The AI Counsel backend (default: http://localhost:8001)",
+        default=backend_base_url,
+        help=f"Base URL of The AI Counsel backend (default: {backend_base_url}, follows PORT_BACKEND)",
     )
     parser.add_argument(
         "--transport",

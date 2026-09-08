@@ -6,11 +6,14 @@ import respx
 
 from the_ai_counsel_mcp.client import CouncilClient
 
+# Mock against the client's own default so these tests follow PORT_BACKEND.
+BASE = CouncilClient().base_url
+
 
 @pytest.mark.asyncio
 async def test_health_check():
     with respx.mock:
-        respx.get("http://localhost:8001/api/health").mock(
+        respx.get(f"{BASE}/api/health").mock(
             return_value=httpx.Response(200, json={"status": "ok"})
         )
         async with CouncilClient() as client:
@@ -21,7 +24,7 @@ async def test_health_check():
 @pytest.mark.asyncio
 async def test_get_settings():
     with respx.mock:
-        respx.get("http://localhost:8001/api/settings").mock(
+        respx.get(f"{BASE}/api/settings").mock(
             return_value=httpx.Response(200, json={"council_models": ["openai:gpt-4.1"]})
         )
         async with CouncilClient() as client:
@@ -32,7 +35,7 @@ async def test_get_settings():
 @pytest.mark.asyncio
 async def test_update_settings():
     with respx.mock:
-        respx.put("http://localhost:8001/api/settings").mock(
+        respx.put(f"{BASE}/api/settings").mock(
             return_value=httpx.Response(200, json={"success": True})
         )
         async with CouncilClient() as client:
@@ -43,7 +46,7 @@ async def test_update_settings():
 @pytest.mark.asyncio
 async def test_list_conversations():
     with respx.mock:
-        respx.get("http://localhost:8001/api/conversations").mock(
+        respx.get(f"{BASE}/api/conversations").mock(
             return_value=httpx.Response(200, json=[{"id": "abc", "title": "Test"}])
         )
         async with CouncilClient() as client:
@@ -54,7 +57,7 @@ async def test_list_conversations():
 @pytest.mark.asyncio
 async def test_create_conversation():
     with respx.mock:
-        respx.post("http://localhost:8001/api/conversations").mock(
+        respx.post(f"{BASE}/api/conversations").mock(
             return_value=httpx.Response(201, json={"id": "new-id", "title": ""})
         )
         async with CouncilClient() as client:
@@ -65,7 +68,7 @@ async def test_create_conversation():
 @pytest.mark.asyncio
 async def test_ollama_models_returns_empty_on_error():
     with respx.mock:
-        respx.get("http://localhost:8001/api/ollama/tags").mock(
+        respx.get(f"{BASE}/api/ollama/tags").mock(
             side_effect=httpx.ConnectError("connection refused")
         )
         async with CouncilClient() as client:
@@ -82,7 +85,7 @@ async def test_stream_message_yields_events():
     )
     with respx.mock:
         respx.post(
-            "http://localhost:8001/api/conversations/conv-1/message/stream"
+            f"{BASE}/api/conversations/conv-1/message/stream"
         ).mock(
             return_value=httpx.Response(200, text=sse_body, headers={"content-type": "text/event-stream"})
         )
@@ -98,7 +101,7 @@ async def test_stream_message_yields_events():
 @pytest.mark.asyncio
 async def test_export_settings():
     with respx.mock:
-        respx.get("http://localhost:8001/api/settings/export").mock(
+        respx.get(f"{BASE}/api/settings/export").mock(
             return_value=httpx.Response(200, json={"council_models": ["openai:gpt-4.1"], "openai_api_key": "sk-test"})
         )
         async with CouncilClient() as client:
@@ -110,7 +113,7 @@ async def test_export_settings():
 @pytest.mark.asyncio
 async def test_import_settings():
     with respx.mock:
-        respx.post("http://localhost:8001/api/settings/import").mock(
+        respx.post(f"{BASE}/api/settings/import").mock(
             return_value=httpx.Response(200, json={"status": "imported"})
         )
         async with CouncilClient() as client:
@@ -121,7 +124,7 @@ async def test_import_settings():
 @pytest.mark.asyncio
 async def test_reset_settings():
     with respx.mock:
-        respx.post("http://localhost:8001/api/settings/reset").mock(
+        respx.post(f"{BASE}/api/settings/reset").mock(
             return_value=httpx.Response(200, json={"status": "reset"})
         )
         async with CouncilClient() as client:
@@ -142,7 +145,7 @@ PERSONAS = [
 @pytest.mark.asyncio
 async def test_get_personas_returns_list():
     with respx.mock:
-        respx.get("http://localhost:8001/api/personas").mock(
+        respx.get(f"{BASE}/api/personas").mock(
             return_value=httpx.Response(200, json=PERSONAS)
         )
         async with CouncilClient() as client:
@@ -155,7 +158,7 @@ async def test_get_personas_returns_list():
 @pytest.mark.asyncio
 async def test_get_personas_raises_on_error():
     with respx.mock:
-        respx.get("http://localhost:8001/api/personas").mock(
+        respx.get(f"{BASE}/api/personas").mock(
             return_value=httpx.Response(500)
         )
         with pytest.raises(httpx.HTTPStatusError):
@@ -167,7 +170,7 @@ async def test_get_personas_raises_on_error():
 async def test_update_persona_sends_patch():
     updated = {**PERSONAS[0], "name": "Super Skeptic", "is_customized": True}
     with respx.mock:
-        route = respx.patch("http://localhost:8001/api/personas/skeptic").mock(
+        route = respx.patch(f"{BASE}/api/personas/skeptic").mock(
             return_value=httpx.Response(200, json=updated)
         )
         async with CouncilClient() as client:
@@ -181,7 +184,7 @@ async def test_update_persona_sends_patch():
 @pytest.mark.asyncio
 async def test_update_persona_not_found_raises():
     with respx.mock:
-        respx.patch("http://localhost:8001/api/personas/ghost").mock(
+        respx.patch(f"{BASE}/api/personas/ghost").mock(
             return_value=httpx.Response(404)
         )
         with pytest.raises(httpx.HTTPStatusError):
@@ -193,7 +196,7 @@ async def test_update_persona_not_found_raises():
 async def test_reset_persona_sends_delete():
     restored = {**PERSONAS[0], "is_customized": False}
     with respx.mock:
-        route = respx.delete("http://localhost:8001/api/personas/skeptic/override").mock(
+        route = respx.delete(f"{BASE}/api/personas/skeptic/override").mock(
             return_value=httpx.Response(200, json=restored)
         )
         async with CouncilClient() as client:
@@ -205,7 +208,7 @@ async def test_reset_persona_sends_delete():
 @pytest.mark.asyncio
 async def test_reset_persona_not_found_raises():
     with respx.mock:
-        respx.delete("http://localhost:8001/api/personas/ghost/override").mock(
+        respx.delete(f"{BASE}/api/personas/ghost/override").mock(
             return_value=httpx.Response(404)
         )
         with pytest.raises(httpx.HTTPStatusError):
@@ -224,7 +227,7 @@ async def test_stream_debate_yields_events():
     sse_body = "".join(f"data: {json.dumps(e)}\n\n" for e in events_data)
 
     with respx.mock:
-        respx.post("http://localhost:8001/api/conversations/c1/debate/stream").mock(
+        respx.post(f"{BASE}/api/conversations/c1/debate/stream").mock(
             return_value=httpx.Response(200, text=sse_body, headers={"content-type": "text/event-stream"})
         )
         collected = []
@@ -242,7 +245,7 @@ async def test_stream_debate_sends_correct_payload():
     sse_body = "data: {\"type\": \"advisor_complete\", \"data\": {}}\n\n"
 
     with respx.mock:
-        route = respx.post("http://localhost:8001/api/conversations/c2/debate/stream").mock(
+        route = respx.post(f"{BASE}/api/conversations/c2/debate/stream").mock(
             return_value=httpx.Response(200, text=sse_body, headers={"content-type": "text/event-stream"})
         )
         async with CouncilClient() as client:
@@ -270,7 +273,7 @@ async def test_stream_debate_skips_invalid_json_lines():
         "data: {\"type\": \"advisor_debate_start\", \"data\": {}}\n\n"
     )
     with respx.mock:
-        respx.post("http://localhost:8001/api/conversations/c3/debate/stream").mock(
+        respx.post(f"{BASE}/api/conversations/c3/debate/stream").mock(
             return_value=httpx.Response(200, text=sse_body, headers={"content-type": "text/event-stream"})
         )
         collected = []

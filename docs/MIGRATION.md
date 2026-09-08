@@ -21,7 +21,7 @@ The AI Counsel is a rebrand and continuation of LLM Council Plus. All features, 
 **What did NOT change:**
 
 - **Data format** — `data/settings.json` and `data/conversations/*.json` are identical in schema. No migration script needed.
-- **Environment variables** — `LLM_COUNCIL_BIND_HOST`, `LLM_COUNCIL_BIND_PORT`, `LLM_COUNCIL_ADMIN_TOKEN` all work as before.
+- **Environment variables** — `LLM_COUNCIL_BIND_HOST`, `LLM_COUNCIL_BIND_PORT`, `LLM_COUNCIL_ADMIN_TOKEN` all work as before. Optional `PORT_BACKEND` / `PORT_FRONTEND` can override the listen ports; defaults stay 8001 / 5173.
 - **Port** — Backend still runs on `8001`.
 - **API surface** — All `/api/*` endpoints are unchanged. New endpoints were added (see CHANGELOG).
 
@@ -147,7 +147,7 @@ No. Copy the whole `data/` directory. Non-secret settings stay in `settings.json
 No. The settings schema is unchanged. The only thing that changes is the product name in the UI.
 
 **Q: Can I run both side by side?**
-Yes, as long as they use different ports. The new repo defaults to 8001 — if the old one is still running on 8001, either stop it first or change the port via `LLM_COUNCIL_BIND_PORT` or Docker port mapping.
+Yes, as long as they use different ports. The new repo defaults to 8001 — if the old one is still running on 8001, either stop it first or change the port via `PORT_BACKEND`, `LLM_COUNCIL_BIND_PORT`, or Docker port mapping.
 
 **Q: What about the old repo?**
 The `jacob-bd/llm-council-plus` repo will remain available with a notice pointing to the new repo. It will not receive further updates.

@@ -343,6 +343,35 @@ FRONTEND_DIST_DIR = os.getenv(
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist"),
 )
 
+# Backend HTTP port. Configured via PORT_BACKEND in .env (LLM_COUNCIL_BIND_PORT
+# is still honoured as a legacy override for existing deployments).
+def _resolve_backend_port() -> int:
+    """Resolve the backend port, failing with a usable message on bad input.
+
+    This runs at import time rather than only in __main__, so a malformed value
+    would otherwise raise a bare ValueError from anything that imports this
+    module -- the test suite and the container healthcheck included.
+    """
+    raw = (os.getenv("LLM_COUNCIL_BIND_PORT") or os.getenv("PORT_BACKEND") or "").strip()
+    if not raw:
+        return 8001
+    try:
+        port = int(raw)
+    except ValueError:
+        raise ValueError(
+            f"Invalid backend port {raw!r}. Set PORT_BACKEND (or "
+            f"LLM_COUNCIL_BIND_PORT) to an integer between 1 and 65535."
+        ) from None
+    if not 1 <= port <= 65535:
+        raise ValueError(
+            f"Backend port {port} is out of range. Set PORT_BACKEND (or "
+            f"LLM_COUNCIL_BIND_PORT) to an integer between 1 and 65535."
+        )
+    return port
+
+
+BACKEND_PORT = _resolve_backend_port()
+
 CORS_FRONTEND_HOSTS = [
     origin.strip()
     for origin in os.getenv("FRONTEND_HOST", "").split(",")
@@ -668,7 +697,7 @@ class Conversation(BaseModel):
 @app.get("/api/health")
 async def health_check(request: Request):
     """Health check endpoint."""
-    host = request.headers.get("host", "localhost:8001")
+    host = request.headers.get("host", f"localhost:{BACKEND_PORT}")
     scheme = request.headers.get("x-forwarded-proto", "http")
     return {
         "status": "ok",
@@ -2566,7 +2595,7 @@ async def test_openrouter_api(request: TestOpenRouterRequest):
 # ---------- MCP server (mounted on same port as REST API) ----------
 try:
     from the_ai_counsel_mcp.server import create_server as _create_mcp_server
-    _mcp = _create_mcp_server(base_url="http://127.0.0.1:8001")
+    _mcp = _create_mcp_server(base_url=f"http://127.0.0.1:{BACKEND_PORT}")
     app.mount("/mcp", _mcp.sse_app())
     logger.info("MCP server mounted at /mcp (SSE at /mcp/sse, messages at /mcp/messages)")
 except Exception:
@@ -2583,7 +2612,7 @@ if __name__ == "__main__":
     # to 0.0.0.0 explicitly when you intentionally want network exposure
     # (Docker CMD already passes --host 0.0.0.0).
     bind_host = os.getenv("LLM_COUNCIL_BIND_HOST", "127.0.0.1")
-    bind_port = int(os.getenv("LLM_COUNCIL_BIND_PORT", "8001"))
+    bind_port = BACKEND_PORT
     if bind_host not in _LOOPBACK_HOSTS and not _ADMIN_TOKEN:
         logger.warning(
             "Binding to %s without LLM_COUNCIL_ADMIN_TOKEN set: "

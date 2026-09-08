@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Backend and frontend listen ports can be set with `PORT_BACKEND` and `PORT_FRONTEND` in the root `.env`. Defaults stay **8001** and **5173**. `LLM_COUNCIL_BIND_PORT` still overrides the backend port when set. In Docker, leaving `BACKEND_HOST` empty uses the page origin so a runtime `PORT_BACKEND` change does not require rebuilding the image.
+
 ## [0.12.1] - 2026-09-04
 
 ### Fixed

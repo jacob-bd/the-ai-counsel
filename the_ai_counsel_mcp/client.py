@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
 
 
+def default_base_url() -> str:
+    """Backend base URL, following PORT_BACKEND from the environment/.env."""
+    return f"http://localhost:{os.getenv('PORT_BACKEND', '8001')}"
+
+
 class CouncilClient:
     """Async HTTP client for The AI Counsel REST API."""
 
-    def __init__(self, base_url: str = "http://localhost:8001", timeout: float = 180.0):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str | None = None, timeout: float = 180.0):
+        self.base_url = (base_url or default_base_url()).rstrip("/")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
