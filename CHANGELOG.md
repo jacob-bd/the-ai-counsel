@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.13.1] - 2026-09-18
 
 ### Fixed
-- ChatGPT OAuth now live-fetches models from the Codex/ChatGPT backends (same path as relay-ai) and includes **GPT-5.6 Luna**, which requires the Responses-Lite WebSocket transport. Searching for Luna no longer only matches OpenRouter.
+- ChatGPT OAuth now live-fetches models from the Codex backend (same path as relay-ai) and includes **GPT-5.6 Luna**, which requires the Responses-Lite WebSocket transport. Searching for Luna no longer only matches OpenRouter.
+- Codex model listing now sends the required `client_version` query param so Counsel no longer falls back to ChatGPT-web (`-wm`) slugs that fail at inference.
 
 ## [0.13.0] - 2026-09-08
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -12,32 +12,36 @@ from .errors import describe_exception
 
 from ..credentials import get_oauth_credential
 from ..oauth.refresh import get_valid_access_token
-from ..oauth.responses_websocket import query_responses_lite_websocket
+from ..oauth.responses_websocket import query_codex_responses_websocket
 from .base import LLMProvider
 
 logger = logging.getLogger(__name__)
 
 CODEX_BASE = "https://chatgpt.com/backend-api/codex"
-CHATGPT_MODELS_URL = "https://chatgpt.com/backend-api/models"
 CHATGPT_CODEX_MODELS_URL = f"{CODEX_BASE}/models"
+# Codex /models requires this query param (relay-ai uses the installed Claude
+# Code version; a recent known-good fallback is enough for Counsel).
+CODEX_MODELS_CLIENT_VERSION = "2.1.183"
 
 # Models the Codex backend rejects for ChatGPT OAuth accounts (HTTP 400).
 # Luna is supported via Responses-Lite WebSocket — do not list it here.
 CHATGPT_CODEX_UNSUPPORTED = frozenset({"gpt-5.5-fast"})
 
-# Seed + runtime models that require Responses-Lite WebSocket transport.
-_RESPONSES_LITE_MODELS: Set[str] = {"gpt-5.6-luna"}
+# Runtime transport flags discovered from live Codex /models (plus seed defaults).
+_MODEL_TRANSPORT: Dict[str, Dict[str, bool]] = {
+    "gpt-5.6-luna": {"prefer_websockets": True, "use_responses_lite": True},
+}
 
 OPENAI_OAUTH_MODEL_SEEDS = [
-    {"id": "gpt-5.6-sol", "name": "GPT-5.6 Sol"},
-    {"id": "gpt-5.6-terra", "name": "GPT-5.6 Terra"},
+    {"id": "gpt-5.6-sol", "name": "GPT-5.6 Sol", "prefer_websockets": True, "use_responses_lite": True},
+    {"id": "gpt-5.6-terra", "name": "GPT-5.6 Terra", "prefer_websockets": True, "use_responses_lite": True},
     {
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "prefer_websockets": True,
         "use_responses_lite": True,
     },
-    {"id": "gpt-5.5", "name": "GPT-5.5"},
+    {"id": "gpt-5.5", "name": "GPT-5.5", "prefer_websockets": True},
     {"id": "gpt-5.4", "name": "GPT-5.4"},
     {"id": "gpt-5.4-mini", "name": "GPT-5.4 Mini"},
     {"id": "gpt-5", "name": "GPT-5"},
@@ -92,19 +96,32 @@ def _extract_responses_text(data: Dict[str, Any]) -> str:
         return json.dumps(data)[:2000]
 
 
+def _humanize_model_id(model_id: str) -> str:
+    return model_id.replace("-", " ").replace(".", " ").title()
+
+
 def _seed_models() -> List[Dict[str, Any]]:
-    return [
-        {
-            "id": f"openai-oauth:{s['id']}",
-            "name": f"{s['name']} [ChatGPT]",
-            "provider": "ChatGPT",
-            "source": "openai-oauth",
-            "prefer_websockets": bool(s.get("prefer_websockets")),
-            "use_responses_lite": bool(s.get("use_responses_lite")),
+    models = []
+    for s in OPENAI_OAUTH_MODEL_SEEDS:
+        if s["id"] in CHATGPT_CODEX_UNSUPPORTED:
+            continue
+        prefer_ws = bool(s.get("prefer_websockets"))
+        use_lite = bool(s.get("use_responses_lite"))
+        _MODEL_TRANSPORT[s["id"]] = {
+            "prefer_websockets": prefer_ws,
+            "use_responses_lite": use_lite,
         }
-        for s in OPENAI_OAUTH_MODEL_SEEDS
-        if s["id"] not in CHATGPT_CODEX_UNSUPPORTED
-    ]
+        models.append(
+            {
+                "id": f"openai-oauth:{s['id']}",
+                "name": f"{s['name']} [ChatGPT]",
+                "provider": "ChatGPT",
+                "source": "openai-oauth",
+                "prefer_websockets": prefer_ws,
+                "use_responses_lite": use_lite,
+            }
+        )
+    return models
 
 
 def _parse_chatgpt_model_entries(body: Any) -> List[Dict[str, Any]]:
@@ -119,10 +136,11 @@ def _parse_chatgpt_model_entries(body: Any) -> List[Dict[str, Any]]:
             mid = raw.get("slug") or raw.get("id")
             if not mid:
                 continue
+            title = raw.get("title") or raw.get("name")
             entries.append(
                 {
                     "id": str(mid),
-                    "name": str(raw.get("title") or raw.get("name") or mid),
+                    "name": str(title) if title else str(mid),
                     "prefer_websockets": bool(raw.get("prefer_websockets")),
                     "use_responses_lite": bool(raw.get("use_responses_lite")),
                 }
@@ -149,7 +167,6 @@ def _parse_chatgpt_model_entries(body: Any) -> List[Dict[str, Any]]:
 def _entries_to_models(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seed_by_id = {s["id"]: s for s in OPENAI_OAUTH_MODEL_SEEDS}
     models: List[Dict[str, Any]] = []
-    lite: Set[str] = set()
     for entry in entries:
         mid = entry["id"]
         if mid in CHATGPT_CODEX_UNSUPPORTED:
@@ -157,9 +174,15 @@ def _entries_to_models(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seed = seed_by_id.get(mid, {})
         prefer_ws = bool(entry.get("prefer_websockets") or seed.get("prefer_websockets"))
         use_lite = bool(entry.get("use_responses_lite") or seed.get("use_responses_lite"))
-        if prefer_ws or use_lite:
-            lite.add(mid)
-        name = entry.get("name") or seed.get("name") or mid
+        _MODEL_TRANSPORT[mid] = {
+            "prefer_websockets": prefer_ws,
+            "use_responses_lite": use_lite,
+        }
+        raw_name = entry.get("name") or ""
+        if not raw_name or raw_name == mid:
+            name = seed.get("name") or _humanize_model_id(mid)
+        else:
+            name = raw_name
         models.append(
             {
                 "id": f"openai-oauth:{mid}",
@@ -170,14 +193,30 @@ def _entries_to_models(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "use_responses_lite": use_lite,
             }
         )
-    if lite:
-        _RESPONSES_LITE_MODELS.update(lite)
     return models
 
 
+def model_transport_flags(model: str) -> Dict[str, bool]:
+    """Return prefer_websockets / use_responses_lite for a bare Codex model id."""
+    cached = _MODEL_TRANSPORT.get(model)
+    if cached:
+        return dict(cached)
+    seed = next((s for s in OPENAI_OAUTH_MODEL_SEEDS if s["id"] == model), None)
+    if seed:
+        return {
+            "prefer_websockets": bool(seed.get("prefer_websockets")),
+            "use_responses_lite": bool(seed.get("use_responses_lite")),
+        }
+    # Luna variants always need Responses-Lite over WebSocket.
+    if "luna" in model.lower():
+        return {"prefer_websockets": True, "use_responses_lite": True}
+    return {"prefer_websockets": False, "use_responses_lite": False}
+
+
 def model_needs_responses_lite(model: str) -> bool:
-    """True when inference must use the Responses-Lite WebSocket transport."""
-    return model in _RESPONSES_LITE_MODELS
+    """True when inference must use the Codex WebSocket transport."""
+    flags = model_transport_flags(model)
+    return bool(flags.get("prefer_websockets") or flags.get("use_responses_lite"))
 
 
 class OpenAIOauthProvider(LLMProvider):
@@ -222,12 +261,14 @@ class OpenAIOauthProvider(LLMProvider):
         if instructions:
             payload["instructions"] = instructions
 
-        if model_needs_responses_lite(model):
+        flags = model_transport_flags(model)
+        if flags.get("prefer_websockets") or flags.get("use_responses_lite"):
             try:
-                return await query_responses_lite_websocket(
+                return await query_codex_responses_websocket(
                     payload=payload,
                     headers=headers,
                     timeout=timeout,
+                    use_responses_lite=bool(flags.get("use_responses_lite")),
                 )
             except Exception as e:
                 return {"error": True, "error_message": describe_exception(e, timeout)}
@@ -316,25 +357,24 @@ class OpenAIOauthProvider(LLMProvider):
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                # Tier 1: Codex-specific listing (models the Codex API supports).
-                codex_resp = await client.get(CHATGPT_CODEX_MODELS_URL, headers=headers)
+                # Codex-specific listing — requires client_version or returns 400.
+                # Do NOT fall back to chatgpt.com/backend-api/models: that catalog
+                # includes ChatGPT-web (-wm) slugs that Codex rejects at inference.
+                codex_resp = await client.get(
+                    CHATGPT_CODEX_MODELS_URL,
+                    headers=headers,
+                    params={"client_version": CODEX_MODELS_CLIENT_VERSION},
+                )
                 if codex_resp.status_code == 200:
                     entries = _parse_chatgpt_model_entries(codex_resp.json())
                     models = _entries_to_models(entries)
                     if models:
                         return models
-
-                # Tier 2: General ChatGPT catalog, filtered by known restrictions.
-                chat_resp = await client.get(CHATGPT_MODELS_URL, headers=headers)
-                if chat_resp.status_code == 200:
-                    entries = [
-                        e
-                        for e in _parse_chatgpt_model_entries(chat_resp.json())
-                        if e["id"] not in CHATGPT_CODEX_UNSUPPORTED
-                    ]
-                    models = _entries_to_models(entries)
-                    if models:
-                        return models
+                else:
+                    logger.warning(
+                        "ChatGPT Codex model list failed (%s); using seeds",
+                        codex_resp.status_code,
+                    )
         except Exception:
             logger.debug("ChatGPT OAuth live model fetch failed; using seeds", exc_info=True)
 
