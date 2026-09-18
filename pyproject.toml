@@ -1,6 +1,6 @@
 [project]
 name = "the-ai-counsel"
-version = "0.13.0"
+version = "0.13.1"
 description = "The AI Counsel — Collective AI Intelligence"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.27.0",
+    "websockets>=15.0.0",
     "pydantic>=2.9.0",
     "pdfplumber>=0.11.0",
     "python-multipart>=0.0.20",
