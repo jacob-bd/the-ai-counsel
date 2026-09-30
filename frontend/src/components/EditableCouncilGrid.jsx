@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import SearchableModelSelect from './SearchableModelSelect';
+import { useI18n } from '../i18n';
 import {
   getProviderInfo,
   getModelDisplayName,
@@ -25,6 +26,7 @@ function isReactSelectTarget(target) {
 }
 
 function ModelPicker({ modelId, models, modelsLoading, onSelect, onCloseEditor }) {
+  const { t } = useI18n();
   return (
     <div className="council-card__picker" onClick={(e) => e.stopPropagation()}>
       <SearchableModelSelect
@@ -33,13 +35,13 @@ function ModelPicker({ modelId, models, modelsLoading, onSelect, onCloseEditor }
         onChange={(id) => {
           if (id) onSelect(id);
         }}
-        placeholder={modelsLoading ? 'Loading models…' : 'Search models…'}
+        placeholder={modelsLoading ? t('Loading models…') : t('Search models…')}
         isLoading={modelsLoading}
         isDisabled={modelsLoading || models.length === 0}
         autoOpen
       />
       <button type="button" className="council-card__picker-close" onClick={onCloseEditor}>
-        Cancel
+        {t('Cancel')}
       </button>
     </div>
   );
@@ -60,6 +62,7 @@ function EditableCouncilCard({
   onSelectModel,
   onCloseEditor,
 }) {
+  const { t } = useI18n();
   const isChairman = role === 'chairman';
   const hasModel = Boolean(modelId);
   const info = hasModel ? getProviderInfo(modelId) : PROVIDER_CONFIG.default;
@@ -89,7 +92,7 @@ function EditableCouncilCard({
       }}
     >
       <div className={`role-badge ${isChairman ? 'chairman' : 'member'}`}>
-        {isChairman ? 'Chairman' : `Member #${memberLabel}`}
+        {isChairman ? t('Chairman') : t('Member #{number}', { number: memberLabel })}
       </div>
 
       {!isChairman && onRemove && (
@@ -100,7 +103,7 @@ function EditableCouncilCard({
             e.stopPropagation();
             onRemove(memberIndex);
           }}
-          aria-label={`Remove member ${memberLabel}`}
+          aria-label={t('Remove member {number}', { number: memberLabel })}
         >
           ✕
         </button>
@@ -116,10 +119,10 @@ function EditableCouncilCard({
 
       <div className="council-info">
         <span className={`model-name ${!hasModel ? 'model-name--placeholder' : ''}`}>
-          {hasModel ? getModelDisplayName(modelId) : 'Choose model'}
+          {hasModel ? getModelDisplayName(modelId) : t('Choose model')}
         </span>
         <span className="provider-label">
-          {isChairman ? 'Final Verdict' : (hasModel ? info.label : 'Pick a model')}
+          {isChairman ? t('Final Verdict') : (hasModel ? info.label : t('Pick a model'))}
         </span>
       </div>
 
@@ -129,7 +132,7 @@ function EditableCouncilCard({
           className={`council-card__edit${isChairman ? ' council-card__edit--chairman' : ''}`}
           onClick={handleEdit}
         >
-          Edit
+          {t('Edit')}
         </button>
       )}
 
@@ -162,6 +165,7 @@ export default function EditableCouncilGrid({
   onAddMemberClick,
   onCloseEditor,
 }) {
+  const { t } = useI18n();
   const gridRef = useRef(null);
 
   useEffect(() => {
@@ -240,10 +244,10 @@ export default function EditableCouncilGrid({
               onAddMemberClick();
             }}
             disabled={modelsLoading || models.length === 0}
-            aria-label="Add council member"
+            aria-label={t('Add council member')}
           >
             <span className="council-card-add-icon" aria-hidden="true">+</span>
-            <span className="council-card-add-label">Add member</span>
+            <span className="council-card-add-label">{t('Add member')}</span>
           </button>
         )}
 

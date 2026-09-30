@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import Skeleton from './common/Skeleton';
 import { getModelVisuals, getShortModelName } from '../utils/modelHelpers';
 import { copyToClipboard } from '../utils/clipboard';
+import { useI18n } from '../i18n';
 import ThinkBlockRenderer from './ThinkBlockRenderer';
 import StageTimer from './StageTimer';
 import './Stage1.css';
 
 export default function Stage1({ responses, startTime, endTime }) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(0);
 
   // Reset activeTab if it becomes out of bounds
@@ -56,7 +58,7 @@ export default function Stage1({ responses, startTime, endTime }) {
       <div className="stage-header">
         <div className="stage-title">
           <span className="stage-icon">💬</span>
-          Stage 1: Individual Perspectives
+          {t('Stage 1: Individual Perspectives')}
         </div>
         <StageTimer startTime={startTime} endTime={endTime} label="Duration" />
       </div>
@@ -95,7 +97,7 @@ export default function Stage1({ responses, startTime, endTime }) {
               {currentVisuals.icon}
             </span>
             <div className="model-info">
-              <span className="model-name-large">{currentResponse.model || 'Unknown Model'}</span>
+            <span className="model-name-large">{currentResponse.model || t('Unknown Model')}</span>
               <span className="model-provider-badge" style={{ borderColor: currentVisuals.color, color: currentVisuals.color }}>
                 {currentVisuals.name}
               </span>
@@ -107,26 +109,26 @@ export default function Stage1({ responses, startTime, endTime }) {
               <button
                 className={`copy-button ${isCopied ? 'copied' : ''}`}
                 onClick={handleCopy}
-                title="Copy to clipboard"
+                title={t('Copy to clipboard')}
               >
                 {isCopied ? (
                   <>
                     <span className="icon">✓</span>
-                    <span className="label">Copied</span>
+                    <span className="label">{t('Copied')}</span>
                   </>
                 ) : (
                   <>
                     <span className="icon">📋</span>
-                    <span className="label">Copy</span>
+                    <span className="label">{t('Copy')}</span>
                   </>
                 )}
               </button>
             )}
 
             {hasError ? (
-              <span className="model-status error">Failed</span>
+              <span className="model-status error">{t('Failed')}</span>
             ) : (
-              <span className="model-status success">Completed</span>
+              <span className="model-status success">{t('Completed')}</span>
             )}
           </div>
         </div>
@@ -135,8 +137,8 @@ export default function Stage1({ responses, startTime, endTime }) {
           <div className="response-error">
             <div className="error-icon">⚠️</div>
             <div className="error-details">
-              <div className="error-title">Model Failed to Respond</div>
-              <div className="error-message">{currentResponse?.error_message || 'Unknown error'}</div>
+              <div className="error-title">{t('Model Failed to Respond')}</div>
+              <div className="error-message">{currentResponse?.error_message || t('Unknown error')}</div>
             </div>
           </div>
         ) : (
@@ -145,7 +147,7 @@ export default function Stage1({ responses, startTime, endTime }) {
               content={
                 typeof currentResponse.response === 'string'
                   ? currentResponse.response
-                  : String(currentResponse.response || 'No response')
+                  : String(currentResponse.response || t('No response'))
               }
             />
           </div>
@@ -156,12 +158,13 @@ export default function Stage1({ responses, startTime, endTime }) {
 }
 
 export function Stage1Skeleton() {
+  const { t } = useI18n();
   return (
     <div className="stage-container stage-1 skeleton-mode">
       <div className="stage-header">
         <div className="stage-title">
           <span className="stage-icon">💬</span>
-          Stage 1: Individual Perspectives
+          {t('Stage 1: Individual Perspectives')}
         </div>
         <div className="stage-timer-skeleton">
           <Skeleton variant="text" width="60px" />

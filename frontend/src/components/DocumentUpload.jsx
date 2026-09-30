@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { useI18n } from '../i18n';
 import './DocumentUpload.css';
 
 const ACCEPTED_DOCUMENT_TYPES = [
@@ -10,13 +11,13 @@ const ACCEPTED_DOCUMENT_TYPES = [
 
 const EMPTY_PAYLOAD = { documents: [], attachments: [], warnings: [] };
 
-function formatAttachment(meta) {
+function formatAttachment(meta, t) {
   const chars = typeof meta.char_count === 'number' ? meta.char_count.toLocaleString() : '0';
   const flags = [];
-  if (meta.page_count) flags.push(`${meta.page_count}p`);
+  if (meta.page_count) flags.push(t('{count} pages', { count: meta.page_count }));
   if (meta.ocr_used) flags.push('OCR');
-  if (meta.truncated) flags.push('trimmed');
-  return `${chars} chars${flags.length ? ` · ${flags.join(' · ')}` : ''}`;
+  if (meta.truncated) flags.push(t('trimmed'));
+  return `${chars} ${t('chars')}${flags.length ? ` · ${flags.join(' · ')}` : ''}`;
 }
 
 export default function DocumentUpload({
@@ -25,6 +26,7 @@ export default function DocumentUpload({
   onChange,
   onBusyChange,
 }) {
+  const { t } = useI18n();
   const inputRef = useRef(null);
   const [attachments, setAttachments] = useState([]);
   const [documents, setDocuments] = useState([]);
@@ -63,7 +65,7 @@ export default function DocumentUpload({
       const result = await api.extractDocuments(files);
       updatePayload(result.documents || [], result.attachments || [], result.warnings || []);
     } catch (error) {
-      updatePayload([], [], [error.message || 'Failed to extract document text.']);
+      updatePayload([], [], [error.message || t('Failed to extract document text.')]);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -92,10 +94,10 @@ export default function DocumentUpload({
         className={`document-upload__button ${attachments.length > 0 ? 'document-upload__button--active' : ''}`}
         onClick={() => inputRef.current?.click()}
         disabled={disabled || isExtracting}
-        title="Attach documents"
+        title={t('Attach documents')}
       >
         <span aria-hidden="true">📎</span>
-        <span>{isExtracting ? 'Extracting' : 'Attach'}</span>
+        <span>{isExtracting ? t('Extracting') : t('Attach')}</span>
       </button>
 
       {(attachments.length > 0 || warnings.length > 0) && (
@@ -103,13 +105,13 @@ export default function DocumentUpload({
           {attachments.map((attachment, index) => (
             <span className="document-upload__chip" key={`${attachment.name}-${index}`}>
               <span className="document-upload__chip-name">{attachment.name}</span>
-              <span className="document-upload__chip-meta">{formatAttachment(attachment)}</span>
+              <span className="document-upload__chip-meta">{formatAttachment(attachment, t)}</span>
               <button
                 type="button"
                 className="document-upload__remove"
                 onClick={() => removeAttachment(index)}
                 disabled={disabled || isExtracting}
-                title={`Remove ${attachment.name}`}
+                title={t('Remove {name}', { name: attachment.name })}
               >
                 ×
               </button>
@@ -117,7 +119,7 @@ export default function DocumentUpload({
           ))}
           {warnings.map((warning, index) => (
             <span className="document-upload__warning" key={`${warning}-${index}`}>
-              {warning}
+              {t(warning)}
             </span>
           ))}
         </div>

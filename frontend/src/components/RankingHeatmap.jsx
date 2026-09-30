@@ -1,11 +1,12 @@
 import { getShortModelName, getModelVisuals } from '../utils/modelHelpers';
+import { useI18n } from '../i18n';
 import './RankingHeatmap.css';
 
-function ordinal(n) {
-  if (n === 1) return '1st';
-  if (n === 2) return '2nd';
-  if (n === 3) return '3rd';
-  return `${n}th`;
+function ordinal(n, t) {
+  if (n === 1) return t('{rank}st', { rank: n });
+  if (n === 2) return t('{rank}nd', { rank: n });
+  if (n === 3) return t('{rank}rd', { rank: n });
+  return t('{rank}th', { rank: n });
 }
 
 /**
@@ -17,6 +18,7 @@ function ordinal(n) {
  *   labelToModel  – Map of "Response A" -> full model id
  */
 export default function RankingHeatmap({ rankings, labelToModel }) {
+  const { t } = useI18n();
   if (!rankings || !labelToModel || rankings.length === 0) return null;
 
   // Filter out any models that failed to rank (failed peer review runs)
@@ -58,10 +60,11 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
   return (
     <div className="ranking-heatmap glass-panel">
       <div className="heatmap-header">
-        <h4 className="heatmap-title">📊 Peer Deliberation Matrix</h4>
+        <h4 className="heatmap-title">{t('📊 Peer Deliberation Matrix')}</h4>
         <p className="heatmap-description">
-          Detailed matrix of anonymous peer reviews. Raters are on the left; rated responses are on top.
-          Self-review cells (—) are excluded from the grid but counted as a perfect <strong>1st place (1.00)</strong> in aggregate score calculations to match the leaderboard averages.
+          {t('Detailed matrix of anonymous peer reviews. Raters are on the left; rated responses are on top. Self-review cells (—) are excluded from the grid but counted as a perfect')}
+          {' '}<strong>{t('1st place (1.00)')}</strong>{' '}
+          {t('in aggregate score calculations to match the leaderboard averages.')}
         </p>
       </div>
 
@@ -69,7 +72,7 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
         <table className="heatmap-table">
           <thead>
             <tr>
-              <th className="heatmap-corner">Rater ↓ / Rated →</th>
+              <th className="heatmap-corner">{t('Rater ↓ / Rated →')}</th>
               {rankeeModels.map((model) => {
                 const visuals = getModelVisuals(model);
                 const short = getShortModelName(model);
@@ -121,7 +124,7 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
                         key={rankee}
                         className={`heatmap-cell heatmap-pos-${pos}`}
                       >
-                        <span className="rank-badge">{ordinal(pos)}</span>
+                        <span className="rank-badge">{ordinal(pos, t)}</span>
                       </td>
                     );
                   })}
@@ -132,7 +135,7 @@ export default function RankingHeatmap({ rankings, labelToModel }) {
               <td className="heatmap-row-header heatmap-avg-label">
                 <div className="row-cell-content">
                   <span className="mini-avatar" style={{ backgroundColor: 'var(--accent-stage2)' }}>📈</span>
-                  <span className="row-name-text font-semibold">Average Rank</span>
+                  <span className="row-name-text font-semibold">{t('Average Rank')}</span>
                 </div>
               </td>
               {rankeeModels.map((rankee) => (

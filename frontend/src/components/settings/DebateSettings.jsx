@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../../i18n';
 
 export default function DebateSettings({
     critiqueMode,
@@ -11,28 +12,30 @@ export default function DebateSettings({
     setConvergenceThreshold,
     executionMode,
 }) {
+    const { t } = useI18n();
+
     // Deliberation and Cost Meter helpers
     const getMeterInfo = (rounds) => {
         if (rounds === 1) {
             return {
                 width: '20%',
                 color: '#06b6d4', // Turquoise accent
-                label: 'Single Pass / Instant Response',
-                desc: 'Standard one-pass response. Fastest execution, zero debate overhead, and minimal token cost.'
+                label: t('Single Pass / Instant Response'),
+                desc: t('Standard one-pass response. Fastest execution, zero debate overhead, and minimal token cost.')
             };
         } else if (rounds <= 3) {
             return {
                 width: rounds === 2 ? '40%' : '60%',
                 color: '#06b6d4', // Turquoise accent
-                label: `Balanced Deliberation (${rounds} Rounds)`,
-                desc: 'Highly Recommended. Models engage in peer review & critique, driving optimal analytical depth without excessive token costs.'
+                label: t('Balanced Deliberation ({rounds} Rounds)', { rounds }),
+                desc: t('Highly Recommended. Models engage in peer review & critique, driving optimal analytical depth without excessive token costs.')
             };
         } else {
             return {
                 width: rounds === 4 ? '80%' : '100%',
                 color: '#f59e0b', // Amber alert color
-                label: `Deep Reasoning (${rounds} Rounds)`,
-                desc: 'Maximum convergence depth. Warning: Consumes significantly higher API tokens and introduces noticeable latency per model.'
+                label: t('Deep Reasoning ({rounds} Rounds)', { rounds }),
+                desc: t('Maximum convergence depth. Warning: Consumes significantly higher API tokens and introduces noticeable latency per model.')
             };
         }
     };
@@ -48,17 +51,17 @@ export default function DebateSettings({
                         <path d="M21 12H3" />
                         <path d="M17 17.9H3" />
                     </svg>
-                    <h3>Council Debate Config</h3>
+                    <h3>{t('Council Debate Config')}</h3>
                 </div>
                 <p className="section-description">
-                    Configure the multi-round iterative debate pipeline, convergence parameters, and critique formatting for the Council deliberation. <em>Note: These settings apply strictly to the main multi-model Council and do not affect the Advisor debate setups.</em>
+                    {t('Configure the multi-round iterative debate pipeline, convergence parameters, and critique formatting for the Council deliberation.')} <em>{t('Note: These settings apply strictly to the main multi-model Council and do not affect the Advisor debate setups.')}</em>
                 </p>
             </div>
 
             <div className="settings-group debate-settings-group">
                 <div className="debate-group-title">
-                    <h4>Critique Mode</h4>
-                    <span className="debate-helper-badge">Deliberation Protocol</span>
+                    <h4>{t('Critique Mode')}</h4>
+                    <span className="debate-helper-badge">{t('Deliberation Protocol')}</span>
                 </div>
 
                 <div className="debate-card-stack">
@@ -75,23 +78,23 @@ export default function DebateSettings({
                                     </svg>
                                 </span>
                                 <div className="debate-card-title-text">
-                                    <h5>Free-form</h5>
-                                    <p className="debate-card-concept">Conversational refinement</p>
+                                    <h5>{t('Free-form')}</h5>
+                                    <p className="debate-card-concept">{t('Conversational refinement')}</p>
                                 </div>
                             </div>
-                            <span className="debate-badge fastest">Fastest (1x cost)</span>
+                            <span className="debate-badge fastest">{t('Fastest (1x cost)')}</span>
                         </div>
                         
                         <div className="debate-card-details">
                             <ul className="debate-details-list">
                                 <li>
-                                    <span className="bullet-label">Round 1:</span> Each model answers your question independently — no awareness of the others.
+                                    <span className="bullet-label">{t('Round 1:')}</span> {t('Each model answers your question independently — no awareness of the others.')}
                                 </li>
                                 <li>
-                                    <span className="bullet-label">Round 2+:</span> Each model receives the Chairman's synthesis from the previous round plus their ranking position, then rewrites their response based on that collective output.
+                                    <span className="bullet-label">{t('Round 2+:')}</span> {t("Each model receives the Chairman's synthesis from the previous round plus their ranking position, then rewrites their response based on that collective output.")}
                                 </li>
                                 <li>
-                                    <span className="bullet-label">Best for:</span> Most questions. Fastest execution, no extra API calls, and the quality improvement per round is already significant.
+                                    <span className="bullet-label">{t('Best for:')}</span> {t('Most questions. Fastest execution, no extra API calls, and the quality improvement per round is already significant.')}
                                 </li>
                             </ul>
                         </div>
@@ -115,23 +118,23 @@ export default function DebateSettings({
                                     </svg>
                                 </span>
                                 <div className="debate-card-title-text">
-                                    <h5>Paragraph-level</h5>
-                                    <p className="debate-card-concept">Structured citation review</p>
+                                    <h5>{t('Paragraph-level')}</h5>
+                                    <p className="debate-card-concept">{t('Structured citation review')}</p>
                                 </div>
                             </div>
-                            <span className="debate-badge balanced">Balanced (1.1x cost)</span>
+                            <span className="debate-badge balanced">{t('Balanced (1.1x cost)')}</span>
                         </div>
                         
                         <div className="debate-card-details">
                             <ul className="debate-details-list">
                                 <li>
-                                    <span className="bullet-label">Round 1:</span> Same as Free-form, but every response is auto-numbered by paragraph (<code>[Para 1]</code>, <code>[Para 2]</code>…) before peer review. Reviewers must cite paragraph numbers in their critiques.
+                                    <span className="bullet-label">{t('Round 1:')}</span> {t('Same as Free-form, but every response is auto-numbered by paragraph ({para1}, {para2}…) before peer review. Reviewers must cite paragraph numbers in their critiques.', { para1: '[Para 1]', para2: '[Para 2]' })}
                                 </li>
                                 <li>
-                                    <span className="bullet-label">Round 2+:</span> Each model is shown exactly which of their own paragraphs peers called strong or weak, plus up to 5 top-rated paragraphs from rival models to potentially incorporate.
+                                    <span className="bullet-label">{t('Round 2+:')}</span> {t('Each model is shown exactly which of their own paragraphs peers called strong or weak, plus up to 5 top-rated paragraphs from rival models to potentially incorporate.')}
                                 </li>
                                 <li>
-                                    <span className="bullet-label">Best for:</span> Structured essays, multi-part answers, legal/policy analysis — any response that naturally breaks into distinct sections worth critiquing individually.
+                                    <span className="bullet-label">{t('Best for:')}</span> {t('Structured essays, multi-part answers, legal/policy analysis — any response that naturally breaks into distinct sections worth critiquing individually.')}
                                 </li>
                             </ul>
                         </div>
@@ -151,23 +154,23 @@ export default function DebateSettings({
                                     </svg>
                                 </span>
                                 <div className="debate-card-title-text">
-                                    <h5>Claim-level</h5>
-                                    <p className="debate-card-concept">Factual assertion mapping</p>
+                                    <h5>{t('Claim-level')}</h5>
+                                    <p className="debate-card-concept">{t('Factual assertion mapping')}</p>
                                 </div>
                             </div>
-                            <span className="debate-badge rigorous">Rigorous (1.5x cost)</span>
+                            <span className="debate-badge rigorous">{t('Rigorous (1.5x cost)')}</span>
                         </div>
                         
                         <div className="debate-card-details">
                             <ul className="debate-details-list">
                                 <li>
-                                    <span className="bullet-label">Before review:</span> The Chairman runs an extra API call to extract factual claims from all responses into structured JSON. Reviewers verdict each claim as strong, weak, or neutral — not the whole response.
+                                    <span className="bullet-label">{t('Before review:')}</span> {t('The Chairman runs an extra API call to extract factual claims from all responses into structured JSON. Reviewers verdict each claim as strong, weak, or neutral — not the whole response.')}
                                 </li>
                                 <li>
-                                    <span className="bullet-label">Round 2+:</span> Each model sees which of their own claims peers rejected, and the top claims from rivals that got strong agreement — so rewrites are targeted at specific disputed facts, not general impressions.
+                                    <span className="bullet-label">{t('Round 2+:')}</span> {t('Each model sees which of their own claims peers rejected, and the top claims from rivals that got strong agreement — so rewrites are targeted at specific disputed facts, not general impressions.')}
                                 </li>
                                 <li>
-                                    <span className="bullet-label">Best for:</span> Fact-heavy queries, technical auditing, or any topic where you care about specific factual accuracy rather than overall argument quality. Adds 1 extra API call per round.
+                                    <span className="bullet-label">{t('Best for:')}</span> {t('Fact-heavy queries, technical auditing, or any topic where you care about specific factual accuracy rather than overall argument quality. Adds 1 extra API call per round.')}
                                 </li>
                             </ul>
                         </div>
@@ -177,8 +180,8 @@ export default function DebateSettings({
                 {/* Number of Rounds */}
                 <div className="debate-rounds-section" style={{ marginTop: '32px' }}>
                     <div className="debate-group-title">
-                        <h4>Number of Rounds</h4>
-                        <span className="debate-helper-badge">Deliberation Depth</span>
+                        <h4>{t('Number of Rounds')}</h4>
+                        <span className="debate-helper-badge">{t('Deliberation Depth')}</span>
                     </div>
 
                     <div className="rounds-segmented-bar">
@@ -191,7 +194,7 @@ export default function DebateSettings({
                             >
                                 <span className="rounds-step-number">{n}</span>
                                 <span className="rounds-step-label">
-                                    {n === 1 ? 'Single Pass' : `${n} Rounds`}
+                                    {n === 1 ? t('Single Pass') : t('{count} Rounds', { count: n })}
                                 </span>
                             </button>
                         ))}
@@ -201,7 +204,7 @@ export default function DebateSettings({
                     <div className="cost-meter-container">
                         <div className="cost-meter-header">
                             <span className="cost-meter-title">{meter.label}</span>
-                            <span className="cost-meter-percentage">{debateRounds === 1 ? 'Low Cost' : debateRounds <= 3 ? 'Balanced' : 'High Token Cost'}</span>
+                            <span className="cost-meter-percentage">{debateRounds === 1 ? t('Low Cost') : debateRounds <= 3 ? t('Balanced') : t('High Token Cost')}</span>
                         </div>
                         <div className="cost-meter-track">
                             <div 
@@ -242,15 +245,15 @@ export default function DebateSettings({
                                         ></label>
                                     </div>
                                     <div className="convergence-toggle-text">
-                                        <h5>Auto-converge</h5>
-                                        <p className="convergence-toggle-hint">Stop early if peer rankings stabilize</p>
+                                        <h5>{t('Auto-converge')}</h5>
+                                        <p className="convergence-toggle-hint">{t('Stop early if peer rankings stabilize')}</p>
                                     </div>
                                 </div>
                             </div>
 
                             {autoConverge && (
                                 <div className="convergence-threshold-section animate-slide-down">
-                                    <span className="convergence-threshold-label">Required Stable Rounds</span>
+                                    <span className="convergence-threshold-label">{t('Required Stable Rounds')}</span>
                                     <div className="threshold-segmented-bar">
                                         {[1, 2, 3].map((n) => (
                                             <button
@@ -259,12 +262,12 @@ export default function DebateSettings({
                                                 className={`threshold-btn ${convergenceThreshold === n ? 'active' : ''}`}
                                                 onClick={() => setConvergenceThreshold(n)}
                                             >
-                                                {n} Stable Round{n > 1 ? 's' : ''}
+                                                {t('Stable Rounds: {count}', { count: n })}
                                             </button>
                                         ))}
                                     </div>
                                     <p className="setting-hint threshold-hint">
-                                        Early stopping triggers if the relative rankings of all response drafts remain identical for {convergenceThreshold} consecutive rounds. Saves significant API tokens!
+                                        {t('Early stopping triggers if the relative rankings of all response drafts remain identical for {count} consecutive rounds. Saves significant API tokens!', { count: convergenceThreshold })}
                                     </p>
                                 </div>
                             )}
@@ -277,7 +280,7 @@ export default function DebateSettings({
                                     <line x1="12" y1="9" x2="12" y2="13" />
                                     <line x1="12" y1="17" x2="12.01" y2="17" />
                                 </svg>
-                                <span>Multi-round debate is configured but currently not active. Change Execution Mode to <strong>Chat + Ranking</strong> or <strong>Full Deliberation</strong> in the main screen to enable it.</span>
+                                <span>{t('Multi-round debate is configured but currently not active. Change Execution Mode to')} <strong>{t('Chat + Ranking')}</strong> {t('or')} <strong>{t('Full Deliberation')}</strong> {t('in the main screen to enable it.')}</span>
                             </div>
                         )}
                     </div>
@@ -289,7 +292,7 @@ export default function DebateSettings({
                                 <line x1="12" y1="9" x2="12" y2="13" />
                                 <line x1="12" y1="17" x2="12.01" y2="17" />
                             </svg>
-                            <span>Execution Mode is currently <strong>Chat Only</strong>. Deliberative peer review stages and synthetic convergence are bypassed.</span>
+                            <span>{t('Execution Mode is currently')} <strong>{t('Chat Only')}</strong>. {t('Deliberative peer review stages and synthetic convergence are bypassed.')}</span>
                         </div>
                     )
                 )}

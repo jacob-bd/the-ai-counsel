@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { OAUTH_PROVIDERS } from '../../constants/oauthProviders';
+import { useI18n } from '../../i18n';
 
 const POLL_MS = 2000;
 
@@ -10,6 +11,7 @@ export default function SubscriptionOAuth({
   onModelsRefresh,
   directAvailableModels = [],
 }) {
+  const { t } = useI18n();
   const [sessions, setSessions] = useState({});
   const [busy, setBusy] = useState({});
   const [errors, setErrors] = useState({});
@@ -103,10 +105,9 @@ export default function SubscriptionOAuth({
 
   return (
     <div className="subsection" style={{ marginTop: '24px' }}>
-      <h4>Subscription Logins</h4>
+      <h4>{t('Subscription Logins')}</h4>
       <p className="subsection-description" style={{ fontSize: 'calc(13px * var(--font-scale))', color: '#94a3b8', marginBottom: '16px' }}>
-        Connect paid subscriptions via OAuth device login. These use your personal subscription
-        through third-party tooling — not official API billing. Use at your own discretion.
+        {t('Connect paid subscriptions via OAuth device login. These use your personal subscription through third-party tooling — not official API billing. Use at your own discretion.')}
       </p>
 
       {OAUTH_PROVIDERS.map((provider) => {
@@ -122,20 +123,20 @@ export default function SubscriptionOAuth({
           <div key={provider.id} className="api-key-section oauth-provider-section">
             <label>{provider.label}</label>
             <p className="api-key-hint" style={{ marginTop: 0, marginBottom: '10px' }}>
-              {provider.description}
+              {t(provider.description)}
             </p>
 
             {connected && !session && (
               <div className="key-status set key-status-row">
                 <span>
-                  ✓ Connected
+                  ✓ {t('Connected')}
                   {provider.id === 'github-copilot' && settings?.github_copilot_is_free_plan === true && (
-                    <> · Free plan</>
+                    <> · {t('Free plan')}</>
                   )}
                   {provider.id === 'github-copilot' && settings?.github_copilot_is_free_plan === false && (
-                    <> · Paid{settings?.github_copilot_plan ? ` (${settings.github_copilot_plan})` : ''}</>
+                    <> · {t('Paid')}{settings?.github_copilot_plan ? ` (${settings.github_copilot_plan})` : ''}</>
                   )}
-                  {modelCount > 0 && ` · ${modelCount} models available`}
+                  {modelCount > 0 && <> · {t(modelCount === 1 ? '{count} model available' : '{count} models available', { count: modelCount })}</>}
                 </span>
                 <button
                   type="button"
@@ -143,7 +144,7 @@ export default function SubscriptionOAuth({
                   onClick={() => handleDisconnect(provider.id)}
                   disabled={isBusy}
                 >
-                  {isBusy ? 'Disconnecting…' : 'Disconnect'}
+                  {isBusy ? t('Disconnecting…') : t('Disconnect')}
                 </button>
               </div>
             )}
@@ -155,14 +156,14 @@ export default function SubscriptionOAuth({
                 onClick={() => handleConnect(provider.id)}
                 disabled={isBusy}
               >
-                {isBusy ? 'Starting…' : 'Connect'}
+                {isBusy ? t('Starting…') : t('Connect')}
               </button>
             )}
 
             {session && (
               <div className="oauth-device-flow">
                 <p className="oauth-instructions">
-                  Open the verification page and enter this code:
+                  {t('Open the verification page and enter this code:')}
                 </p>
                 <div className="oauth-user-code">{session.user_code}</div>
                 <div className="oauth-actions">
@@ -171,15 +172,15 @@ export default function SubscriptionOAuth({
                     className="action-btn"
                     onClick={() => openVerification(session)}
                   >
-                    Open verification page
+                    {t('Open verification page')}
                   </button>
-                  <span className="oauth-waiting">Waiting for authorization…</span>
+                  <span className="oauth-waiting">{t('Waiting for authorization…')}</span>
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="test-result error">{error}</div>
+              <div className="test-result error">{t(error)}</div>
             )}
           </div>
         );

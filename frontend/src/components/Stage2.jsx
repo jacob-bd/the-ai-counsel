@@ -8,6 +8,7 @@ import './Stage2.css';
 import './ClaimCards.css';
 import StageTimer from './StageTimer';
 import { copyToClipboard } from '../utils/clipboard';
+import { useI18n } from '../i18n';
 
 function deAnonymizeText(text, labelToModel) {
     if (!labelToModel) return text;
@@ -28,6 +29,7 @@ function hexToRgb(hex) {
 }
 
 export default function Stage2({ rankings, labelToModel, aggregateRankings, startTime, endTime, canonicalClaims, aggregateClaimVerdicts }) {
+    const { t } = useI18n();
     const [activeTab, setActiveTab] = useState(0);
     const [viewMode, setViewMode] = useState('leaderboard'); // 'leaderboard' or 'heatmap'
 
@@ -86,7 +88,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
             <div className="stage-header">
                 <div className="stage-title">
                     <span className="stage-icon">⚖️</span>
-                    Stage 2: Peer Rankings
+                    {t('Stage 2: Peer Rankings')}
                 </div>
                 <StageTimer startTime={startTime} endTime={endTime} label="Duration" />
             </div>
@@ -104,7 +106,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
             {isClaimMode ? (
                 <details className="raw-evaluations-collapse">
                     <summary className="raw-evaluations-toggle">
-                        Show Raw Evaluations ({rankings?.length || 0} evaluators)
+                        {t('Show Raw Evaluations ({count} evaluators)', { count: rankings?.length || 0 })}
                     </summary>
                     <div style={{ marginTop: '12px' }}>
                         <RawEvaluationTabs
@@ -125,10 +127,10 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                 </details>
             ) : (
                 <>
-                    <h4>Raw Evaluations</h4>
+                    <h4>{t('Raw Evaluations')}</h4>
                     <p className="stage-description">
-                        Each model evaluated all responses (anonymized as {anonymizedLabelText}) and provided rankings.
-                        Below, model names are shown in <strong>bold</strong> for readability, but the original evaluation used anonymous labels.
+                        {t('Each model evaluated all responses (anonymized as {labels}) and provided rankings.', { labels: anonymizedLabelText })}
+                        {' '}{t('Below, model names are shown in')} <strong>{t('bold')}</strong> {t('for readability, but the original evaluation used anonymous labels.')}
                     </p>
                     <RawEvaluationTabs
                         rankings={rankings}
@@ -151,11 +153,11 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                 <div className="aggregate-rankings">
                     <div className="aggregate-header-row">
                         <div className="aggregate-title-group">
-                            <h4>🏆 Stage 2 Results</h4>
+                            <h4>{t('🏆 Stage 2 Results')}</h4>
                             <p className="stage-description">
                                 {viewMode === 'leaderboard' || aggregateRankings.length < 3
-                                    ? 'Combined results across all peer evaluations. Bar length corresponds to average rank value.'
-                                    : 'Detailed matrix of anonymous peer evaluations.'
+                                    ? t('Combined results across all peer evaluations. Bar length corresponds to average rank value.')
+                                    : t('Detailed matrix of anonymous peer evaluations.')
                                 }
                             </p>
                         </div>
@@ -164,16 +166,16 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                                 <button 
                                     className={`toggle-btn ${viewMode === 'leaderboard' ? 'active' : ''}`}
                                     onClick={() => setViewMode('leaderboard')}
-                                    title="Show Leaderboard List"
+                                    title={t('Show Leaderboard List')}
                                 >
-                                    🏆 Leaderboard
+                                    {t('🏆 Leaderboard')}
                                 </button>
                                 <button 
                                     className={`toggle-btn ${viewMode === 'heatmap' ? 'active' : ''}`}
                                     onClick={() => setViewMode('heatmap')}
-                                    title="Show Detailed Matrix"
+                                    title={t('Show Detailed Matrix')}
                                 >
-                                    📊 Detail Matrix
+                                    {t('📊 Detail Matrix')}
                                 </button>
                             </div>
                         )}
@@ -233,12 +235,13 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
 }
 
 export function Stage2Skeleton() {
+    const { t } = useI18n();
     return (
         <div className="stage-container stage-2 skeleton-mode">
             <div className="stage-header">
                 <div className="stage-title">
                     <span className="stage-icon">⚖️</span>
-                    Stage 2: Peer Rankings
+                    {t('Stage 2: Peer Rankings')}
                 </div>
                 <div className="stage-timer-skeleton">
                     <Skeleton variant="text" width="60px" />
@@ -315,6 +318,7 @@ function RawEvaluationTabs({
     anonymizedLabelText,
     parsedRanking
 }) {
+    const { t } = useI18n();
     return (
         <>
             {/* Avatar Tabs */}
@@ -348,7 +352,7 @@ function RawEvaluationTabs({
                             {currentVisuals.icon}
                         </span>
                         <div className="model-info">
-                            <span className="model-name-large">{currentRanking.model || 'Unknown Model'}</span>
+                            <span className="model-name-large">{currentRanking.model || t('Unknown Model')}</span>
                             <span className="model-provider-badge" style={{ borderColor: currentVisuals.color, color: currentVisuals.color }}>
                                 {currentVisuals.name}
                             </span>
@@ -360,26 +364,26 @@ function RawEvaluationTabs({
                             <button
                                 className={`copy-button ${isCopied ? 'copied' : ''}`}
                                 onClick={handleCopy}
-                                title="Copy to clipboard"
+                                title={t('Copy to clipboard')}
                             >
                                 {isCopied ? (
                                     <>
                                         <span className="icon">✓</span>
-                                        <span className="label">Copied</span>
+                                        <span className="label">{t('Copied')}</span>
                                     </>
                                 ) : (
                                     <>
                                         <span className="icon">📋</span>
-                                        <span className="label">Copy</span>
+                                        <span className="label">{t('Copy')}</span>
                                     </>
                                 )}
                             </button>
                         )}
 
                         {hasError ? (
-                            <span className="model-status error">Failed</span>
+                            <span className="model-status error">{t('Failed')}</span>
                         ) : (
-                            <span className="model-status success">Completed</span>
+                            <span className="model-status success">{t('Completed')}</span>
                         )}
                     </div>
                 </div>
@@ -388,8 +392,8 @@ function RawEvaluationTabs({
                     <div className="response-error">
                         <div className="error-icon">⚠️</div>
                         <div className="error-details">
-                            <div className="error-title">Model Failed to Respond</div>
-                            <div className="error-message">{currentRanking?.error_message || 'Unknown error'}</div>
+                            <div className="error-title">{t('Model Failed to Respond')}</div>
+                            <div className="error-message">{currentRanking?.error_message || t('Unknown error')}</div>
                         </div>
                     </div>
                 ) : (
@@ -404,13 +408,11 @@ function RawEvaluationTabs({
 
                         {parsedRanking.length > 0 && (
                             <div className="parsed-ranking">
-                                <strong>Extracted Ranking:</strong>
+                                <strong>{t('Extracted Ranking:')}</strong>
                                 <span className="info-tooltip-container">
                                     <span className="info-icon">?</span>
                                     <span className="info-tooltip">
-                                        This is the ranking parsed from the model's text response.
-                                        It's used to calculate the aggregate rankings below.
-                                        Compare with the text above to verify the system correctly understood the model's ranking.
+                                        {t("This is the ranking parsed from the model's text response. It's used to calculate the aggregate rankings below. Compare with the text above to verify the system correctly understood the model's ranking.")}
                                     </span>
                                 </span>
                                 <ol>

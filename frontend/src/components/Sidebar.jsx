@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { formatDatePart, formatTimePart } from '../utils/dateFormat';
 import { formatSidebarCost, sidebarCostTooltip } from '../utils/formatCost';
+import { useI18n } from '../i18n';
 import './Sidebar.css';
 
 const getConversationMode = (conversation) => (
@@ -24,6 +25,7 @@ export default function Sidebar({
   onGoHome,
   dateFormat = 'auto',
 }) {
+  const { t } = useI18n();
   const [confirmingDelete, setConfirmingDelete] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -65,20 +67,20 @@ export default function Sidebar({
       
       <div className={`sidebar ${isOpen ? 'open' : ''}`}>
         {/* Mobile close button */}
-        <button className="sidebar-close-btn" onClick={onClose} aria-label="Close menu">
+        <button className="sidebar-close-btn" onClick={onClose} aria-label={t('Close menu')}>
           ×
         </button>
         
         <div className="sidebar-header">
         <div className="sidebar-title-wrapper">
           <div className="sidebar-title">The AI <span className="title-plus">Counsel</span></div>
-          <div className="sidebar-subtitle">Created by: <a href="https://github.com/jacob-bd" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dotted rgba(255,255,255,0.3)', paddingBottom: '1px', transition: 'border-color 0.2s' }} onMouseEnter={e => e.target.style.borderBottomColor = 'rgba(255,255,255,0.7)'} onMouseLeave={e => e.target.style.borderBottomColor = 'rgba(255,255,255,0.3)'}>jacob-bd</a></div>
+          <div className="sidebar-subtitle">{t('Created by:')} <a href="https://github.com/jacob-bd" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dotted rgba(255,255,255,0.3)', paddingBottom: '1px', transition: 'border-color 0.2s' }} onMouseEnter={e => e.target.style.borderBottomColor = 'rgba(255,255,255,0.7)'} onMouseLeave={e => e.target.style.borderBottomColor = 'rgba(255,255,255,0.3)'}>jacob-bd</a></div>
           <div className="sidebar-version">v0.13.1</div>
         </div>
         <button
           className="icon-button"
           onClick={onOpenSettings}
-          title="Settings"
+          title={t('Settings')}
         >
           ⚙️
         </button>
@@ -88,7 +90,7 @@ export default function Sidebar({
       <div className="sidebar-actions">
         <button className="sidebar-action-btn sidebar-action-btn--home" onClick={onGoHome}>
           <span className="btn-icon">⌂</span>
-          <span className="btn-text">Home</span>
+          <span className="btn-text">{t('Home')}</span>
         </button>
         <div className="sidebar-action-row">
           <button
@@ -97,7 +99,7 @@ export default function Sidebar({
             disabled={isLoading}
           >
             <span className="btn-icon">+</span>
-            <span className="btn-text">New Council</span>
+            <span className="btn-text">{t('New Council')}</span>
           </button>
           <button
             className="sidebar-action-btn sidebar-action-btn--advisors"
@@ -105,7 +107,7 @@ export default function Sidebar({
             disabled={isLoading}
           >
             <span className="btn-icon">+</span>
-            <span className="btn-text">New Advisors</span>
+            <span className="btn-text">{t('New Advisors')}</span>
           </button>
         </div>
       </div>
@@ -115,7 +117,7 @@ export default function Sidebar({
         <input
           type="text"
           className="search-input"
-          placeholder="Search conversations..."
+          placeholder={t('Search conversations...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -123,7 +125,7 @@ export default function Sidebar({
           <button 
             className="search-clear" 
             onClick={() => setSearchQuery('')}
-            title="Clear search"
+            title={t('Clear search')}
           >
             ×
           </button>
@@ -133,7 +135,7 @@ export default function Sidebar({
       <div className="conversation-list">
         {filteredConversations.length === 0 ? (
           <div className="sidebar-empty-state">
-            {searchQuery ? 'No matching conversations' : 'No history'}
+            {searchQuery ? t('No matching conversations') : t('No history')}
           </div>
         ) : (
           filteredConversations.map((conv) => {
@@ -177,21 +179,21 @@ export default function Sidebar({
                   </div>
                   {isLoading && conv.id === currentConversationId ? (
                     <button className="stop-generation-btn small" onClick={handleAbortClick}>
-                      Stop
+                      {t('Stop')}
                     </button>
                   ) : confirmingDelete === conv.id ? (
                     <div className="delete-confirm">
                       <button
                         className="confirm-yes-btn"
                         onClick={(e) => handleConfirmDelete(e, conv.id)}
-                        title="Confirm delete"
+                        title={t('Confirm delete')}
                       >
                         ✓
                       </button>
                       <button
                         className="confirm-no-btn"
                         onClick={handleCancelDelete}
-                        title="Cancel"
+                        title={t('Cancel')}
                       >
                         ✕
                       </button>
@@ -200,7 +202,7 @@ export default function Sidebar({
                     <button
                       className="delete-btn"
                       onClick={(e) => handleDeleteClick(e, conv.id)}
-                      title="Delete conversation"
+                      title={t('Delete conversation')}
                     >
                       🗑️
                     </button>

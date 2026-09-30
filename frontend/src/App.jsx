@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import { api, DEFAULT_EXECUTION_MODE, buildAvailableSearchProviders } from './api';
 import { hasConfiguredProviders } from './constants/oauthProviders';
 import { applyFontSize, normalizeFontSize } from './utils/fontSize';
+import { useI18n } from './i18n';
 import './App.css';
 import './components/StageCopyButtons.css';
 import './ModeToggle.css';
@@ -47,10 +48,10 @@ const IDLE_LOADING = {
   stage4: false,
 };
 
-function AppLoadingFallback() {
+function AppLoadingFallback({ t }) {
   return (
     <div className="app-loading" role="status" aria-live="polite">
-      Loading...
+      {t('Loading...')}
     </div>
   );
 }
@@ -69,7 +70,7 @@ class AppErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div className="app-loading" role="alert">
-          Failed to load. Please refresh the page.
+          {this.props.errorMessage}
         </div>
       );
     }
@@ -124,6 +125,7 @@ const buildAdvisorProgressMessage = (progress, existing = {}) => {
 };
 
 function App() {
+  const { t } = useI18n();
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -1626,7 +1628,7 @@ function App() {
       <button
         className="mobile-menu-btn"
         onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
+        aria-label={t('Open menu')}
       >
         <span className="hamburger-icon"></span>
       </button>
@@ -1648,8 +1650,8 @@ function App() {
       />
 
       <div className="main-area">
-        <AppErrorBoundary>
-          <Suspense fallback={<AppLoadingFallback />}>
+        <AppErrorBoundary errorMessage={t('Failed to load. Please refresh the page.')}>
+          <Suspense fallback={<AppLoadingFallback t={t} />}>
             {appMode === null && !currentConversationId ? (
               <LandingPage onSelectMode={(m) => {
                 setAppMode(m);
@@ -1688,8 +1690,8 @@ function App() {
       </div>
 
       {showSettings && (
-        <AppErrorBoundary>
-          <Suspense fallback={<AppLoadingFallback />}>
+        <AppErrorBoundary errorMessage={t('Failed to load. Please refresh the page.')}>
+          <Suspense fallback={<AppLoadingFallback t={t} />}>
             <Settings
               onClose={handleSettingsClose}
               ollamaStatus={ollamaStatus}

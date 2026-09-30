@@ -1,5 +1,6 @@
 import './CostReport.css';
 import { formatUsd } from '../utils/formatCost';
+import { useI18n } from '../i18n';
 
 const numberFormatter = new Intl.NumberFormat(undefined);
 
@@ -8,8 +9,11 @@ function formatTokens(value) {
   return numberFormatter.format(value);
 }
 
-function formatTokenBreakdown(item) {
-  return `${formatTokens(item.input_tokens)} in / ${formatTokens(item.output_tokens)} out`;
+function formatTokenBreakdown(item, t) {
+  return t('{input} in / {output} out', {
+    input: formatTokens(item.input_tokens),
+    output: formatTokens(item.output_tokens),
+  });
 }
 
 function rowCostLabel(row) {
@@ -24,6 +28,7 @@ function rowStatus(row) {
 }
 
 export default function CostReport({ report, title = 'Run Cost' }) {
+  const { t } = useI18n();
   if (!report || !Array.isArray(report.by_model) || report.by_model.length === 0) {
     return null;
   }
@@ -36,46 +41,46 @@ export default function CostReport({ report, title = 'Run Cost' }) {
       : 'Known';
 
   return (
-    <section className="cost-report" aria-label={title}>
+    <section className="cost-report" aria-label={t(title)}>
       <div className="cost-report__summary">
         <div>
-          <div className="cost-report__eyebrow">{title}</div>
+          <div className="cost-report__eyebrow">{t(title)}</div>
           <div className="cost-report__total">{formatUsd(report.total_cost, unknownTotal)}</div>
         </div>
-        <div className="cost-report__metrics" aria-label="Cost metrics">
-          <span title="Provider-reported total tokens when available, otherwise input plus output tokens.">
-            {formatTokens(report.total_tokens)} total tokens
+        <div className="cost-report__metrics" aria-label={t('Cost metrics')}>
+          <span title={t('Provider-reported total tokens when available, otherwise input plus output tokens.')}>
+            {t('{count} total tokens', { count: formatTokens(report.total_tokens) })}
           </span>
-          <span title="Input tokens">{formatTokens(report.input_tokens)} in</span>
-          <span title="Output tokens">{formatTokens(report.output_tokens)} out</span>
-          <span>{report.total_calls || 0} calls</span>
+          <span title={t('Input tokens')}>{t('{count} in', { count: formatTokens(report.input_tokens) })}</span>
+          <span title={t('Output tokens')}>{t('{count} out', { count: formatTokens(report.output_tokens) })}</span>
+          <span>{t('{count} calls', { count: report.total_calls || 0 })}</span>
           <span className={`cost-report__status ${report.has_unknown_costs ? 'unknown' : report.has_estimates ? 'estimated' : 'known'}`}>
-            {statusText}
+            {t(statusText)}
           </span>
         </div>
       </div>
 
       <details className="cost-report__details">
-        <summary>Model breakdown</summary>
-        <div className="cost-report__table" role="table" aria-label="Cost by model">
+        <summary>{t('Model breakdown')}</summary>
+        <div className="cost-report__table" role="table" aria-label={t('Cost by model')}>
           <div className="cost-report__row cost-report__row--head" role="row">
-            <span role="columnheader">Model</span>
-            <span role="columnheader">Calls</span>
-            <span role="columnheader">Tokens</span>
-            <span role="columnheader">Cost</span>
-            <span role="columnheader">Status</span>
+            <span role="columnheader">{t('Model')}</span>
+            <span role="columnheader">{t('Calls')}</span>
+            <span role="columnheader">{t('Tokens')}</span>
+            <span role="columnheader">{t('Cost')}</span>
+            <span role="columnheader">{t('Status')}</span>
           </div>
           {report.by_model.map((row) => (
             <div className="cost-report__row" role="row" key={row.name}>
               <span className="cost-report__model" role="cell" title={row.name}>{row.name}</span>
               <span role="cell">{row.calls || 0}</span>
-              <span className="cost-report__tokens" role="cell" title={formatTokenBreakdown(row)}>
+              <span className="cost-report__tokens" role="cell" title={formatTokenBreakdown(row, t)}>
                 <span>{formatTokens(row.total_tokens)}</span>
-                <small>{formatTokenBreakdown(row)}</small>
+                <small>{formatTokenBreakdown(row, t)}</small>
               </span>
               <span role="cell">{rowCostLabel(row)}</span>
               <span role="cell" className={`cost-report__source ${rowStatus(row).toLowerCase().replace(' ', '-')}`}>
-                {rowStatus(row)}
+                {t(rowStatus(row))}
               </span>
             </div>
           ))}

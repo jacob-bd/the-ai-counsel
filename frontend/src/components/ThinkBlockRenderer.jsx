@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { MarkdownRenderer } from './MarkdownContent';
+import { useI18n } from '../i18n';
 import './ThinkBlockRenderer.css';
 
 // Collapsible think block component
 function ThinkBlock({ content }) {
+  const { t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -13,7 +15,7 @@ function ThinkBlock({ content }) {
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <span className="think-icon">💭</span>
-        <span className="think-label">Reasoning</span>
+        <span className="think-label">{t('Reasoning')}</span>
         <span className="think-chevron">{isExpanded ? '▼' : '▶'}</span>
       </button>
       {isExpanded && (
@@ -27,8 +29,9 @@ function ThinkBlock({ content }) {
 
 // Helper to parse and render content with <think> tags styled differently
 export default function ThinkBlockRenderer({ content }) {
+  const { t } = useI18n();
   if (!content || typeof content !== 'string') {
-    return <MarkdownRenderer>{String(content || 'No response')}</MarkdownRenderer>;
+    return <MarkdownRenderer>{String(content || t('No response'))}</MarkdownRenderer>;
   }
 
   // Regex to match <think>...</think> blocks (handles multiline)

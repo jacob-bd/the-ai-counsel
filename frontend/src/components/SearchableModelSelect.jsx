@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import Select from 'react-select';
+import { useI18n } from '../i18n';
 
 /**
  * Searchable model selector using react-select.
@@ -15,6 +16,8 @@ export default function SearchableModelSelect({
   allModels = null, // Optional: all models to find current value if filtered out
   autoOpen = false,
 }) {
+  const { t } = useI18n();
+
   // Convert models to react-select format with grouping
   const groupedOptions = models.reduce((acc, model) => {
     // Determine group label
@@ -70,7 +73,11 @@ export default function SearchableModelSelect({
       return a.localeCompare(b);
     })
     .map(group => ({
-      label: group,
+      label: group
+        .replace(' (Cloud)', ` (${t('Cloud')})`)
+        .replace(' (Subscription)', ` (${t('Subscription')})`)
+        .replace(' (Direct)', ` (${t('Direct')})`)
+        .replace(/^Local/, t('Local')),
       options: groupedOptions[group],
     }));
 
@@ -86,7 +93,7 @@ export default function SearchableModelSelect({
     if (currentModel) {
       selectedOption = {
         value: currentModel.id,
-        label: `${currentModel.name} (filtered)`,
+        label: `${currentModel.name} (${t('filtered')})`,
         model: currentModel,
       };
     }
@@ -202,7 +209,8 @@ export default function SearchableModelSelect({
       options={options}
       value={selectedOption}
       onChange={(option) => onChange(option ? option.value : '')}
-      placeholder={placeholder}
+      placeholder={t(placeholder)}
+      aria-label={t('Search and select a model...')}
       isDisabled={isDisabled}
       isLoading={isLoading}
       isClearable
@@ -212,8 +220,8 @@ export default function SearchableModelSelect({
       styles={customStyles}
       menuPortalTarget={document.body}
       classNamePrefix="model-select"
-      noOptionsMessage={() => "No models found"}
-      loadingMessage={() => "Loading models..."}
+      noOptionsMessage={() => t('No models found')}
+      loadingMessage={() => t('Loading models...')}
       filterOption={(option, inputValue) => {
         if (!inputValue) return true;
         // Normalize dashes/underscores to spaces so "kimi k2" matches "kimi-k2"

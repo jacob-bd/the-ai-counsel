@@ -1,3 +1,5 @@
+import { useI18n } from '../../i18n';
+
 const COUNCIL_PROMPTS = [
   {
     id: 'stage1',
@@ -108,6 +110,7 @@ export default function PromptSettings({
   activePromptTab,
   setActivePromptTab,
 }) {
+  const { t } = useI18n();
   const promptConfigs = variant === 'advisor' ? ADVISOR_PROMPTS : COUNCIL_PROMPTS;
   const activeConfig = promptConfigs.find(prompt => prompt.id === activePromptTab) || promptConfigs[0];
   const sectionTitle = variant === 'advisor' ? 'Advisor System Prompts' : 'Council System Prompts';
@@ -118,8 +121,8 @@ export default function PromptSettings({
 
   return (
     <section>
-      <h3>{sectionTitle}</h3>
-      <p className="section-description">{sectionDescription}</p>
+      <h3>{t(sectionTitle)}</h3>
+      <p className="section-description">{t(sectionDescription)}</p>
 
       <div className="prompts-tabs">
         {promptConfigs.map(prompt => (
@@ -129,16 +132,16 @@ export default function PromptSettings({
             className={`prompt-tab ${activeConfig.id === prompt.id ? 'active' : ''}`}
             onClick={() => setActivePromptTab(prompt.id)}
           >
-            {prompt.label}
+            {t(prompt.label)}
           </button>
         ))}
       </div>
 
       <div className="prompt-content">
-        <label htmlFor={`${activeConfig.id}-prompt`}>{activeConfig.heading}</label>
+        <label htmlFor={`${activeConfig.id}-prompt`}>{t(activeConfig.heading)}</label>
         <p className="prompt-help">
-          {activeConfig.description}
-          <span>Available variables:</span>
+          {t(activeConfig.description)}
+          <span>{t('Available variables:')}</span>
           {activeConfig.variables.map(variable => (
             <code key={variable}>{`{${variable}}`}</code>
           ))}
@@ -155,7 +158,7 @@ export default function PromptSettings({
           className="reset-prompt-btn"
           onClick={() => handleResetPrompt(activeConfig.key)}
         >
-          Reset to Default
+          {t('Reset to Default')}
         </button>
       </div>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { getShortModelName } from '../utils/modelHelpers';
+import { useI18n } from '../i18n';
 import './AdvisorGrid.css';
 
 export default function AdvisorGrid({
@@ -9,12 +10,13 @@ export default function AdvisorGrid({
   maxRounds = 3,
   isRunning = false,
 }) {
+  const { t } = useI18n();
   if (!personas || personas.length === 0) return null;
 
   return (
     <div className="advisor-grid-wrapper">
       <div className="advisor-round-indicator">
-        Round {round} of {maxRounds}
+        {t('Round {round} of {maxRounds}', { round, maxRounds })}
       </div>
       <div className="advisor-grid">
         {personas.map((persona) => {
