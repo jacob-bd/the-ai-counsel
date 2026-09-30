@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-30
+
 ### Added
-- Traditional Chinese interface translations, selectable from Settings; English remains the default.
+- Traditional Chinese interface localization, selectable from the Settings header (English stays the default; the choice is saved in the browser). Interface strings are translated while provider/model values, prompts, and conversation data stay untouched, and untranslated strings fall back to English (PR [#29](https://github.com/jacob-bd/the-ai-counsel/pull/29)). Thanks [@jamesliu69](https://github.com/jamesliu69)!
+
+### Thanks
+- Thanks to [@jamesliu69](https://github.com/jamesliu69) for contributing the Traditional Chinese localization (PR [#29](https://github.com/jacob-bd/the-ai-counsel/pull/29)), a thorough pass that covers every screen while leaving model, prompt, and conversation data untouched.
 
 ## [0.13.1] - 2026-09-18
 
