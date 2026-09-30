@@ -4,6 +4,7 @@ import MarkdownContent from './MarkdownContent';
 import { getShortModelName } from '../utils/modelHelpers';
 import CostReport from './CostReport';
 import { copyToClipboard } from '../utils/clipboard';
+import { useI18n } from '../i18n';
 import './DebateView.css';
 
 const toStr = (v) => (typeof v === 'string' ? v : String(v || ''));
@@ -12,13 +13,13 @@ function findPersona(personas, id) {
   return personas.find((p) => p.id === id) || null;
 }
 
-function RoundSection({ roundIndex, roundData, personas, isLast, isRunning }) {
+function RoundSection({ roundIndex, roundData, personas, isLast, isRunning, t }) {
   const responses = roundData.responses || [];
 
   return (
     <div className="debate-view__round">
       <div className="debate-view__round-header">
-        <span className="debate-view__round-label">Round {roundIndex + 1}</span>
+        <span className="debate-view__round-label">{t('Round {round}', { round: roundIndex + 1 })}</span>
         <div className="debate-view__round-divider" />
       </div>
 
@@ -27,7 +28,7 @@ function RoundSection({ roundIndex, roundData, personas, isLast, isRunning }) {
           const persona = findPersona(personas, resp.persona_id);
           const hasError = !!resp.error;
           const hasWarning = !hasError && !!(resp.warning || resp.word_limit_exceeded);
-          const displayName = persona?.name || resp.persona_name || resp.persona_id || 'Unknown';
+          const displayName = persona?.name || resp.persona_name || resp.persona_id || t('Unknown');
           const displayEmoji = persona?.avatar_emoji || '🤖';
           const displayRole = persona?.role || '';
           const displayColor = persona?.color || '#64748b';
@@ -56,10 +57,10 @@ function RoundSection({ roundIndex, roundData, personas, isLast, isRunning }) {
                   )}
                 </div>
                 {hasError && (
-                  <span className="debate-view__response-error-badge">Error</span>
+                  <span className="debate-view__response-error-badge">{t('Error')}</span>
                 )}
                 {hasWarning && (
-                  <span className="debate-view__response-warning-badge">Long</span>
+                  <span className="debate-view__response-warning-badge">{t('Long')}</span>
                 )}
               </div>
               <div className="debate-view__response-body">
@@ -67,9 +68,9 @@ function RoundSection({ roundIndex, roundData, personas, isLast, isRunning }) {
                   <div className="debate-view__response-error">
                     <span>⚠️</span>
                     <div className="debate-view__response-error-detail">
-                      <span>{resp.error || 'This advisor failed to respond.'}</span>
+                      <span>{resp.error || t('This advisor failed to respond.')}</span>
                       {resp.model && (
-                        <span className="debate-view__response-error-model">Model: {resp.model}</span>
+                        <span className="debate-view__response-error-model">{t('Model: {model}', { model: resp.model })}</span>
                       )}
                     </div>
                   </div>
@@ -77,9 +78,9 @@ function RoundSection({ roundIndex, roundData, personas, isLast, isRunning }) {
                   <>
                     {hasWarning && (
                       <div className="debate-view__response-warning">
-                        <span>Word guidance exceeded; response kept.</span>
+                        <span>{t('Word guidance exceeded; response kept.')}</span>
                         {resp.word_count && resp.word_limit && (
-                          <span>{resp.word_count} / {resp.word_limit} words</span>
+                          <span>{t('{count} / {limit} words', { count: resp.word_count, limit: resp.word_limit })}</span>
                         )}
                       </div>
                     )}
@@ -96,13 +97,13 @@ function RoundSection({ roundIndex, roundData, personas, isLast, isRunning }) {
       {isLast && isRunning ? (
         <div className="debate-view__next-round-banner">
           <span className="debate-view__next-round-dot" />
-          Next round starting...
+          {t('Next round starting...')}
         </div>
       ) : responses.length > 0 && !isRunning ? (
         <div className="debate-view__consensus-banner">
           {responses.every((r) => !r.error)
-            ? '✅ All advisors completed this round'
-            : '⚠️ Some advisors encountered errors'}
+            ? t('✅ All advisors completed this round')
+            : t('⚠️ Some advisors encountered errors')}
         </div>
       ) : null}
     </div>
@@ -123,6 +124,7 @@ export default function DebateView({
   error = null,
   costReport = null,
 }) {
+  const { t } = useI18n();
   const [verdictCopied, setVerdictCopied] = useState(false);
 
   const activePersonaId = useMemo(() => {
@@ -151,16 +153,16 @@ export default function DebateView({
   const expectedResponseCount = currentRoundData?.order?.length || personas.length || 0;
   const livePhase = phase || (isRunning ? 'round' : 'complete');
   const liveTitle = (() => {
-    if (livePhase === 'search') return 'Searching the web';
-    if (livePhase === 'tiebreaker') return 'Running tiebreaker';
-    if (livePhase === 'verdict') return 'Building verdict';
-    if (livePhase === 'round_complete') return 'Preparing next step';
-    if (livePhase === 'initializing') return 'Starting advisor debate';
-    return `Round ${currentRound} in progress`;
+    if (livePhase === 'search') return t('Searching the web');
+    if (livePhase === 'tiebreaker') return t('Running tiebreaker');
+    if (livePhase === 'verdict') return t('Building verdict');
+    if (livePhase === 'round_complete') return t('Preparing next step');
+    if (livePhase === 'initializing') return t('Starting advisor debate');
+    return t('Round {round} in progress', { round: currentRound });
   })();
   const liveDetail = expectedResponseCount > 0
-    ? `${currentResponseCount}/${expectedResponseCount} advisors responded`
-    : 'Preparing advisor panel';
+    ? t('{responded}/{total} advisors responded', { responded: currentResponseCount, total: expectedResponseCount })
+    : t('Preparing advisor panel');
 
   return (
     <div className="debate-view">
@@ -187,10 +189,10 @@ export default function DebateView({
       {question && (
         <div className="debate-view__question">
           <div className="debate-view__question-top">
-            <span className="debate-view__question-label">Debating</span>
+            <span className="debate-view__question-label">{t('Debating')}</span>
             {webSearch && (
               <span className={`debate-view__search-badge ${showDebateStarting ? 'debate-view__search-badge--searching' : ''}`}>
-                {showDebateStarting ? '🌐 Searching the web...' : '🌐 Web search included'}
+                {showDebateStarting ? t('🌐 Searching the web...') : t('🌐 Web search included')}
               </span>
             )}
           </div>
@@ -202,7 +204,7 @@ export default function DebateView({
       {showDebateStarting && (
         <div className="debate-view__starting">
           <span className="debate-view__starting-spinner" aria-hidden="true" />
-          Debate starting...
+          {t('Debate starting...')}
         </div>
       )}
 
@@ -213,8 +215,8 @@ export default function DebateView({
         <div className="debate-view__error">
           <span className="debate-view__error-icon">⚠️</span>
           <div className="debate-view__error-content">
-            <strong>Debate failed</strong>
-            <p>{error}</p>
+            <strong>{t('Debate failed')}</strong>
+            <p>{t(error)}</p>
           </div>
         </div>
       )}
@@ -231,6 +233,7 @@ export default function DebateView({
             personas={personas}
             isLast={idx === rounds.length - 1}
             isRunning={isRunning}
+            t={t}
           />
         );
       })}
@@ -240,7 +243,7 @@ export default function DebateView({
         <div className="debate-view__tiebreaker">
           <div className="debate-view__tiebreaker-header">
             <span className="debate-view__tiebreaker-icon">🔀</span>
-            <span className="debate-view__tiebreaker-title">Tiebreaker</span>
+            <span className="debate-view__tiebreaker-title">{t('Tiebreaker')}</span>
             {tiebreaker.model && (
               <span className="debate-view__tiebreaker-model">{tiebreaker.model}</span>
             )}
@@ -258,7 +261,7 @@ export default function DebateView({
                 {verdict.error ? '⚠️' : '📋'}
               </span>
               <span className="debate-view__verdict-title">
-                {verdict.error ? 'Verdict Error' : 'Verdict'}
+                {verdict.error ? t('Verdict Error') : t('Verdict')}
               </span>
               {verdict.model && (
                 <span className="debate-view__verdict-model">{verdict.model}</span>
@@ -269,17 +272,17 @@ export default function DebateView({
                 className={`debate-view__copy-btn ${verdictCopied ? 'debate-view__copy-btn--copied' : ''}`}
                 onClick={handleCopyVerdict}
                 type="button"
-                title="Copy verdict to clipboard"
+                title={t('Copy verdict to clipboard')}
               >
                 {verdictCopied ? (
                   <>
                     <span>✓</span>
-                    <span>Copied</span>
+                    <span>{t('Copied')}</span>
                   </>
                 ) : (
                   <>
                     <span>📋</span>
-                    <span>Copy</span>
+                    <span>{t('Copy')}</span>
                   </>
                 )}
               </button>

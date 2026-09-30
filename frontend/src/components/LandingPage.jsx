@@ -1,4 +1,5 @@
 import './LandingPage.css';
+import { useI18n } from '../i18n';
 
 const CouncilIcon = () => (
   <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -24,6 +25,7 @@ const AdvisorsIcon = () => (
 );
 
 export default function LandingPage({ onSelectMode }) {
+  const { t } = useI18n();
   return (
     <div className="landing-page">
       <div className="landing-orb landing-orb--blue" />
@@ -32,11 +34,11 @@ export default function LandingPage({ onSelectMode }) {
 
       <div className="landing-inner">
         <div className="landing-header">
-          <div className="landing-eyebrow">Multi-model AI deliberation</div>
+          <div className="landing-eyebrow">{t('Multi-model AI deliberation')}</div>
           <h1 className="landing-title">
             The AI <span className="landing-title__plus">Counsel</span>
           </h1>
-          <p className="landing-subtitle">Choose Council for answers. Choose Advisors for decisions.</p>
+          <p className="landing-subtitle">{t('Choose Council for answers. Choose Advisors for decisions.')}</p>
         </div>
 
         <div className="landing-cards">
@@ -47,20 +49,19 @@ export default function LandingPage({ onSelectMode }) {
                 <CouncilIcon />
               </div>
               <div className="landing-card__body">
-                <div className="landing-card__label">LLM Council</div>
-                <h2 className="landing-card__title">Multi-Model Deliberation</h2>
+                <div className="landing-card__label">{t('LLM Council')}</div>
+                <h2 className="landing-card__title">{t('Multi-Model Deliberation')}</h2>
                 <p className="landing-card__desc">
-                  Multiple AI models answer in parallel, rank each other anonymously, and a chairman
-                  synthesizes the best response.
+                  {t('Multiple AI models answer in parallel, rank each other anonymously, and a chairman synthesizes the best response.')}
                 </p>
                 <ul className="landing-card__features">
-                  <li>Best for facts, summaries, creative prompts</li>
-                  <li>Use when you want one strong answer</li>
-                  <li>Peer ranking plus chairman synthesis</li>
+                  <li>{t('Best for facts, summaries, creative prompts')}</li>
+                  <li>{t('Use when you want one strong answer')}</li>
+                  <li>{t('Peer ranking plus chairman synthesis')}</li>
                 </ul>
               </div>
               <div className="landing-card__cta">
-                <span>Enter Council</span>
+                <span>{t('Enter Council')}</span>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -75,20 +76,19 @@ export default function LandingPage({ onSelectMode }) {
                 <AdvisorsIcon />
               </div>
               <div className="landing-card__body">
-                <div className="landing-card__label">LLM Advisors</div>
-                <h2 className="landing-card__title">Persona-Driven Debate</h2>
+                <div className="landing-card__label">{t('LLM Advisors')}</div>
+                <h2 className="landing-card__title">{t('Persona-Driven Debate')}</h2>
                 <p className="landing-card__desc">
-                  Named advisor personas argue through choices where the right answer depends on
-                  priorities, risks, and tradeoffs.
+                  {t('Named advisor personas argue through choices where the right answer depends on priorities, risks, and tradeoffs.')}
                 </p>
                 <ul className="landing-card__features">
-                  <li>Best for strategy, ethics, risk, prioritization</li>
-                  <li>Use when reasonable advisors may disagree</li>
-                  <li>Consensus verdict plus next steps</li>
+                  <li>{t('Best for strategy, ethics, risk, prioritization')}</li>
+                  <li>{t('Use when reasonable advisors may disagree')}</li>
+                  <li>{t('Consensus verdict plus next steps')}</li>
                 </ul>
               </div>
               <div className="landing-card__cta">
-                <span>Start Advisory Session</span>
+                <span>{t('Start Advisory Session')}</span>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

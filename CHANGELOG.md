@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Traditional Chinese interface translations, selectable from Settings; English remains the default.
+
 ## [0.13.1] - 2026-09-18
 
 ### Fixed

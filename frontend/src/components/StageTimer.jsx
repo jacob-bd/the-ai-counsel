@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useI18n } from '../i18n';
 
 export default function StageTimer({ startTime, endTime, label = "Elapsed" }) {
+    const { t } = useI18n();
     const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
@@ -34,7 +36,7 @@ export default function StageTimer({ startTime, endTime, label = "Elapsed" }) {
             color: '#666',
             fontFamily: 'monospace'
         }}>
-            {label}: {formatTime(elapsed)}
+            {t(label)}: {formatTime(elapsed)}
         </span>
     );
 }

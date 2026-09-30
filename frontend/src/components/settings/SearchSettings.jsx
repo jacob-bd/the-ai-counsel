@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../../i18n';
 
 export const SEARCH_PROVIDERS = [
     {
@@ -82,9 +83,11 @@ export default function SearchSettings({
     setSearchHybridMode,
     onDisconnectSearchKey,
 }) {
+    const { t } = useI18n();
+
     return (
         <section className="settings-section">
-            <h3>Web Search Provider</h3>
+            <h3>{t('Web Search Provider')}</h3>
             <div className="provider-options">
                 {SEARCH_PROVIDERS.map(provider => (
                     <div key={provider.id} className={`provider-option-container ${selectedSearchProvider === provider.id ? 'selected' : ''}`}>
@@ -98,7 +101,7 @@ export default function SearchSettings({
                             />
                             <div className="provider-info">
                                 <span className="provider-name">{provider.name}</span>
-                                <span className="provider-description">{provider.description}</span>
+                                <span className="provider-description">{t(provider.description)}</span>
                             </div>
                         </label>
 
@@ -108,7 +111,7 @@ export default function SearchSettings({
                                 <div className="api-key-input-row">
                                     <input
                                         type="password"
-                                        placeholder={settings?.serper_api_key_set ? '••••••••••••••••' : 'Enter Serper API key'}
+                                        placeholder={settings?.serper_api_key_set ? '••••••••••••••••' : t('Enter Serper API key')}
                                         value={serperApiKey}
                                         onChange={e => {
                                             setSerperApiKey(e.target.value);
@@ -122,24 +125,24 @@ export default function SearchSettings({
                                         onClick={handleTestSerper}
                                         disabled={isTestingSerper || (!serperApiKey && !settings?.serper_api_key_set)}
                                     >
-                                        {isTestingSerper ? 'Testing...' : (settings?.serper_api_key_set && !serperApiKey ? 'Retest' : 'Test')}
+                                        {isTestingSerper ? t('Testing...') : (settings?.serper_api_key_set && !serperApiKey ? t('Retest') : t('Test'))}
                                     </button>
                                 </div>
                                 {settings?.serper_api_key_set && !serperApiKey && (
                                     <div className="key-status set key-status-row">
-                                        <span>✓ API key configured</span>
+                                        <span>✓ {t('API key configured')}</span>
                                         <button
                                             type="button"
                                             className="test-button danger"
                                             onClick={() => onDisconnectSearchKey?.('serper')}
                                         >
-                                            Disconnect
+                                            {t('Disconnect')}
                                         </button>
                                     </div>
                                 )}
                                 {serperTestResult && (
                                     <div className={`test-result ${serperTestResult.success ? 'success' : 'error'}`}>
-                                        {serperTestResult.success ? '✓' : '✗'} {serperTestResult.message}
+                                        {serperTestResult.success ? '✓' : '✗'} {t(serperTestResult.message)}
                                     </div>
                                 )}
                                 <a 
@@ -149,7 +152,7 @@ export default function SearchSettings({
                                     className="api-key-link"
                                     style={{ marginTop: '8px', display: 'inline-block', fontSize: 'calc(12px * var(--font-scale))', color: '#60a5fa' }}
                                 >
-                                    Get API key at serper.dev →
+                                    {t('Get API key at')} serper.dev →
                                 </a>
                             </div>
                         )}
@@ -160,7 +163,7 @@ export default function SearchSettings({
                                 <div className="api-key-input-row">
                                     <input
                                         type="password"
-                                        placeholder={settings?.tavily_api_key_set ? '••••••••••••••••' : 'Enter Tavily API key'}
+                                        placeholder={settings?.tavily_api_key_set ? '••••••••••••••••' : t('Enter Tavily API key')}
                                         value={tavilyApiKey}
                                         onChange={e => {
                                             setTavilyApiKey(e.target.value);
@@ -174,24 +177,24 @@ export default function SearchSettings({
                                         onClick={handleTestTavily}
                                         disabled={isTestingTavily || (!tavilyApiKey && !settings?.tavily_api_key_set)}
                                     >
-                                        {isTestingTavily ? 'Testing...' : (settings?.tavily_api_key_set && !tavilyApiKey ? 'Retest' : 'Test')}
+                                        {isTestingTavily ? t('Testing...') : (settings?.tavily_api_key_set && !tavilyApiKey ? t('Retest') : t('Test'))}
                                     </button>
                                 </div>
                                 {settings?.tavily_api_key_set && !tavilyApiKey && (
                                     <div className="key-status set key-status-row">
-                                        <span>✓ API key configured</span>
+                                        <span>✓ {t('API key configured')}</span>
                                         <button
                                             type="button"
                                             className="test-button danger"
                                             onClick={() => onDisconnectSearchKey?.('tavily')}
                                         >
-                                            Disconnect
+                                            {t('Disconnect')}
                                         </button>
                                     </div>
                                 )}
                                 {tavilyTestResult && (
                                     <div className={`test-result ${tavilyTestResult.success ? 'success' : 'error'}`}>
-                                        {tavilyTestResult.success ? '✓' : '✗'} {tavilyTestResult.message}
+                                        {tavilyTestResult.success ? '✓' : '✗'} {t(tavilyTestResult.message)}
                                     </div>
                                 )}
                             </div>
@@ -203,7 +206,7 @@ export default function SearchSettings({
                                 <div className="api-key-input-row">
                                     <input
                                         type="password"
-                                        placeholder={settings?.brave_api_key_set ? '••••••••••••••••' : 'Enter Brave API key'}
+                                        placeholder={settings?.brave_api_key_set ? '••••••••••••••••' : t('Enter Brave API key')}
                                         value={braveApiKey}
                                         onChange={e => {
                                             setBraveApiKey(e.target.value);
@@ -217,24 +220,24 @@ export default function SearchSettings({
                                         onClick={handleTestBrave}
                                         disabled={isTestingBrave || (!braveApiKey && !settings?.brave_api_key_set)}
                                     >
-                                        {isTestingBrave ? 'Testing...' : (settings?.brave_api_key_set && !braveApiKey ? 'Retest' : 'Test')}
+                                        {isTestingBrave ? t('Testing...') : (settings?.brave_api_key_set && !braveApiKey ? t('Retest') : t('Test'))}
                                     </button>
                                 </div>
                                 {settings?.brave_api_key_set && !braveApiKey && (
                                     <div className="key-status set key-status-row">
-                                        <span>✓ API key configured</span>
+                                        <span>✓ {t('API key configured')}</span>
                                         <button
                                             type="button"
                                             className="test-button danger"
                                             onClick={() => onDisconnectSearchKey?.('brave')}
                                         >
-                                            Disconnect
+                                            {t('Disconnect')}
                                         </button>
                                     </div>
                                 )}
                                 {braveTestResult && (
                                     <div className={`test-result ${braveTestResult.success ? 'success' : 'error'}`}>
-                                        {braveTestResult.success ? '✓' : '✗'} {braveTestResult.message}
+                                        {braveTestResult.success ? '✓' : '✗'} {t(braveTestResult.message)}
                                     </div>
                                 )}
                             </div>
@@ -246,7 +249,7 @@ export default function SearchSettings({
                                 <div className="api-key-input-row">
                                     <input
                                         type="password"
-                                        placeholder={settings?.tinyfish_api_key_set ? '••••••••••••••••' : 'Enter TinyFish API key'}
+                                        placeholder={settings?.tinyfish_api_key_set ? '••••••••••••••••' : t('Enter TinyFish API key')}
                                         value={tinyfishApiKey}
                                         onChange={e => {
                                             setTinyfishApiKey(e.target.value);
@@ -260,28 +263,28 @@ export default function SearchSettings({
                                         onClick={handleTestTinyfish}
                                         disabled={isTestingTinyfish || (!tinyfishApiKey && !settings?.tinyfish_api_key_set)}
                                     >
-                                        {isTestingTinyfish ? 'Testing...' : (settings?.tinyfish_api_key_set && !tinyfishApiKey ? 'Retest' : 'Test')}
+                                        {isTestingTinyfish ? t('Testing...') : (settings?.tinyfish_api_key_set && !tinyfishApiKey ? t('Retest') : t('Test'))}
                                     </button>
                                 </div>
                                 {settings?.tinyfish_api_key_set && !tinyfishApiKey && (
                                     <div className="key-status set key-status-row">
-                                        <span>✓ API key configured</span>
+                                        <span>✓ {t('API key configured')}</span>
                                         <button
                                             type="button"
                                             className="test-button danger"
                                             onClick={() => onDisconnectSearchKey?.('tinyfish')}
                                         >
-                                            Disconnect
+                                            {t('Disconnect')}
                                         </button>
                                     </div>
                                 )}
                                 {tinyfishTestResult && (
                                     <div className={`test-result ${tinyfishTestResult.success ? 'success' : 'error'}`}>
-                                        {tinyfishTestResult.success ? '✓' : '✗'} {tinyfishTestResult.message}
+                                        {tinyfishTestResult.success ? '✓' : '✗'} {t(tinyfishTestResult.message)}
                                     </div>
                                 )}
                                 <div className="rate-limit-notice" style={{ marginTop: '8px', fontSize: 'calc(12px * var(--font-scale))', color: '#94a3b8' }}>
-                                    ⚠ Free tier: 5 searches/min. Upgrade at <a href="https://agent.tinyfish.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>agent.tinyfish.ai</a> for higher limits.
+                                    ⚠ {t('Free tier: 5 searches/min. Upgrade at')} <a href="https://agent.tinyfish.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>agent.tinyfish.ai</a> {t('for higher limits.')}
                                 </div>
                                 <a
                                     href="https://agent.tinyfish.ai/api-keys"
@@ -290,7 +293,7 @@ export default function SearchSettings({
                                     className="api-key-link"
                                     style={{ marginTop: '8px', display: 'inline-block', fontSize: 'calc(12px * var(--font-scale))', color: '#60a5fa' }}
                                 >
-                                    Get free API key at agent.tinyfish.ai →
+                                    {t('Get free API key at')} agent.tinyfish.ai →
                                 </a>
                             </div>
                         )}
@@ -299,10 +302,10 @@ export default function SearchSettings({
             </div>
 
             <div className="full-content-section">
-                <label>Full Article Fetch (Jina AI)</label>
+                <label>{t('Full Article Fetch (Jina AI)')}</label>
                 <p className="setting-description">
-                    Uses Jina AI to read the full text of the top search results.
-                    <strong> Set to 0 to disable.</strong>
+                    {t('Uses Jina AI to read the full text of the top search results.')}
+                    <strong> {t('Set to 0 to disable.')}</strong>
                 </p>
                 <div className="full-content-input-row">
                     <input
@@ -313,29 +316,29 @@ export default function SearchSettings({
                         onChange={e => setFullContentResults(parseInt(e.target.value, 10))}
                         className="full-content-slider"
                     />
-                    <span className="full-content-value">{fullContentResults} results</span>
+                    <span className="full-content-value">{t('{count} results', { count: fullContentResults })}</span>
                 </div>
             </div>
 
             {/* DuckDuckGo-specific optimization settings */}
             {selectedSearchProvider === 'duckduckgo' && (
                 <div className="ddg-optimization-section" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    <label>DuckDuckGo Optimization</label>
+                    <label>{t('DuckDuckGo Optimization')}</label>
                     <p className="setting-description">
-                        DuckDuckGo includes built-in intelligent query processing that automatically:
+                        {t('DuckDuckGo includes built-in intelligent query processing that automatically:')}
                     </p>
                     <ul className="feature-list" style={{ margin: '8px 0 12px 20px', fontSize: 'calc(12px * var(--font-scale))', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-                        <li>Removes conversational fluff from your prompts</li>
-                        <li>Detects query intent (news, factual, comparison)</li>
-                        <li>Adds temporal context for current events</li>
-                        <li>Reranks results by relevance</li>
+                        <li>{t('Removes conversational fluff from your prompts')}</li>
+                        <li>{t('Detects query intent (news, factual, comparison)')}</li>
+                        <li>{t('Adds temporal context for current events')}</li>
+                        <li>{t('Reranks results by relevance')}</li>
                     </ul>
 
                     {/* Result Count Slider */}
                     <div className="result-count-section" style={{ marginTop: '16px' }}>
                         <div className="setting-row">
-                            <span className="setting-label">Search Result Count</span>
-                            <span className="setting-value">{searchResultCount} results</span>
+                            <span className="setting-label">{t('Search Result Count')}</span>
+                            <span className="setting-value">{t('{count} results', { count: searchResultCount })}</span>
                         </div>
                         <input
                             type="range"
@@ -345,7 +348,7 @@ export default function SearchSettings({
                             onChange={e => setSearchResultCount(parseInt(e.target.value, 10))}
                             className="full-content-slider"
                         />
-                        <p className="setting-hint">More results = better coverage but slower. Default: 8</p>
+                        <p className="setting-hint">{t('More results = better coverage but slower. Default: 8')}</p>
                     </div>
 
                     {/* Hybrid Mode Toggle */}
@@ -356,10 +359,10 @@ export default function SearchSettings({
                                 checked={searchHybridMode}
                                 onChange={e => setSearchHybridMode(e.target.checked)}
                             />
-                            <span className="toggle-label">Hybrid Search (Web + News)</span>
+                            <span className="toggle-label">{t('Hybrid Search (Web + News)')}</span>
                         </label>
                         <p className="setting-hint" style={{ marginTop: '4px', marginLeft: '28px' }}>
-                            Combines general web results with recent news for better coverage of current events.
+                            {t('Combines general web results with recent news for better coverage of current events.')}
                         </p>
                     </div>
                 </div>
@@ -367,12 +370,12 @@ export default function SearchSettings({
 
             {/* Search Query Processing */}
             <div className="keyword-extraction-section" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                <label>Search Query Processing</label>
+                <label>{t('Search Query Processing')}</label>
                 <p className="setting-description">
-                    Choose how your prompt is sent to the search engine.
+                    {t('Choose how your prompt is sent to the search engine.')}
                     {selectedSearchProvider === 'duckduckgo' && (
                         <span style={{ display: 'block', marginTop: '4px', color: 'var(--text-tertiary)', fontSize: 'calc(12px * var(--font-scale))' }}>
-                            ℹ️ DuckDuckGo uses built-in query optimization. Direct mode is recommended.
+                            {t('ℹ️ DuckDuckGo uses built-in query optimization. Direct mode is recommended.')}
                         </span>
                     )}
                 </p>
@@ -388,9 +391,9 @@ export default function SearchSettings({
                                 onChange={() => setSearchKeywordExtraction('direct')}
                             />
                             <div className="provider-info">
-                                <span className="provider-name">Direct (Recommended)</span>
+                                <span className="provider-name">{t('Direct (Recommended)')}</span>
                                 <span className="provider-description">
-                                    Send your exact query to the search engine. Best for most providers.
+                                    {t('Send your exact query to the search engine. Best for most providers.')}
                                 </span>
                             </div>
                         </label>
@@ -406,9 +409,9 @@ export default function SearchSettings({
                                 onChange={() => setSearchKeywordExtraction('yake')}
                             />
                             <div className="provider-info">
-                                <span className="provider-name">Smart Keywords (YAKE)</span>
+                                <span className="provider-name">{t('Smart Keywords (YAKE)')}</span>
                                 <span className="provider-description">
-                                    Extract key terms from your prompt before searching. Useful if you paste very long prompts that confuse the search engine.
+                                    {t('Extract key terms from your prompt before searching. Useful if you paste very long prompts that confuse the search engine.')}
                                 </span>
                             </div>
                         </label>
@@ -424,9 +427,9 @@ export default function SearchSettings({
                                 onChange={() => setSearchKeywordExtraction('llm')}
                             />
                             <div className="provider-info">
-                                <span className="provider-name">LLM Reformulation</span>
+                                <span className="provider-name">{t('LLM Reformulation')}</span>
                                 <span className="provider-description">
-                                    Use the Chairman model to rephrase your query into an optimal search term. Slower but can improve results for complex questions.
+                                    {t('Use the Chairman model to rephrase your query into an optimal search term. Slower but can improve results for complex questions.')}
                                 </span>
                             </div>
                         </label>

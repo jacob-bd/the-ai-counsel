@@ -4,6 +4,7 @@ import { getModelVisuals, getShortModelName } from '../utils/modelHelpers';
 import ThinkBlockRenderer from './ThinkBlockRenderer';
 import StageTimer from './StageTimer';
 import { copyToClipboard } from '../utils/clipboard';
+import { useI18n } from '../i18n';
 import './Stage4.css';
 
 /** Highlight [REVISED: ...] and [NEW: ...] markers for visual scanning */
@@ -16,6 +17,7 @@ function highlightRevisionMarkers(text) {
 }
 
 export default function Stage4({ correctedDraft, startTime, endTime }) {
+    const { t } = useI18n();
     const [isCopied, setIsCopied] = useState(false);
 
     if (!correctedDraft) return null;
@@ -40,14 +42,13 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
             <div className="stage-header">
                 <div className="stage-title">
                     <span className="stage-icon">📝</span>
-                    Stage 4: Corrected Draft
+                    {t('Stage 4: Corrected Draft')}
                 </div>
                 <StageTimer startTime={startTime} endTime={endTime} label="Duration" />
             </div>
             <p className="stage-4-description">
-                The chairman has rewritten the original document incorporating all corrections,
-                fixing flawed claims, and applying recommendations from the deliberation.
-                Changes are marked with <strong>[REVISED]</strong> or <strong>[NEW]</strong>.
+                {t('The chairman has rewritten the original document incorporating all corrections, fixing flawed claims, and applying recommendations from the deliberation. Changes are marked with')}
+                {' '}<strong>[REVISED]</strong> {t('or')} <strong>[NEW]</strong>.
             </p>
             <div className="corrected-draft-response">
                 <div className="corrected-draft-header">
@@ -57,7 +58,7 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                         </span>
                         <div className="corrected-draft-info">
                             <span className="corrected-draft-role">
-                                <span>📝</span> Corrected Draft
+                                <span>📝</span> {t('Corrected Draft')}
                             </span>
                             <span className="corrected-draft-model">{shortName}</span>
                             <span className="corrected-draft-provider-badge">{visuals.name}</span>
@@ -66,12 +67,12 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                     <button
                         className={`copy-button ${isCopied ? 'copied' : ''}`}
                         onClick={handleCopy}
-                        title="Copy corrected draft to clipboard"
+                        title={t('Copy corrected draft to clipboard')}
                     >
                         {isCopied ? (
-                            <><span className="icon">✓</span><span className="label">Copied</span></>
+                            <><span className="icon">✓</span><span className="label">{t('Copied')}</span></>
                         ) : (
-                            <><span className="icon">📋</span><span className="label">Copy</span></>
+                            <><span className="icon">📋</span><span className="label">{t('Copy')}</span></>
                         )}
                     </button>
                 </div>
@@ -80,7 +81,7 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
                         content={highlightRevisionMarkers(
                             typeof correctedDraft?.response === 'string'
                                 ? correctedDraft.response
-                                : String(correctedDraft?.response || 'No corrected draft generated.')
+                                : String(correctedDraft?.response || t('No corrected draft generated.'))
                         )}
                     />
                 </div>
@@ -90,12 +91,13 @@ export default function Stage4({ correctedDraft, startTime, endTime }) {
 }
 
 export function Stage4Skeleton() {
+    const { t } = useI18n();
     return (
         <div className="stage-container stage-4 skeleton-mode">
             <div className="stage-header">
                 <div className="stage-title">
                     <span className="stage-icon">📝</span>
-                    Stage 4: Corrected Draft
+                    {t('Stage 4: Corrected Draft')}
                 </div>
                 <div className="stage-timer-skeleton"><Skeleton variant="text" width="60px" /></div>
             </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '../i18n';
 import './SearchContext.css';
 
 /**
@@ -33,6 +34,7 @@ function parseSearchResults(searchContext) {
 }
 
 export default function SearchContext({ searchQuery, extractedQuery, searchContext }) {
+  const { t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!searchContext) return null;
@@ -52,11 +54,11 @@ export default function SearchContext({ searchQuery, extractedQuery, searchConte
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <span className="search-icon">🔍</span>
-        <span className="search-label">Web Search</span>
+        <span className="search-label">{t('Web Search')}</span>
         {searchQuery && (
           <span
             className="search-query-preview"
-            title={extractedQuery ? `Search terms sent: ${extractedQuery}` : searchQuery}
+            title={extractedQuery ? t('Search terms sent: {terms}', { terms: extractedQuery }) : searchQuery}
           >
             "{displayQuery}"
           </span>
@@ -76,7 +78,7 @@ export default function SearchContext({ searchQuery, extractedQuery, searchConte
       {/* Sources - Always visible */}
       {sources.length > 0 && (
         <div className="search-sources">
-          <span className="sources-label">Sources:</span>
+          <span className="sources-label">{t('Sources:')}</span>
           <div className="sources-list">
             {sources.map((source, index) => (
               <a
@@ -87,7 +89,7 @@ export default function SearchContext({ searchQuery, extractedQuery, searchConte
                 className="source-link"
                 title={source.title + (source.summary ? '\n\n' + source.summary : '')}
               >
-                {source.source || source.title || `Source ${index + 1}`}
+                {source.source || source.title || t('Source {number}', { number: index + 1 })}
               </a>
             ))}
           </div>

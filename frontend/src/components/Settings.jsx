@@ -10,6 +10,7 @@ import GeneralSettings, { RESPONSE_LANGUAGE_DEFAULT } from './settings/GeneralSe
 import { RESPONSE_LANGUAGES_FALLBACK } from '../constants/responseLanguages';
 import { normalizeFontSize } from '../utils/fontSize';
 import { countStoredCredentials, filterOAuthModels, OAUTH_PROVIDERS } from '../constants/oauthProviders';
+import { useI18n } from '../i18n';
 import './Settings.css';
 
 const PROMPT_FIELDS = [
@@ -66,6 +67,7 @@ const normalizeDirectProviderToggles = (toggles, data) => ({
 });
 
 export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initialSection = 'llm_keys', onFontSizeChange }) {
+  const { t, language, setLanguage } = useI18n();
   const [activeSection, setActiveSection] = useState(initialSection);
 
   const [settings, setSettings] = useState(null);
@@ -206,6 +208,19 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   // Remote/Local filter toggles per model type
   const [councilMemberFilters, setCouncilMemberFilters] = useState({});  // Per-member filters (indexed by member index)
   const [chairmanFilter, setChairmanFilter] = useState('remote');
+
+  const renderLanguageSelector = () => (
+    <select
+      aria-label={t('Interface language')}
+      value={language}
+      onChange={(event) => setLanguage(event.target.value)}
+      className="select-input"
+      style={{ width: 'auto', minWidth: '118px', marginRight: '12px', fontSize: 'calc(12px * var(--font-scale))' }}
+    >
+      <option value="en">English</option>
+      <option value="zh-TW">{t('Traditional Chinese')}</option>
+    </select>
+  );
 
   useEffect(() => {
     loadSettings();
@@ -681,7 +696,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError(err.message || `Failed to disconnect ${label}`);
+      setError(err.message || t('Failed to disconnect {provider}', { provider: label }));
     }
   };
 
@@ -1104,7 +1119,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       await loadModels();
       setSuccessMessage(
         result?.message
-        || `Disconnected all providers (${result?.cleared ?? 0} credentials cleared).`
+        || t('Disconnected all providers ({count} credentials cleared).', { count: result?.cleared ?? 0 })
       );
       setSuccess(true);
       setTimeout(() => {
@@ -1473,14 +1488,14 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         );
 
         if (missingModels.length > 0) {
-          setError(`Imported with warnings: Models not found: ${missingModels.join(', ')}`);
+          setError(t('Imported with warnings: Models not found: {models}', { models: missingModels.join(', ') }));
         } else {
           setSuccess(true);
           setTimeout(() => setSuccess(false), 3000);
         }
 
       } catch (err) {
-        setError(`Import failed: ${err.message}`);
+        setError(t('Import failed: {error}', { error: err.message }));
       }
     };
     reader.readAsText(file);
@@ -1570,12 +1585,17 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       const importedCount = Array.isArray(result?.imported) ? result.imported.length : selected.length;
       const skippedCount = Array.isArray(result?.skipped) ? result.skipped.length : 0;
       const errorCount = result?.errors ? Object.keys(result.errors).length : 0;
-      let message = `✓ Imported successfully — ${importedCount} credential${importedCount === 1 ? '' : 's'} added.`;
+      let message = t(
+        importedCount === 1
+          ? '✓ Imported successfully — {count} credential added.'
+          : '✓ Imported successfully — {count} credentials added.',
+        { count: importedCount }
+      );
       if (skippedCount > 0) {
-        message += ` ${skippedCount} skipped.`;
+        message += ` ${t('{count} skipped.', { count: skippedCount })}`;
       }
       if (errorCount > 0) {
-        message += ` ${errorCount} failed.`;
+        message += ` ${t('{count} failed.', { count: errorCount })}`;
       }
       setRelayImportMessage({
         tone: errorCount > 0 && importedCount === 0 ? 'error' : 'success',
@@ -1704,14 +1724,17 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       <div className="settings-overlay" onClick={onClose}>
         <div className="settings-modal" onClick={e => e.stopPropagation()}>
           <div className="settings-header">
-            <h2>Settings</h2>
-            <button className="close-button" onClick={onClose}>&times;</button>
+            <h2>{t('Settings')}</h2>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {renderLanguageSelector()}
+              <button className="close-button" onClick={onClose} aria-label={t('Close Settings')}>&times;</button>
+            </div>
           </div>
           <div className="settings-body" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
             {error ? (
-              <div className="settings-error">{error}</div>
+              <div className="settings-error">{t(error)}</div>
             ) : (
-              <div className="settings-loading">Loading settings...</div>
+              <div className="settings-loading">{t('Loading settings...')}</div>
             )}
           </div>
         </div>
@@ -1728,10 +1751,13 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       <div className="settings-modal" onClick={e => e.stopPropagation()}>
         <div className="settings-header">
           <div>
-            <h2>Settings</h2>
-            <p className="settings-header-subtitle">Changes save automatically</p>
+            <h2>{t('Settings')}</h2>
+            <p className="settings-header-subtitle">{t('Changes save automatically')}</p>
           </div>
-          <button className="close-button" onClick={onClose}>&times;</button>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {renderLanguageSelector()}
+            <button className="close-button" onClick={onClose} aria-label={t('Close Settings')}>&times;</button>
+          </div>
         </div>
 
         <div className="settings-body">
@@ -1741,49 +1767,49 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
               className={`sidebar-nav-item ${activeSection === 'general' ? 'active' : ''}`}
               onClick={() => setActiveSection('general')}
             >
-              General
+              {t('General')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'llm_keys' ? 'active' : ''}`}
               onClick={() => setActiveSection('llm_keys')}
             >
-              LLM API Keys
+              {t('LLM API Keys')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'council' ? 'active' : ''}`}
               onClick={() => setActiveSection('council')}
             >
-              Council Config
+              {t('Council Config')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'debate' ? 'active' : ''}`}
               onClick={() => setActiveSection('debate')}
             >
-              Council Debate Config
+              {t('Council Debate Config')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'prompts' ? 'active' : ''}`}
               onClick={() => setActiveSection('prompts')}
             >
-              Council System Prompts
+              {t('Council System Prompts')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'advisor_prompts' ? 'active' : ''}`}
               onClick={() => setActiveSection('advisor_prompts')}
             >
-              Advisor System Prompts
+              {t('Advisor System Prompts')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'search' ? 'active' : ''}`}
               onClick={() => setActiveSection('search')}
             >
-              Search Providers
+              {t('Search Providers')}
             </button>
             <button
               className={`sidebar-nav-item ${activeSection === 'import_export' ? 'active' : ''}`}
               onClick={() => setActiveSection('import_export')}
             >
-              Backup & Reset
+              {t('Backup & Reset')}
             </button>
           </div>
 
@@ -1992,13 +2018,13 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
             {/* IMPORT & EXPORT (New Section) */}
             {activeSection === 'import_export' && (
               <section className="settings-section">
-                <h3>Backup & Reset</h3>
+                <h3>{t('Backup & Reset')}</h3>
 
                 <div className="subsection">
-                  <h4>Import / Export</h4>
+                  <h4>{t('Import / Export')}</h4>
                   <p className="section-description">
-                    Save or restore your council configuration (models, prompts, settings).
-                    <br /><em>Note: API keys are NOT exported for security.</em>
+                    {t('Save or restore your council configuration (models, prompts, settings).')}
+                    <br /><em>{t('Note: API keys are NOT exported for security.')}</em>
                   </p>
                 </div>
 
@@ -2014,26 +2040,24 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                     <button
                       className="action-btn"
                       onClick={() => document.getElementById('import-council').click()}
-                      title="Import Configuration"
+                      title={t('Import Configuration')}
                     >
-                      Import Config
+                      {t('Import Config')}
                     </button>
                     <button
                       className="action-btn"
                       onClick={handleExportCouncil}
-                      title="Export Configuration"
+                      title={t('Export Configuration')}
                     >
-                      Export Config
+                      {t('Export Config')}
                     </button>
                   </div>
                 </div>
 
                 <div className="subsection" style={{ marginTop: '32px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <h4 style={{ color: '#f87171' }}>Danger Zone</h4>
+                  <h4 style={{ color: '#f87171' }}>{t('Danger Zone')}</h4>
                   <p className="section-description">
-                    Disconnect every LLM API key, search key, and subscription OAuth login.
-                    Council models, prompts, and other settings are left alone. Env-provided keys
-                    are ignored until you save a new key.
+                    {t('Disconnect every LLM API key, search key, and subscription OAuth login. Council models, prompts, and other settings are left alone. Env-provided keys are ignored until you save a new key.')}
                   </p>
                   <button
                     className="reset-button"
@@ -2042,12 +2066,11 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                     style={{ marginTop: '10px' }}
                     disabled={disconnectAllBusy}
                   >
-                    {disconnectAllBusy ? 'Disconnecting…' : 'Disconnect All Providers'}
+                    {disconnectAllBusy ? t('Disconnecting…') : t('Disconnect All Providers')}
                   </button>
 
                   <p className="section-description" style={{ marginTop: '24px' }}>
-                    Reset all settings to their default values. This will clear your council selection and custom prompts.
-                    API keys will be preserved.
+                    {t('Reset all settings to their default values. This will clear your council selection and custom prompts. API keys will be preserved.')}
                   </p>
                   <button
                     className="reset-button"
@@ -2055,7 +2078,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                     onClick={handleResetToDefaults}
                     style={{ marginTop: '10px' }}
                   >
-                    Reset to Defaults
+                    {t('Reset to Defaults')}
                   </button>
                 </div>
               </section>
@@ -2065,25 +2088,25 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         </div>
 
         <div className="settings-footer">
-          {error && <div className="settings-error">{error}</div>}
+          {error && <div className="settings-error">{t(error)}</div>}
           {success && (
             <div className="settings-success">
-              {successMessage
+              {t(successMessage
                 || (activeSection === 'general' && relayImportMessage?.tone === 'success'
                   ? relayImportMessage.text
                   : activeSection === 'llm_keys' && !settings?.openrouter_api_key_set && !ollamaStatus?.connected
                     ? 'Defaults loaded. Please configure an API Key.'
-                    : 'Settings saved!')}
+                    : 'Settings saved!'))}
             </div>
           )}
 
           <div className="footer-actions">
             <button className="cancel-button" onClick={onClose}>
-              Close
+              {t('Close')}
             </button>
-            {isSaving && <span className="settings-autosave-status">Saving…</span>}
+            {isSaving && <span className="settings-autosave-status">{t('Saving…')}</span>}
             {!isSaving && success && (
-              <span className="settings-autosave-status saved">Saved</span>
+              <span className="settings-autosave-status saved">{t('Saved')}</span>
             )}
           </div>
         </div>
@@ -2094,23 +2117,28 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           <div className="settings-overlay confirmation-overlay" onClick={() => !credentialStorageBusy && setCredentialStorageTarget(null)}>
             <div className="settings-modal confirmation-modal" onClick={e => e.stopPropagation()}>
               <div className="settings-header">
-                <h2>Move credentials?</h2>
+                <h2>{t('Move credentials?')}</h2>
               </div>
               <div className="settings-content confirmation-content" style={{ padding: '20px 24px' }}>
                 <p style={{ marginBottom: '16px' }}>
-                  Move {countStoredCredentials(settings)} stored credential{countStoredCredentials(settings) === 1 ? '' : 's'} from{' '}
-                  <strong>{currentCredentialStorage === 'file' ? 'local file' : 'OS keystore'}</strong> to{' '}
-                  <strong>{credentialStorageTarget === 'file' ? 'local file' : 'OS keystore'}</strong>?
+                  {t(
+                    countStoredCredentials(settings) === 1
+                      ? 'Move {count} stored credential from'
+                      : 'Move {count} stored credentials from',
+                    { count: countStoredCredentials(settings) }
+                  )}{' '}
+                  <strong>{t(currentCredentialStorage === 'file' ? 'local file' : 'OS keystore')}</strong> {t('to')}{' '}
+                  <strong>{t(credentialStorageTarget === 'file' ? 'local file' : 'OS keystore')}</strong>?
                 </p>
-                <p className="api-key-hint">Existing credentials are removed from the old location after a successful copy.</p>
+                <p className="api-key-hint">{t('Existing credentials are removed from the old location after a successful copy.')}</p>
               </div>
               <div className="settings-footer">
                 <div className="footer-actions" style={{ width: '100%', justifyContent: 'flex-end' }}>
                   <button className="cancel-button" onClick={() => setCredentialStorageTarget(null)} disabled={credentialStorageBusy}>
-                    Cancel
+                    {t('Cancel')}
                   </button>
                   <button className="action-btn" onClick={confirmCredentialStorageMigration} disabled={credentialStorageBusy}>
-                    {credentialStorageBusy ? 'Moving…' : 'Move credentials'}
+                    {credentialStorageBusy ? t('Moving…') : t('Move credentials')}
                   </button>
                 </div>
               </div>
@@ -2124,23 +2152,23 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           <div className="settings-overlay confirmation-overlay" onClick={() => !disconnectAllBusy && setShowDisconnectAllConfirm(false)}>
             <div className="settings-modal confirmation-modal" onClick={e => e.stopPropagation()}>
               <div className="settings-header">
-                <h2>Disconnect all providers?</h2>
+                <h2>{t('Disconnect all providers?')}</h2>
               </div>
               <div className="settings-content confirmation-content" style={{ padding: '20px 24px' }}>
                 <p style={{ marginBottom: '16px' }}>
-                  This removes every stored API key and OAuth login from the credential store.
+                  {t('This removes every stored API key and OAuth login from the credential store.')}
                 </p>
                 <div className="confirmation-details" style={{ padding: '16px 20px' }}>
-                  <p><strong>This will clear:</strong></p>
+                  <p><strong>{t('This will clear:')}</strong></p>
                   <ul style={{ margin: '12px 0', lineHeight: '1.8' }}>
-                    <li>OpenRouter, Groq, OpenCode, and direct provider keys</li>
-                    <li>Search provider keys (Tavily, Brave, Serper, TinyFish)</li>
-                    <li>Subscription OAuth (xAI, ChatGPT, Copilot)</li>
-                    <li>Custom endpoint URL / name</li>
-                    <li>Provider toggles → all disabled</li>
+                    <li>{t('OpenRouter, Groq, OpenCode, and direct provider keys')}</li>
+                    <li>{t('Search provider keys (Tavily, Brave, Serper, TinyFish)')}</li>
+                    <li>{t('Subscription OAuth (xAI, ChatGPT, Copilot)')}</li>
+                    <li>{t('Custom endpoint URL / name')}</li>
+                    <li>{t('Provider toggles → all disabled')}</li>
                   </ul>
                   <p className="confirmation-safe" style={{ marginTop: '14px' }}>
-                    ✓ Council models, prompts, and other settings are kept
+                    ✓ {t('Council models, prompts, and other settings are kept')}
                   </p>
                 </div>
               </div>
@@ -2151,14 +2179,14 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                     onClick={() => setShowDisconnectAllConfirm(false)}
                     disabled={disconnectAllBusy}
                   >
-                    Cancel
+                    {t('Cancel')}
                   </button>
                   <button
                     className="reset-button"
                     onClick={confirmDisconnectAllProviders}
                     disabled={disconnectAllBusy}
                   >
-                    {disconnectAllBusy ? 'Disconnecting…' : 'Disconnect All'}
+                    {disconnectAllBusy ? t('Disconnecting…') : t('Disconnect All')}
                   </button>
                 </div>
               </div>
@@ -2172,29 +2200,29 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
           <div className="settings-overlay confirmation-overlay" onClick={() => setShowResetConfirm(false)}>
             <div className="settings-modal confirmation-modal" onClick={e => e.stopPropagation()}>
               <div className="settings-header">
-                <h2>Confirm Reset</h2>
+                <h2>{t('Confirm Reset')}</h2>
               </div>
               <div className="settings-content confirmation-content" style={{ padding: '20px 24px' }}>
-                <p style={{ marginBottom: '16px' }}>Are you sure you want to reset to defaults?</p>
+                <p style={{ marginBottom: '16px' }}>{t('Are you sure you want to reset to defaults?')}</p>
                 <div className="confirmation-details" style={{ padding: '16px 20px' }}>
-                  <p><strong>This will reset:</strong></p>
+                  <p><strong>{t('This will reset:')}</strong></p>
                   <ul style={{ margin: '12px 0', lineHeight: '1.8' }}>
-                    <li>Provider toggles → All disabled</li>
-                    <li>Model selections → Cleared</li>
-                    <li>Council size → Reset to 2 members</li>
-                    <li>Temperatures → Defaults (0.5 / 0.4 / 0.3)</li>
-                    <li>System prompts → Defaults</li>
-                    <li>Search provider → DuckDuckGo</li>
-                    <li>Jina fetch count → 3</li>
-                    <li>Ollama URL → localhost:11434</li>
+                    <li>{t('Provider toggles → All disabled')}</li>
+                    <li>{t('Model selections → Cleared')}</li>
+                    <li>{t('Council size → Reset to 2 members')}</li>
+                    <li>{t('Temperatures → Defaults (0.5 / 0.4 / 0.3)')}</li>
+                    <li>{t('System prompts → Defaults')}</li>
+                    <li>{t('Search provider → DuckDuckGo')}</li>
+                    <li>{t('Jina fetch count → 3')}</li>
+                    <li>{t('Ollama URL → localhost:11434')}</li>
                   </ul>
-                  <p className="confirmation-safe" style={{ marginTop: '14px' }}>✓ API keys will be PRESERVED</p>
+                  <p className="confirmation-safe" style={{ marginTop: '14px' }}>✓ {t('API keys will be PRESERVED')}</p>
                 </div>
               </div>
               <div className="settings-footer">
                 <div className="footer-actions" style={{ width: '100%', justifyContent: 'flex-end' }}>
-                  <button className="cancel-button" onClick={() => setShowResetConfirm(false)}>Cancel</button>
-                  <button className="reset-button" onClick={confirmResetToDefaults}>Confirm Reset</button>
+                  <button className="cancel-button" onClick={() => setShowResetConfirm(false)}>{t('Cancel')}</button>
+                  <button className="reset-button" onClick={confirmResetToDefaults}>{t('Confirm Reset')}</button>
                 </div>
               </div>
             </div>

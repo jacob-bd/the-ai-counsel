@@ -14,6 +14,7 @@ import Stage4, { Stage4Skeleton } from './Stage4';
 import RoundNavigator from './RoundNavigator';
 import CostReport from './CostReport';
 import DocumentUpload from './DocumentUpload';
+import { useI18n } from '../i18n';
 import './ChatInterface.css';
 
 function hasStage1Results(msg) {
@@ -71,22 +72,23 @@ function isCouncilTurnPending(msg, isActiveTurn, isLoading) {
 import { CRITIQUE_MODE_LABELS } from '../constants/critiqueMode';
 
 function DebateConfigBar({ critiqueMode, debateRounds, autoConverge, convergenceThreshold, onOpenSettings }) {
+    const { t } = useI18n();
     const modeLabel = CRITIQUE_MODE_LABELS[critiqueMode] || critiqueMode;
-    const roundsLabel = debateRounds === 1 ? '1 round' : `${debateRounds} rounds`;
+    const roundsLabel = debateRounds === 1 ? t('1 round') : t('{count} rounds', { count: debateRounds });
     const showAutoConverge = debateRounds > 1 && autoConverge;
 
     return (
         <div className="debate-config-bar">
             <div className="debate-config-bar__info">
-                <span className="debate-config-bar__label">Debate:</span>
-                <span className="debate-config-bar__pill">{modeLabel}</span>
+                <span className="debate-config-bar__label">{t('Debate:')}</span>
+                <span className="debate-config-bar__pill">{t(modeLabel)}</span>
                 <span className="debate-config-bar__dot">·</span>
                 <span className="debate-config-bar__value">{roundsLabel}</span>
                 {showAutoConverge && (
                     <>
                         <span className="debate-config-bar__dot">·</span>
                         <span className="debate-config-bar__converge">
-                            Auto-converge ({convergenceThreshold} stable)
+                            {t('Auto-converge ({count} stable)', { count: convergenceThreshold })}
                         </span>
                     </>
                 )}
@@ -96,7 +98,7 @@ function DebateConfigBar({ critiqueMode, debateRounds, autoConverge, convergence
                 className="debate-config-bar__link"
                 onClick={() => onOpenSettings?.('debate')}
             >
-                Council Debate Config →
+                {t('Council Debate Config →')}
             </button>
         </div>
     );
@@ -125,6 +127,7 @@ export default function ChatInterface({
     autoConverge = true,
     convergenceThreshold = 2,
 }) {
+    const { t } = useI18n();
     const [input, setInput] = useState('');
     const [activeSearchProvider, setActiveSearchProvider] = useState(null);
     const [searchPopoverOpen, setSearchPopoverOpen] = useState(false);
@@ -211,9 +214,9 @@ export default function ChatInterface({
         return (
             <div className="chat-interface">
                 <div className="empty-state">
-                    <h1>Welcome to The AI <span className="plus-text">Counsel</span></h1>
+                    <h1>{t('Welcome to')} The AI <span className="plus-text">Counsel</span></h1>
                     <p className="hero-message">
-                        Configure your council below, then start a session or ask your question.
+                        {t('Configure your council below, then start a session or ask your question.')}
                     </p>
                     <div className="welcome-grid-container">
                         <CouncilSetup
@@ -228,7 +231,7 @@ export default function ChatInterface({
                     <button className="start-session-btn start-session-btn--secondary" onClick={onNewConversation}>
                         <span className="btn-content">
                             <span className="btn-icon">✨</span>
-                            Start a New Council Session
+                            {t('Start a New Council Session')}
                         </span>
                     </button>
                 </div>
@@ -250,9 +253,9 @@ export default function ChatInterface({
                 ) : (conversation.messages.length === 0) ? (
                     <div className="hero-container">
                         <div className="hero-content">
-                            <h1>Welcome to The AI <span className="text-gradient">Counsel</span></h1>
+                            <h1>{t('Welcome to')} The AI <span className="text-gradient">Counsel</span></h1>
                             <p className="hero-subtitle">
-                                Configure your council below, then ask your question.
+                                {t('Configure your council below, then ask your question.')}
                             </p>
                             <div className="welcome-grid-container">
                                 <CouncilSetup
@@ -277,8 +280,8 @@ export default function ChatInterface({
                             <div className="message-role" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 <span>
                                     {msg.role === 'user'
-                                        ? (mode === 'advisors' ? 'Your Question' : 'Your Question to the Council')
-                                        : (mode === 'advisors' ? 'Advisor Panel' : 'LLM Council')}
+                                        ? (mode === 'advisors' ? t('Your Question') : t('Your Question to the Council'))
+                                        : (mode === 'advisors' ? t('Advisor Panel') : t('LLM Council'))}
                                 </span>
                                 {msg.role === 'assistant' && msg.type !== 'advisor_debate' && (() => {
                                     const knownMode = msg.metadata?.execution_mode
@@ -288,17 +291,17 @@ export default function ChatInterface({
                                     const rounds = msg.metadata?.rounds?.length || msg.metadata?.debate_rounds_configured || 1;
                                     const critique = msg.metadata?.critique_mode || 'freeform';
                                     let label;
-                                    if (knownMode === 'chat_only') label = '💬 Chat Only';
-                                    else if (knownMode === 'chat_ranking') label = '⚖️ Chat + Ranking';
+                                    if (knownMode === 'chat_only') label = `💬 ${t('Chat Only')}`;
+                                    else if (knownMode === 'chat_ranking') label = `⚖️ ${t('Chat + Ranking')}`;
                                     else if (knownMode === 'full') {
                                         if (rounds > 1) {
-                                            const critiqueLabel = CRITIQUE_MODE_LABELS[critique] || critique;
-                                            label = `🏛️ Full Debate (${rounds} Rds • ${critiqueLabel})`;
+                                            const critiqueLabel = t(CRITIQUE_MODE_LABELS[critique] || critique);
+                                            label = `🏛️ ${t('Full Debate ({rounds} Rds • {mode})', { rounds, mode: critiqueLabel })}`;
                                         } else {
-                                            label = '🏛️ Full Deliberation';
+                                            label = `🏛️ ${t('Full Deliberation')}`;
                                         }
                                     } else {
-                                        label = '🏛️ Deliberation';
+                                        label = `🏛️ ${t('Deliberation')}`;
                                     }
                                     return <span className="debate-mode-pill">{label}</span>;
                                 })()}
@@ -371,10 +374,10 @@ export default function ChatInterface({
                 {!councilConfigured ? (
                     <div className="input-container config-required">
                         <span className="config-message">
-                            ⚠️ Council not ready — add at least one member.
+                            ⚠️ {t('Council not ready — add at least one member.')}
                             {!providersConfigured && (
                                 <button className="config-link" onClick={() => onOpenSettings('llm_keys')}>
-                                    Configure API Keys
+                                    {t('Configure API Keys')}
                                 </button>
                             )}
                         </span>
@@ -388,7 +391,7 @@ export default function ChatInterface({
                                     className={`search-toggle ${activeSearchProvider ? 'active' : ''}`}
                                     onClick={() => !isLoading && setSearchPopoverOpen((v) => !v)}
                                     disabled={isLoading}
-                                    title={activeSearchProvider ? `Search: ${availableSearchProviders.find(p => p.id === activeSearchProvider)?.name || activeSearchProvider}` : 'Web Search Off'}
+                                    title={activeSearchProvider ? t('Search: {provider}', { provider: availableSearchProviders.find(p => p.id === activeSearchProvider)?.name || activeSearchProvider }) : t('Web Search Off')}
                                     aria-haspopup="listbox"
                                     aria-expanded={searchPopoverOpen}
                                 >
@@ -407,7 +410,7 @@ export default function ChatInterface({
                                             onClick={() => { setActiveSearchProvider(null); setSearchPopoverOpen(false); }}
                                         >
                                             <span className="search-popover-option-icon">✕</span>
-                                            Off
+                                            {t('Off')}
                                         </button>
                                         {availableSearchProviders.map((p) => (
                                             <button
@@ -426,7 +429,7 @@ export default function ChatInterface({
 
                             <textarea
                                 className="message-input"
-                                placeholder={isLoading ? "Consulting..." : "Ask the Council..."}
+                                placeholder={isLoading ? t('Consulting...') : t('Ask the Council...')}
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
@@ -436,7 +439,7 @@ export default function ChatInterface({
                             />
 
                             {isLoading ? (
-                                <button type="button" className="send-button stop-button" onClick={onAbort} title="Stop Generation">
+                                <button type="button" className="send-button stop-button" onClick={onAbort} title={t('Stop Generation')}>
                                     ⏹
                                 </button>
                             ) : (
@@ -480,6 +483,7 @@ function CouncilMessageRenderer({
     stage2AnchorRef,
     stage3AnchorRef,
 }) {
+    const { t } = useI18n();
     const [selectedRound, setSelectedRound] = useState(null);
 
     const hasRounds = Array.isArray(msg.metadata?.rounds) && msg.metadata.rounds.length > 0;
@@ -521,14 +525,14 @@ function CouncilMessageRenderer({
             {msg.error && (
                 <div className="council-error">
                     <span className="council-error-icon">⚠️</span>
-                    <span className="council-error-text">{msg.error}</span>
+                    <span className="council-error-text">{t(msg.error)}</span>
                 </div>
             )}
 
             {isCouncilTurnPending(msg, isActiveCouncilTurn, isLoading) && (
                 <div className="stage-loading">
                     <div className="spinner"></div>
-                    <span>Consulting the council…</span>
+                    <span>{t('Consulting the council…')}</span>
                 </div>
             )}
 
@@ -537,7 +541,7 @@ function CouncilMessageRenderer({
                 <div className="stage-loading">
                     <div className="spinner"></div>
                     <span>
-                        🔍 Searching the web with {availableSearchProviders.find(p => p.id === (activeSearchProvider || searchProvider))?.name || 'Web'}...
+                        {t('🔍 Searching the web with {provider}...', { provider: availableSearchProviders.find(p => p.id === (activeSearchProvider || searchProvider))?.name || 'Web' })}
                     </span>
                 </div>
             )}
@@ -563,14 +567,14 @@ function CouncilMessageRenderer({
 
             <CostReport
                 report={displayMetadata.cost_report}
-                title={totalRounds > 1 ? 'Debate Cost' : 'Run Cost'}
+                title={t(totalRounds > 1 ? 'Debate Cost' : 'Run Cost')}
             />
 
             {/* Stage 1: Council Grid (during active round deliberation only) */}
             {shouldShowStage1CouncilGrid(msg) && (
                 <div className="stage-container">
                     <div className="stage-header">
-                        <h3>Stage 1: Council Deliberation {totalRounds > 1 && `(Round ${activeRoundNum})`}</h3>
+                        <h3>{t('Stage 1: Council Deliberation')}{totalRounds > 1 && ` ${t('(Round {round})', { round: activeRoundNum })}`}</h3>
                         {msg.timers?.stage1Start && (
                             <StageTimer
                                 startTime={msg.timers.stage1Start}
@@ -646,7 +650,7 @@ function CouncilMessageRenderer({
                         <>
                             <div className="stage-loading">
                                 <div className="spinner"></div>
-                                <span>📝 Stage 4: Generating corrected draft…</span>
+                                <span>{t('📝 Stage 4: Generating corrected draft…')}</span>
                             </div>
                             <Stage4Skeleton />
                         </>
@@ -665,8 +669,8 @@ function CouncilMessageRenderer({
                 <div className="aborted-indicator">
                     <span className="aborted-icon">⏹</span>
                     <span className="aborted-text">
-                        Generation stopped by user.
-                        {displayStage1 && !displayStage3 && ' Partial results shown above.'}
+                        {t('Generation stopped by user.')}
+                        {displayStage1 && !displayStage3 && ` ${t('Partial results shown above.')}`}
                     </span>
                 </div>
             )}

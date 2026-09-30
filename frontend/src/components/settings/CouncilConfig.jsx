@@ -1,5 +1,6 @@
 import React from 'react';
 import { OAUTH_PROVIDERS } from '../../constants/oauthProviders';
+import { useI18n } from '../../i18n';
 
 const DIRECT_PROVIDERS = [
     { id: 'openai', name: 'OpenAI', key: 'openai_api_key' },
@@ -46,6 +47,8 @@ export default function CouncilConfig({
     customEndpointName,
     customEndpointUrl,
 }) {
+    const { t } = useI18n();
+
     const isSourceConfigured = (source) => {
         switch (source) {
             case 'openrouter': return !!settings?.openrouter_api_key_set;
@@ -70,11 +73,10 @@ export default function CouncilConfig({
     return (
         <>
             <section className="settings-section">
-                <h3>Available Model Sources</h3>
+                <h3>{t('Available Model Sources')}</h3>
                 <p className="section-description">
-                    Toggle which providers are available across all model pickers — Council members, Chairman, and Advisor debates.
-                    Disabling a provider here hides its models everywhere.
-                    <br /><em style={{ opacity: 0.7, fontSize: 'calc(12px * var(--font-scale))' }}>Note: Most non-chat models (embeddings, image generation, speech, OCR, etc.) are automatically filtered out, though some may still appear.</em>
+                    {t('Toggle which providers are available across all model pickers — Council members, Chairman, and Advisor debates. Disabling a provider here hides its models everywhere.')}
+                    <br /><em style={{ opacity: 0.7, fontSize: 'calc(12px * var(--font-scale))' }}>{t('Note: Most non-chat models (embeddings, image generation, speech, OCR, etc.) are automatically filtered out, though some may still appear.')}</em>
                 </p>
 
                 <div className="hybrid-settings-card">
@@ -82,7 +84,7 @@ export default function CouncilConfig({
                     <div className="filter-group">
                         <label 
                             className={`toggle-wrapper ${!isSourceConfigured('ollama') ? 'source-disabled' : ''}`}
-                            title={!isSourceConfigured('ollama') ? 'Not configured — connect Ollama in LLM API Keys' : ''}
+                            title={!isSourceConfigured('ollama') ? t('Not configured — connect Ollama in LLM API Keys') : ''}
                         >
                             <div className="toggle-switch">
                                 <input
@@ -94,9 +96,9 @@ export default function CouncilConfig({
                                 <span className="slider"></span>
                             </div>
                             <span className="toggle-text">
-                                Local (Ollama)
+                                {t('Local (Ollama)')}
                                 {!isSourceConfigured('ollama') && (
-                                    <span className="toggle-hint"> · not configured</span>
+                                    <span className="toggle-hint"> · {t('not configured')}</span>
                                 )}
                             </span>
                         </label>
@@ -112,7 +114,7 @@ export default function CouncilConfig({
                                 <label
                                     key={provider.id}
                                     className={`toggle-wrapper ${!configured ? 'source-disabled' : ''}`}
-                                    title={!configured ? 'Not connected — sign in under LLM API Keys → Subscription Logins' : ''}
+                                    title={!configured ? t('Not connected — sign in under LLM API Keys → Subscription Logins') : ''}
                                 >
                                     <div className="toggle-switch">
                                         <input
@@ -131,7 +133,7 @@ export default function CouncilConfig({
                                     <span className="toggle-text">
                                         {provider.label}
                                         {!configured && (
-                                            <span className="toggle-hint"> · not connected</span>
+                                            <span className="toggle-hint"> · {t('not connected')}</span>
                                         )}
                                     </span>
                                 </label>
@@ -173,7 +175,7 @@ export default function CouncilConfig({
                                 />
                                 <span className="slider"></span>
                             </div>
-                            <span className="toggle-text">Remote APIs</span>
+                            <span className="toggle-text">{t('Remote APIs')}</span>
                         </label>
                     </div>
 
@@ -182,7 +184,7 @@ export default function CouncilConfig({
                         <div className="filter-group" style={{ marginBottom: '8px' }}>
                             <label 
                                 className={`toggle-wrapper ${!isSourceConfigured('openrouter') ? 'source-disabled' : ''}`}
-                                title={!isSourceConfigured('openrouter') ? 'Not configured — add API key in LLM API Keys' : ''}
+                                title={!isSourceConfigured('openrouter') ? t('Not configured — add API key in LLM API Keys') : ''}
                             >
                                 <div className="toggle-switch direct-toggle">
                                     <input
@@ -203,14 +205,14 @@ export default function CouncilConfig({
                                 <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>
                                     OpenRouter
                                     {!isSourceConfigured('openrouter') && (
-                                        <span className="toggle-hint"> · not configured</span>
+                                        <span className="toggle-hint"> · {t('not configured')}</span>
                                     )}
                                 </span>
                             </label>
 
                             <label 
                                 className={`toggle-wrapper ${!isSourceConfigured('groq') ? 'source-disabled' : ''}`}
-                                title={!isSourceConfigured('groq') ? 'Not configured — add API key in LLM API Keys' : ''}
+                                title={!isSourceConfigured('groq') ? t('Not configured — add API key in LLM API Keys') : ''}
                             >
                                 <div className="toggle-switch direct-toggle">
                                     <input
@@ -231,7 +233,7 @@ export default function CouncilConfig({
                                 <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>
                                     Groq
                                     {!isSourceConfigured('groq') && (
-                                        <span className="toggle-hint"> · not configured</span>
+                                        <span className="toggle-hint"> · {t('not configured')}</span>
                                     )}
                                 </span>
                             </label>
@@ -253,12 +255,12 @@ export default function CouncilConfig({
                                         />
                                         <span className="slider"></span>
                                     </div>
-                                    <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>{settings?.custom_endpoint_name || customEndpointName || 'Custom Endpoint'}</span>
+                                    <span className="toggle-text" style={{ fontSize: 'calc(13px * var(--font-scale))' }}>{settings?.custom_endpoint_name || customEndpointName || t('Custom Endpoint')}</span>
                                 </label>
                             )}
                         </div>
 
-                        <div className="direct-grid-label">Direct connections</div>
+                        <div className="direct-grid-label">{t('Direct connections')}</div>
                         {/* Direct provider grid */}
                         <div className="direct-grid">
                             {DIRECT_PROVIDERS.map(dp => {
@@ -267,7 +269,7 @@ export default function CouncilConfig({
                                     <label 
                                         key={dp.id} 
                                         className={`toggle-wrapper ${!configured ? 'source-disabled' : ''}`}
-                                        title={!configured ? 'SOURCE NOT CONFIGURED - Add API key in LLM API Keys' : ''}
+                                        title={!configured ? t('SOURCE NOT CONFIGURED - Add API key in LLM API Keys') : ''}
                                     >
                                         <div className="toggle-switch direct-toggle">
                                             <input
@@ -296,15 +298,15 @@ export default function CouncilConfig({
             </section>
 
             <section className="settings-section">
-                <h3>Temperature Controls</h3>
+                <h3>{t('Temperature Controls')}</h3>
                 <p className="section-description">
-                    Temperature controls how creative or focused a model's responses are. Lower values produce more predictable, consistent outputs; higher values encourage more diverse, creative answers.
+                    {t("Temperature controls how creative or focused a model's responses are. Lower values produce more predictable, consistent outputs; higher values encourage more diverse, creative answers.")}
                 </p>
 
                 {/* Council Heat (Stage 1) */}
                 <div className="subsection">
                     <div className="heat-slider-header">
-                        <h4>Council Heat <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>(Stage 1)</span></h4>
+                        <h4>{t('Council Heat')} <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>({t('Stage 1')})</span></h4>
                         <span className="heat-value">{councilTemperature.toFixed(1)}</span>
                     </div>
                     <div className="heat-slider-container">
@@ -323,7 +325,7 @@ export default function CouncilConfig({
                     </div>
                     {(councilModels || []).some(isFixedTemperatureModel) && (
                         <div className="heat-warning">
-                            Some selected models enforce fixed temperature and will ignore this setting.
+                            {t('Some selected models enforce fixed temperature and will ignore this setting.')}
                         </div>
                     )}
                 </div>
@@ -331,7 +333,7 @@ export default function CouncilConfig({
                 {/* Peer Ranking Heat (Stage 2) */}
                 <div className="subsection" style={{ marginTop: '20px' }}>
                     <div className="heat-slider-header">
-                        <h4>Peer Ranking Heat <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>(Stage 2)</span></h4>
+                        <h4>{t('Peer Ranking Heat')} <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>({t('Stage 2')})</span></h4>
                         <span className="heat-value">{stage2Temperature.toFixed(1)}</span>
                     </div>
                     <div className="heat-slider-container">
@@ -352,7 +354,7 @@ export default function CouncilConfig({
                 {/* Chairman Heat (Stage 3) */}
                 <div className="subsection" style={{ marginTop: '20px' }}>
                     <div className="heat-slider-header">
-                        <h4>Chairman Heat <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>(Stage 3)</span></h4>
+                        <h4>{t('Chairman Heat')} <span style={{ fontWeight: 400, fontSize: 'calc(12px * var(--font-scale))', opacity: 0.5 }}>({t('Stage 3')})</span></h4>
                         <span className="heat-value">{chairmanTemperature.toFixed(1)}</span>
                     </div>
                     <div className="heat-slider-container">
@@ -371,7 +373,7 @@ export default function CouncilConfig({
                     </div>
                     {isFixedTemperatureModel(chairmanModel) && (
                         <div className="heat-warning">
-                            This model enforces fixed temperature and will ignore this setting.
+                            {t('This model enforces fixed temperature and will ignore this setting.')}
                         </div>
                     )}
                 </div>
