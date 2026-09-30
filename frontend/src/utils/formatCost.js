@@ -1,5 +1,5 @@
-export function formatUsd(value, unknown = false) {
-  if (unknown || typeof value !== 'number' || Number.isNaN(value)) return 'Unknown';
+export function formatUsd(value, unknown = false, unknownLabel = 'Unknown') {
+  if (unknown || typeof value !== 'number' || Number.isNaN(value)) return unknownLabel;
   if (value === 0) return '$0.00';
   if (value < 0.000001) return '<$0.000001';
   if (value < 0.01) return `$${value.toFixed(6)}`;
@@ -13,17 +13,17 @@ export function formatSidebarCost(totalCost, costStatus) {
   return amount;
 }
 
-export function sidebarCostTooltip(totalCost, costStatus, totalCalls) {
-  const parts = ['Conversation total'];
+export function sidebarCostTooltip(totalCost, costStatus, totalCalls, t) {
+  const parts = [t('Conversation total')];
   if (typeof totalCalls === 'number' && totalCalls > 0) {
-    parts.push(`${totalCalls} API call${totalCalls === 1 ? '' : 's'}`);
+    parts.push(t(totalCalls === 1 ? '{count} API call' : '{count} API calls', { count: totalCalls }));
   }
   if (costStatus === 'partial') {
-    parts.push('some pricing unavailable');
+    parts.push(t('some pricing unavailable'));
   } else if (costStatus === 'estimated') {
-    parts.push('estimated pricing');
+    parts.push(t('estimated pricing'));
   } else if (costStatus === 'free') {
-    parts.push('known free models');
+    parts.push(t('known free models'));
   }
   if (typeof totalCost === 'number') {
     parts.push(formatUsd(totalCost));

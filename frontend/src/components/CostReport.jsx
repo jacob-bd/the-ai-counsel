@@ -16,8 +16,8 @@ function formatTokenBreakdown(item, t) {
   });
 }
 
-function rowCostLabel(row) {
-  return formatUsd(row.total_cost, row.known_cost_calls === 0 && row.unknown_cost_calls > 0);
+function rowCostLabel(row, t) {
+  return formatUsd(row.total_cost, row.known_cost_calls === 0 && row.unknown_cost_calls > 0, t('Unknown'));
 }
 
 function rowStatus(row) {
@@ -45,7 +45,7 @@ export default function CostReport({ report, title = 'Run Cost' }) {
       <div className="cost-report__summary">
         <div>
           <div className="cost-report__eyebrow">{t(title)}</div>
-          <div className="cost-report__total">{formatUsd(report.total_cost, unknownTotal)}</div>
+          <div className="cost-report__total">{formatUsd(report.total_cost, unknownTotal, t('Unknown'))}</div>
         </div>
         <div className="cost-report__metrics" aria-label={t('Cost metrics')}>
           <span title={t('Provider-reported total tokens when available, otherwise input plus output tokens.')}>
@@ -78,7 +78,7 @@ export default function CostReport({ report, title = 'Run Cost' }) {
                 <span>{formatTokens(row.total_tokens)}</span>
                 <small>{formatTokenBreakdown(row, t)}</small>
               </span>
-              <span role="cell">{rowCostLabel(row)}</span>
+              <span role="cell">{rowCostLabel(row, t)}</span>
               <span role="cell" className={`cost-report__source ${rowStatus(row).toLowerCase().replace(' ', '-')}`}>
                 {t(rowStatus(row))}
               </span>

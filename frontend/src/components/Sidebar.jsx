@@ -163,7 +163,7 @@ export default function Sidebar({
                     {conv.total_cost != null && (
                       <span
                         className="conversation-cost-pill"
-                        title={sidebarCostTooltip(conv.total_cost, conv.cost_status, conv.total_calls)}
+                        title={sidebarCostTooltip(conv.total_cost, conv.cost_status, conv.total_calls, t)}
                       >
                         {formatSidebarCost(conv.total_cost, conv.cost_status)}
                       </span>

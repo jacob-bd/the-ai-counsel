@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Traditional Chinese interface: the sidebar cost tooltip and the run-cost report no longer fall back to English, and debate terminology is consistent across the UI (round = 輪, verdict = 裁決, tiebreaker = 決勝).
+
 ## [0.14.0] - 2026-09-30
 
 ### Added
