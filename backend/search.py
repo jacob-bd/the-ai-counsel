@@ -14,6 +14,7 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
+from anyio import fail_after
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import Implementation
@@ -579,10 +580,7 @@ async def perform_web_search(
             results = await _search_tinyfish(extracted_query, max_results, full_content_results)
             return {"results": results, "extracted_query": extracted_query, "intent": "unknown"}
         elif provider == SearchProvider.PARALLEL:
-            results = await asyncio.wait_for(
-                _search_parallel(extracted_query, max_results, full_content_results),
-                timeout=SEARCH_TIMEOUT_BUDGET,
-            )
+            results = await _search_parallel(extracted_query, max_results, full_content_results)
             return {"results": results, "extracted_query": extracted_query, "intent": "unknown"}
         else:
             # DuckDuckGo - now with hybrid search, optimization, and reranking
@@ -614,52 +612,57 @@ async def _search_parallel(query: str, max_results: int, full_content_results: i
         return ""
 
     client_info = Implementation(name="the-ai-counsel", version=__version__)
-    async with (
-        httpx.AsyncClient(
-            headers={"User-Agent": f"{client_info.name}/{client_info.version}"},
-            timeout=httpx.Timeout(PARALLEL_MCP_TIMEOUT, connect=5),
-        ) as client,
-        streamable_http_client(PARALLEL_MCP_URL, http_client=client) as (read, write, _),
-        ClientSession(
-            read, write, client_info=client_info,
-            read_timeout_seconds=timedelta(seconds=PARALLEL_MCP_TIMEOUT),
-        ) as session,
-    ):
-        await session.initialize()
-        search = await session.call_tool(
-            "web_search", {"objective": query, "search_queries": [query]}
-        )
-        data = search.structuredContent or {}
-        if search.isError or not isinstance(data.get("results"), list):
-            raise ValueError("Parallel MCP did not return search results")
+    sources = None
+    pages = {}
+    try:
+        with fail_after(SEARCH_TIMEOUT_BUDGET):
+            async with (
+                httpx.AsyncClient(
+                    headers={"User-Agent": f"{client_info.name}/{client_info.version}"},
+                    timeout=httpx.Timeout(PARALLEL_MCP_TIMEOUT, connect=5),
+                ) as client,
+                streamable_http_client(PARALLEL_MCP_URL, http_client=client) as (read, write, _),
+                ClientSession(
+                    read, write, client_info=client_info,
+                    read_timeout_seconds=timedelta(seconds=PARALLEL_MCP_TIMEOUT),
+                ) as session,
+            ):
+                await session.initialize()
+                search = await session.call_tool(
+                    "web_search", {"objective": query, "search_queries": [query]}
+                )
+                data = search.structuredContent or {}
+                if search.isError or not isinstance(data.get("results"), list):
+                    raise ValueError("Parallel MCP did not return search results")
 
-        sources = {}
-        for result in data["results"]:
-            if not isinstance(result, dict):
-                continue
-            url = result.get("url")
-            if not _is_parallel_source_url(url) or url in sources:
-                continue
-            sources[url] = result
-            if len(sources) == max_results:
-                break
+                sources = {}
+                for result in data["results"]:
+                    if not isinstance(result, dict):
+                        continue
+                    url = result.get("url")
+                    if not _is_parallel_source_url(url) or url in sources:
+                        continue
+                    sources[url] = result
+                    if len(sources) == max_results:
+                        break
 
-        pages = {}
-        urls = list(sources)[:max(0, min(full_content_results, 10))]
-        if urls:
-            arguments = {"urls": urls, "full_content": True}
-            if isinstance(data.get("session_id"), str) and data["session_id"]:
-                arguments["session_id"] = data["session_id"]
-            try:
-                fetch = await session.call_tool("web_fetch", arguments)
-                if not fetch.isError:
-                    pages = {
-                        page["url"]: page.get("full_content")
-                        for page in (fetch.structuredContent or {}).get("results", [])
-                        if isinstance(page, dict) and page.get("url") in urls
-                    }
-            except Exception as exc:
-                logger.warning("Parallel MCP article fetch failed (%s)", type(exc).__name__)
+                urls = list(sources)[:max(0, min(full_content_results, 10))]
+                if urls:
+                    arguments = {"urls": urls, "full_content": True}
+                    if isinstance(data.get("session_id"), str) and data["session_id"]:
+                        arguments["session_id"] = data["session_id"]
+                    fetch = await session.call_tool("web_fetch", arguments)
+                    if not fetch.isError:
+                        pages = {
+                            page["url"]: page.get("full_content")
+                            for page in (fetch.structuredContent or {}).get("results", [])
+                            if isinstance(page, dict) and page.get("url") in urls
+                        }
+    except Exception as exc:
+        # The SDK can report a transport error when the session exits.
+        if sources is None:
+            raise
+        logger.warning("Parallel MCP article fetch or session cleanup failed (%s)", type(exc).__name__)
 
     formatted = []
     for index, (url, result) in enumerate(sources.items(), start=1):

@@ -1,6 +1,6 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Event, Thread
 from unittest.mock import AsyncMock
 
 import pytest
@@ -36,6 +36,7 @@ def mcp_server(monkeypatch):
     calls = []
     errors = set()
     initialized = []
+    release_fetch = Event()
     tool_results = {
         "web_search": {
             "session_id": "server-issued-session",
@@ -98,6 +99,12 @@ def mcp_server(monkeypatch):
                     "authenticated": "Authorization" in self.headers or "Cookie" in self.headers,
                     "session": self.headers.get("Mcp-Session-Id"),
                 })
+                if f"{name}_http" in errors:
+                    self.send_error(503)
+                    return
+                if f"{name}_slow" in errors:
+                    release_fetch.wait(timeout=5)
+                    return
                 result = (
                     {"isError": True, "content": [{"type": "text", "text": "Unavailable"}]}
                     if name in errors else {"content": [], "structuredContent": tool_results[name]}
@@ -117,6 +124,7 @@ def mcp_server(monkeypatch):
         try:
             yield calls, errors
         finally:
+            release_fetch.set()
             server.shutdown()
             worker.join()
 
@@ -174,18 +182,23 @@ def test_parallel_research_is_opt_in_and_attributes_search_and_fetch(counsel_cli
 
 
 @pytest.mark.parametrize(
-    ("fetch_count", "unavailable_tool", "expected_tools", "expected_context"),
+    ("fetch_count", "failure", "expected_tools", "expected_context"),
     [
         (0, None, ["web_search"], "NASA search excerpt"),
         (1, "web_fetch", ["web_search", "web_fetch"], "NASA search excerpt"),
+        (1, "web_fetch_http", ["web_search", "web_fetch"], "NASA search excerpt"),
+        (1, "web_fetch_slow", ["web_search", "web_fetch"], "NASA search excerpt"),
         (1, "web_search", ["web_search"], "Web search was attempted but failed"),
     ],
 )
-def test_parallel_research_keeps_running(counsel_client, mcp_server, fetch_count,
-                                        unavailable_tool, expected_tools, expected_context):
+def test_parallel_research_keeps_running(
+    counsel_client, mcp_server, fetch_count, failure, expected_tools, expected_context, monkeypatch,
+):
     calls, errors = mcp_server
-    if unavailable_tool:
-        errors.add(unavailable_tool)
+    if failure == "web_fetch_slow":
+        monkeypatch.setattr(search, "SEARCH_TIMEOUT_BUDGET", 1)
+    if failure:
+        errors.add(failure)
     response = counsel_client.put("/api/settings", json={
         "search_provider": "parallel",
         "full_content_results": fetch_count,
