@@ -230,11 +230,11 @@ Manage council configuration and presets.
 | `execution_mode` | string | `update` | `full`, `chat_ranking`, or `chat_only` |
 | `stage1_prompt`, `stage2_prompt`, `stage3_prompt` | string | `update` | Custom system prompts |
 | `title_prompt`, `query_prompt` | string | `update` | Title generation and LLM search query reformulation prompts |
-| `search_provider` | string | `update` | `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish` |
+| `search_provider` | string | `update` | `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish`, `parallel` |
 | `search_keyword_extraction` | string | `update` | Query processing: `direct` (default), `yake`, or `llm` |
 | `search_result_count` | integer | `update` | Number of results to fetch (5–15, default 8) |
 | `search_hybrid_mode` | boolean | `update` | DuckDuckGo: combine web + news (default `true`) |
-| `full_content_results` | integer | `update` | Jina Reader full-text fetch count (0–10, default 3; 0 = disabled) |
+| `full_content_results` | integer | `update` | Article fetch count (0–10, default 3). Parallel MCP uses its own fetch tool. Set to 0 to disable. |
 | `enabled_providers` | object | `update` | Global provider toggles (apply to all model pickers) |
 | `direct_provider_toggles` | object | `update` | Per-direct-provider toggles (keys: `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`, `opencode-zen`, `opencode-go`) — also global |
 | `preset_id` | string | `save_preset`, `delete_preset`, `set_default_preset` | Preset UUID |
@@ -336,7 +336,7 @@ Provider utilities, model listing, and health checks.
 
 If settings fetch fails while backend is up: includes `"settings_error": "..."`.
 
-**`set_search` valid providers:** `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish`.
+**`set_search` valid providers:** `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish`, `parallel`. Omit `api_key` when choosing Parallel MCP.
 
 **`set_search` query processing mode** — set `search_keyword_extraction` via `council_settings` `update`:
 

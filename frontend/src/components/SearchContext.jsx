@@ -10,15 +10,15 @@ function parseSearchResults(searchContext) {
   if (!searchContext) return [];
 
   const results = [];
-  const blocks = searchContext.split(/Result \d+:/);
+  const blocks = searchContext.split(/^Result \d+:\r?$/m);
 
   for (const block of blocks) {
     if (!block.trim()) continue;
 
-    const titleMatch = block.match(/Title:\s*(.+)/);
-    const urlMatch = block.match(/URL:\s*(.+)/);
-    const sourceMatch = block.match(/Source:\s*(.+)/);
-    const summaryMatch = block.match(/Summary:\s*([\s\S]*?)(?=\n\n|$)/);
+    const titleMatch = block.match(/^Title:[ \t]*(.+)/m);
+    const urlMatch = block.match(/^URL:[ \t]*(.+)/m);
+    const sourceMatch = block.match(/^Source:[ \t]*(.+)/m);
+    const summaryMatch = block.match(/(?:^|\n)Summary:[ \t]*([\s\S]*?)(?=\n\n|$)/);
 
     if (titleMatch && urlMatch) {
       results.push({

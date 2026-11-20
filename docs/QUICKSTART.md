@@ -152,7 +152,7 @@ Choose your deliberation type and depth:
 ## Next Steps
 
 - Explore **System Prompts** to customize model behavior
-- Configure **Web Search** providers (Tavily, Brave) for better results
+- Choose a **Web Search** provider in Settings. Parallel MCP offers search and article fetching without an API key.
 - Adjust **Temperature** sliders for creativity control
 - **Export** your council config to share or backup
 - **Enable multi-round debate** — see [Council Debate Config Guide](COUNCIL-DEBATE-CONFIG.md) for a full walkthrough of critique modes, round settings, and real-world examples

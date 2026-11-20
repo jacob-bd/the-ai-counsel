@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Parallel MCP as an optional web search provider for Council and Advisors, with article fetching and no API key required.
+
 ## [0.14.1] - 2026-09-30
 
 ### Fixed

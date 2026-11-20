@@ -929,7 +929,7 @@ print("Verdict:", result["verdict"]["content"])
 | `model_assignments` | object | No | — | Per-persona overrides: `{"skeptic": "openai:gpt-4.1"}` |
 | `max_rounds` | integer | No | `advisor_default_rounds` setting | Number of rounds (3–10) |
 | `web_search` | boolean | No | `false` | Enable web search context |
-| `search_provider` | string | No | — | `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish` |
+| `search_provider` | string | No | — | `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish`, `parallel` |
 
 Advisor response rows include `word_count`, `word_limit`, `word_limit_exceeded`, and optional `warning`. Exceeding the word limit is treated as guidance failure, not a model failure: the response is kept and surfaced with a warning.
 
@@ -1391,9 +1391,16 @@ curl -X PUT http://localhost:8001/api/settings \
   -H "Content-Type: application/json" \
   -d '{"search_provider": "tinyfish", "tinyfish_api_key": "sk-tinyfish-..."}'
 
-# Valid providers: duckduckgo, tavily, brave, serper, tinyfish
-# duckduckgo requires no key; all others require an API key
+# Switch to Parallel MCP without an API key
+curl -X PUT http://localhost:8001/api/settings \
+  -H "Content-Type: application/json" \
+  -d '{"search_provider": "parallel"}'
+
+# Valid providers: duckduckgo, tavily, brave, serper, tinyfish, parallel
+# duckduckgo and parallel require no key
 ```
+
+Parallel MCP sends the processed search query and any article URLs selected by `full_content_results` to Parallel. Set `full_content_results` to `0` to use excerpts alone.
 
 ### Search Query Processing Mode
 
