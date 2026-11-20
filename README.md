@@ -220,8 +220,11 @@ Ground your council's or advisors' responses in real-time information:
 | **Serper** | API Key | Real Google results, 2,500 free queries |
 | **Tavily** | API Key | Purpose-built for LLMs, rich content |
 | **Brave Search** | API Key | Privacy-focused, 2,000 free queries/month |
+| **Parallel MCP** | Free | Web search and article fetching with no API key |
 
 **Full Article Fetching**: Uses [Jina Reader](https://jina.ai/reader) to extract full article content from top search results (configurable 0–10 results).
+
+Choose **Parallel MCP** in Settings → Search Providers or the web search menu. This sends the search query and URLs selected for article fetching to Parallel. Set **Full Article Fetch** to 0 to use search excerpts alone. The app sends its name and version in the HTTP User-Agent so Parallel can measure aggregate free MCP usage.
 
 ### Temperature Controls
 

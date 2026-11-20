@@ -147,7 +147,7 @@ def register(server, base_url: str) -> None:
                 if query_prompt is not None:
                     updates["query_prompt"] = query_prompt
                 if search_provider is not None:
-                    valid_search_providers = ("duckduckgo", "tavily", "brave", "serper", "tinyfish")
+                    valid_search_providers = ("duckduckgo", "tavily", "brave", "serper", "tinyfish", "parallel")
                     if search_provider not in valid_search_providers:
                         return f"Error: search_provider must be one of: {', '.join(valid_search_providers)}."
                     updates["search_provider"] = search_provider

@@ -127,9 +127,11 @@ def register(server, base_url: str) -> None:
             if action == "set_search":
                 if not provider:
                     return "Error: provider is required for set_search."
-                valid_providers = ("duckduckgo", "tavily", "brave", "serper", "tinyfish")
+                valid_providers = ("duckduckgo", "tavily", "brave", "serper", "tinyfish", "parallel")
                 if provider not in valid_providers:
                     return f"Error: invalid provider '{provider}'. Must be one of: {', '.join(valid_providers)}."
+                if provider == "parallel" and api_key:
+                    return "Error: Parallel MCP uses anonymous access. Omit api_key."
                 updates = {"search_provider": provider}
                 if api_key:
                     updates[f"{provider}_api_key"] = api_key

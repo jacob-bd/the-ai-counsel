@@ -81,7 +81,7 @@ This fixes binary incompatibilities (e.g., `@rollup/rollup-darwin-*` variants).
 | Module | Purpose |
 |--------|---------|
 | `council.py` | Orchestration: stage1/2/3 collection, rankings, title generation |
-| `search.py` | Web search: DuckDuckGo, Tavily, Brave, Serper, TinyFish with Jina Reader content fetch |
+| `search.py` | Web search: DuckDuckGo, Tavily, Brave, Serper, TinyFish, and Parallel MCP |
 | `settings.py` | Config management, persisted to `data/settings.json` |
 | `config.py` | OpenRouter endpoint URL, data dir constant, settings-aware getters (`get_openrouter_api_key`, `get_council_models`, `get_chairman_model`, ...) that bridge env vars and `settings.py` |
 | `costs.py` | Usage normalization, pricing lookup/cache, per-call cost attribution, and run-level cost reports |
@@ -326,9 +326,11 @@ curl https://your-endpoint.com/v1/models -H "Authorization: Bearer $API_KEY"
 
 ## Web Search
 
-**Providers**: DuckDuckGo (free), Tavily (API), Brave (API), Serper (API), TinyFish (API). The canonical list of valid `search_provider` enum values is `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish` — also documented in `skills/the-ai-counsel-api/SKILL.md`. Add new providers in `backend/search.py` (`SearchProvider` enum) first.
+**Providers**: DuckDuckGo (default, no key), Tavily (API), Brave (API), Serper (API), TinyFish (API), and Parallel MCP (no key). The valid `search_provider` values are `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish`, and `parallel`. Add new providers in `backend/search.py` (`SearchProvider` enum) first and update `skills/the-ai-counsel-api/SKILL.md`.
 
 **Full Content Fetching**: Jina Reader (`https://r.jina.ai/{url}`) extracts article text for top N results (configurable 0-10, default 3). Falls back to summary if fetch fails or yields <500 chars. 25-second timeout per article, 60-second total search budget.
+
+Parallel MCP sends the processed search query to `web_search` and uses `web_fetch` for the top URLs when the fetch count is above zero. Search excerpts remain available if article fetching fails.
 
 **Search Query Processing**:
 - **Direct** (default): Send exact query to search engine
@@ -344,7 +346,7 @@ The interface language can be switched in the Settings header (English is the de
 4. **Council Debate Config**: Critique mode, debate rounds, auto-converge, convergence threshold
 5. **Council System Prompts**: Stage 1 / Stage 2 / Stage 3 / Title / Search Query are user-editable and persisted in `settings.json` (fields `stage1_prompt` / `stage2_prompt` / `stage3_prompt` / `title_prompt` / `query_prompt`, all five updated via `PUT /api/settings`), each with reset-to-default. The Title and Query prompts (`TITLE_PROMPT_DEFAULT` / query-generation prompt in `backend/prompts.py`) are used internally by `generate_conversation_title` and `generate_search_query`.
 6. **Advisor System Prompts**: Round 1, follow-up, cross-pollination, verdict, tiebreaker prompts
-7. **Search Providers**: DuckDuckGo, Tavily, Brave, Serper, TinyFish + Jina full content settings
+7. **Search Providers**: DuckDuckGo, Tavily, Brave, Serper, TinyFish, and Parallel MCP with article fetch settings
 8. **Backup & Reset**: Import/Export config, Disconnect All Providers (clears credential store + OAuth; keeps council/prompts), reset to defaults
 
 **Council presets** (`council_presets` in `settings.json`): Saved from welcome-screen Council Setup — members + chairman only. Max 20; one default auto-loads. Main screen and Settings edit the same `council_models` / `chairman_model` fields. Lineup locked in a conversation after the first message.

@@ -15,7 +15,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "ddgs>=8.0.0",
     "yake>=0.4.8",
-    "mcp[cli]>=1.0.0",
+    "mcp[cli]>=1.27.1",
     "keyring>=25.7.0",
 ]
 

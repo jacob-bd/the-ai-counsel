@@ -37,6 +37,13 @@ export const SEARCH_PROVIDERS = [
         requiresKey: true,
         keyType: 'tinyfish',
     },
+    {
+        id: 'parallel',
+        name: 'Parallel MCP',
+        description: 'Free web search with no API key. Sends your search query and any article URLs selected for fetching to Parallel.',
+        requiresKey: false,
+        keyType: null,
+    },
 ];
 
 export default function SearchSettings({
@@ -302,9 +309,9 @@ export default function SearchSettings({
             </div>
 
             <div className="full-content-section">
-                <label>{t('Full Article Fetch (Jina AI)')}</label>
+                <label>{t('Full Article Fetch')}</label>
                 <p className="setting-description">
-                    {t('Uses Jina AI to read the full text of the top search results.')}
+                    {t('Fetch article text for the top search results. Parallel MCP uses Parallel for article fetching.')}
                     <strong> {t('Set to 0 to disable.')}</strong>
                 </p>
                 <div className="full-content-input-row">
