@@ -33,6 +33,7 @@ export function buildAvailableSearchProviders(settings) {
   if (settings.tavily_api_key_set) providers.push({ id: 'tavily', name: 'Tavily' });
   if (settings.brave_api_key_set) providers.push({ id: 'brave', name: 'Brave Search' });
   if (settings.tinyfish_api_key_set) providers.push({ id: 'tinyfish', name: 'TinyFish' });
+  providers.push({ id: 'parallel', name: 'Parallel MCP' });
   return providers;
 }
 

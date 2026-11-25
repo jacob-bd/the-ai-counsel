@@ -226,7 +226,7 @@ async def test_set_search_provider_tinyfish_with_key(server):
 @pytest.mark.asyncio
 async def test_set_search_provider_valid_options(server):
     """All valid provider names should succeed (mocked backend)."""
-    valid_providers = ("duckduckgo", "tavily", "brave", "serper", "tinyfish")
+    valid_providers = ("duckduckgo", "tavily", "brave", "serper", "tinyfish", "parallel")
     for provider in valid_providers:
         with respx.mock:
             respx.put("http://test:8001/api/settings").mock(
@@ -238,6 +238,19 @@ async def test_set_search_provider_valid_options(server):
 
 
 # ── Extended configure_council tests ────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_configure_council_with_parallel_search(server):
+    with respx.mock:
+        update = respx.put("http://test:8001/api/settings").mock(
+            return_value=httpx.Response(200, json={"success": True})
+        )
+        result = await server.call_tool("council_settings", {
+            "action": "update", "search_provider": "parallel",
+        })
+        assert get_json(result)["status"] == "updated"
+        assert json.loads(update.calls.last.request.content) == {"search_provider": "parallel"}
+
 
 @pytest.mark.asyncio
 async def test_configure_council_with_stage1_prompt(server):
