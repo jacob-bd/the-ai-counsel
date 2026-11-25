@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-25
+
 ### Added
-- Parallel MCP as an optional web search provider for Council and Advisors, with article fetching and no API key required.
+- Parallel MCP as an optional web search provider for Council and Advisors, with article fetching and no API key required (PR [#30](https://github.com/jacob-bd/the-ai-counsel/pull/30)). Thanks [@georgeatparallel](https://github.com/georgeatparallel)!
+
+### Thanks
+- Thanks to [@georgeatparallel](https://github.com/georgeatparallel) for contributing the Parallel MCP search integration (PR [#30](https://github.com/jacob-bd/the-ai-counsel/pull/30)), including anonymous search, article fetching, provider settings, MCP support, and tests.
 
 ## [0.14.1] - 2026-09-30
 

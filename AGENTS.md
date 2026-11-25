@@ -217,7 +217,7 @@ User Query (+ optional web search / file uploads)
  ↓
 [Document Extraction: text files + PDFs via pdfplumber, optional OCR]
  ↓
-[Web Search: DuckDuckGo/Tavily/Brave + Jina Reader]
+[Web Search: configured provider + article extraction]
  ↓
 Stage 1: Parallel queries → Stream individual responses
  ↓
@@ -328,7 +328,7 @@ curl https://your-endpoint.com/v1/models -H "Authorization: Bearer $API_KEY"
 
 **Providers**: DuckDuckGo (default, no key), Tavily (API), Brave (API), Serper (API), TinyFish (API), and Parallel MCP (no key). The valid `search_provider` values are `duckduckgo`, `tavily`, `brave`, `serper`, `tinyfish`, and `parallel`. Add new providers in `backend/search.py` (`SearchProvider` enum) first and update `skills/the-ai-counsel-api/SKILL.md`.
 
-**Full Content Fetching**: Jina Reader (`https://r.jina.ai/{url}`) extracts article text for top N results (configurable 0-10, default 3). Falls back to summary if fetch fails or yields <500 chars. 25-second timeout per article, 60-second total search budget.
+**Full Content Fetching**: Jina Reader (`https://r.jina.ai/{url}`) extracts article text for top N results for API-backed providers (configurable 0-10, default 3). Falls back to summary if fetch fails or yields <500 chars. 25-second timeout per article, 60-second total search budget. Parallel MCP uses its own `web_fetch` tool with a 20-second timeout inside the same total search budget.
 
 Parallel MCP sends the processed search query to `web_search` and uses `web_fetch` for the top URLs when the fetch count is above zero. Search excerpts remain available if article fetching fails.
 

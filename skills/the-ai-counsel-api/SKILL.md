@@ -1,6 +1,6 @@
 ---
 name: the-ai-counsel-api
-version: 0.14.1
+version: 0.15.0
 description: The AI Counsel — MCP-first (10 action-based tools) when The AI Counsel MCP server is connected; REST/curl fallback when MCP is unavailable, for cron scripts, or raw SSE. Triggers on "ask the council", "run a debate", "configure models", "run a deliberation", "check council health", "import relay-ai keys", "disconnect providers", etc.
 ---
 
@@ -17,7 +17,7 @@ Use **Council** for direct answers, creative prompts, factual questions, and "gi
 
 **Transport rule (read first):** If The AI Counsel **MCP tools are available** in your session, **call them** — do **not** shell out to `curl` for the same operation. This skill’s REST sections are the **fallback reference** when MCP is missing, the SSE session is stale, or you need raw SSE/admin export.
 
-**MCP server (v0.14.1):** Built-in SSE at `http://localhost:8001/mcp/sse` (stdio: `python -m the_ai_counsel_mcp`). Exposes **10 action-based tools** (not 25). Verify via `GET /api/health` → `"mcp": {"tools": 10, "sse_url": "..."}`.
+**MCP server (v0.15.0):** Built-in SSE at `http://localhost:8001/mcp/sse` (stdio: `python -m the_ai_counsel_mcp`). Exposes **10 action-based tools** (not 25). Verify via `GET /api/health` → `"mcp": {"tools": 10, "sse_url": "..."}`.
 
 **The server's connect message is minimal by design** — it does not list the tools. Use the roster below.
 
@@ -620,7 +620,7 @@ curl -X PUT http://localhost:8001/api/settings \
 |-------|---------|-------------|
 | `search_result_count` | `8` | Number of web search results to retrieve (5–15) |
 | `search_hybrid_mode` | `true` | DuckDuckGo: combine web + news results for better current-events coverage |
-| `full_content_results` | `3` | How many top results to fetch full article text via Jina Reader (0 = disabled) |
+| `full_content_results` | `3` | How many top results to fetch full article text (Jina Reader for API-backed providers, Parallel MCP's `web_fetch` for Parallel; 0 = disabled) |
 
 **`enabled_providers` keys:** `openrouter`, `ollama`, `groq`, `direct` (master toggle for all direct), `custom`
 
